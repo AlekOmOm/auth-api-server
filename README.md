@@ -2,6 +2,11 @@
 
 ## usage
 
+```
+cp .env.template .env
+# add values to .env
+```
+
 ```Bash
 make setup-frontend
 make dev-frontend
