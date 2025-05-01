@@ -1,0 +1,42 @@
+{
+  "name": "auth-system_nodejs",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "run": "node server.js",
+    "dev": "npm run init-db && npm run nodemonDev",
+    "nodemonDev": "nodemon server.js",
+    "init-db": "node ./src/db/setupDB.js",
+    "reset-db": "node ./src/db/setupDB.js --delete",
+    "test": "vitest run"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AlekOmOm/auth-system_NodeJS.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/AlekOmOm/auth-system_NodeJS/issues"
+  },
+  "homepage": "https://github.com/AlekOmOm/auth-system_NodeJS#readme",
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "express-rate-limit": "^7.5.0",
+    "express-session": "^1.18.1",
+    "express-validator": "^7.2.1",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "supertest": "^7.1.0",
+    "vitest": "^3.1.2"
+  }
+}
