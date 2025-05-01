@@ -47,27 +47,19 @@ auth server setup for API access to user
 ### Installation
 
 1. Clone the repository
-2. Install dependencies
+2. setup:
 
 ```bash
-cd backend
-npm install
+make setup-frontend
+make setup-backend
 ```
 
-3. Create a `.env` file in the root directory with the following variables:
+1. Create a `.env` file in the root directory with:
 
-```
-BACKEND_PORT=3001
-FRONTEND_PORT=3000
-SESSION_SECRET=your_secret_key_here
-RATE_LIMIT_WINDOW=15
-RATE_LIMIT_LIMIT=300
-```
-
-use template: 
-
-```
+```Bash
 cp .env.template .env
+# set SESSION_SECRET value
+# default ports: 3000 & 3001
 ```
 
 ### Running the Server
@@ -75,13 +67,12 @@ cp .env.template .env
 Development mode with auto-reload:
 
 ```bash
-npm run dev
-```
+make setup-frontend && make dev-frontend
+make setup-backend && make dev-backend # in separate terminal
 
-Production mode:
-
-```bash
-npm run start
+# powershell
+make setup-frontend; make dev-frontend
+make setup-backend; make dev-backend # in separate terminal
 ```
 
 ## Features
@@ -135,7 +126,9 @@ The system follows a modular architecture with clear separation of concerns:
 ```
 backend/
 ├── src/                  # Source code
+│   ├── controllers/              
 │   ├── db/              # Database operations
+│   ├── middleware/              
 │   ├── routes/          # API routes
 │   ├── services/        # Business logic
 │   └── utils/           # Utility functions
