@@ -15,14 +15,6 @@ npm run dev
 npm run build
 ```
 
-## Environment Variables
-
-Create a `.env` file in the root directory with:
-
-```
-VITE_BACKEND_URL=http://localhost:3001/api
-```
-
 ## Features
 
 - User authentication (login/register)
