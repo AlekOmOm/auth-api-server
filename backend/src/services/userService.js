@@ -9,14 +9,11 @@ import { removePasswordFromUser } from "../utils/authUtils.js";
 // Read all users
 export async function getUsers() {
   try {
-    console.log("getUsers");
     const users = await db.getUsers();
-    console.log("users", users);
 
     // Filter sensitive data
     const filteredUsers = users.map((user) => removePasswordFromUser(user));
 
-    console.log("filteredUsers", filteredUsers);
     return {
       message: "Users retrieved successfully",
       data: {

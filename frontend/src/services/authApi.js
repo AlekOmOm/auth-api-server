@@ -45,17 +45,13 @@ const register = async (credentials) => {
       return response;
     }
 
-    console.log("Registration successful response from fetchPost:", response);
-
     // --- Added: Update authStore on successful registration ---
     if (response.data && response.data.user) {
       authStore.login(response.data.user);
     } else {
-      // Start of Selection
       console.warn(
         "Registration successful, but user data missing in response."
       );
-      // End of Selectio
 
       // Return the successful response object
       return response;
@@ -78,8 +74,6 @@ const register = async (credentials) => {
  * @returns {Promise<Object>} Login result with success status
  */
 const login = async (credentials) => {
-  console.log("const login called");
-
   try {
     // Input validation (assuming email/password for login)
     if (!credentials.email || !credentials.password) {

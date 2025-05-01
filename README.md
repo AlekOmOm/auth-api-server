@@ -25,3 +25,38 @@ make setup-backend; make dev-backend
 ## docs
 
 [backend docs](./backend/README.md)
+
+## UI testing 
+
+[seed users](./backend/src/db/connection/seedData.json)
+
+```json
+   "seedUsers": [
+      {
+         "name": "admin",
+         "role": "admin",
+         "email": "admin@admin.com",
+         "password": "admin"
+      },
+      {
+         "name": "mother-theresa",
+         "role": "user",
+         "email": "mother@world.com",
+         "password": "the-big-g"
+      },
+      {
+         "name": "john-mccarmack",
+         "role": "user",
+         "email": "john@meta.com",
+         "password": "john-creator-of-doom"
+      },
+      {
+         "name": "Linus-Torvalds",
+         "role": "user",
+         "email": "linus@linux.com",
+         "password": "linux-creator_thats-me"
+      }
+   ]
+```
+
+

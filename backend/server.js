@@ -97,7 +97,7 @@ app.use(generalLimiter);
  *  - GET /api/account/
  *  - POST /api/account/
  *  - PUT /api/account/
- *  - DELETE /api/account/        - for account deletion (data and account)
+ *  - DELETE /api/account/
  *
  * @endpoints role: admin
  *  - GET /api/users/user
@@ -117,5 +117,6 @@ import accountRoute from "./src/routes/account.js";
 app.use("/api/account", accountRoute);
 
 app.listen(PORT, () => {
-  console.log(`---> Server listening event fired on port ${PORT}`);
+  // For production logging
+  console.info(`Server running on port ${PORT}`);
 });

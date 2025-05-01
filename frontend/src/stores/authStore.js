@@ -19,19 +19,10 @@ function createAuthStore() {
     loading: true, // Start in loading state
   });
 
-  /* ex. /api/auth/session response
-{
-    "message": "User retrieved successfully",
-    "data": {
-        "id": 1,
-        "name": "admin",
-        "role": "admin",
-        "email": "admin@admin.com"
-    }
-}
-  */
-
-  // check session
+  /** checkSession
+   * @description check if user is authenticated
+   * @context called from authApi.js, after fetchPost
+   */
   async function checkSession() {
     update((state) => ({ ...state, loading: true }));
     try {
@@ -47,15 +38,24 @@ function createAuthStore() {
     }
   }
 
+  /** login
+   * @description update store state to authenticated and set user data
+   * @context called from authApi.js, after fetchPost
+   *
+   * @param {Object} userData - user data from login response
+   */
   function login(userData) {
-    // Assuming userData includes { userId, role, etc. } from the login response
+    // called from authApi.js, after fetchPost
     set({ isAuthenticated: true, user: userData, loading: false });
   }
 
+  /** logout
+   * @description update store state to unauthenticated and set user data to null
+   * @context called from authApi.js, after fetchPost
+   */
   function logout() {
-    // Optionally call a logout endpoint on the backend
+    // called from authApi.js, after fetchPost
     set({ isAuthenticated: false, user: null, loading: false });
-    // Add navigation back to login if needed, e.g., navigate('/login');
   }
 
   // Check session when store is initialized

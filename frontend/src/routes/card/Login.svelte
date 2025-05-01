@@ -16,17 +16,14 @@
       email: email.trim(),
       password: password.trim()
     }
-    console.log(credentials);
 
     try {
       const response = await authApi.login(credentials);
-      console.log(response);
       if (response.success && response.data) {
-        authStore.login(response.data);
+        authStore.login(response.data); // data sent to authStore (taken as userData)
         navigate('/home', { replace: true });
       } else {
         errorMessage = response.message || 'Login failed.';
-        console.log(response.message);
       }
     } catch (error) {
       console.error('Login failed:', error);

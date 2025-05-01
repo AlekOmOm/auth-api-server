@@ -7,22 +7,22 @@
          "password": "admin"
       },
       {
-         "name": "user1",
+         "name": "mother-theresa",
          "role": "user",
-         "email": "user1@user.com",
-         "password": "user1"
+         "email": "mother@world.com",
+         "password": "the-big-g"
       },
       {
-         "name": "user2",
+         "name": "john-mccarmack",
          "role": "user",
-         "email": "user2@user.com",
-         "password": "user2"
+         "email": "john@meta.com",
+         "password": "john-creator-of-doom"
       },
       {
-         "name": "user3",
+         "name": "Linus-Torvalds",
          "role": "user",
-         "email": "user3@user.com",
-         "password": "user3"
+         "email": "linus@linux.com",
+         "password": "linux-creator_thats-me"
       }
    ]
 }
