@@ -23,7 +23,7 @@ make setup-backend; make dev-backend
 ```
 
 ## docs
-
+[frontend](./frontend/README.md)
 [backend docs](./backend/README.md)
 
 ## UI testing 
