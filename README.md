@@ -2,7 +2,7 @@
 
 ## usage
 
-```
+```Bash
 cp .env.template .env
 # add values to .env
 ```
