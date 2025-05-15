@@ -32,17 +32,13 @@ dev-fullstack:
 	@cd backend && npm run dev & cd frontend && npm run dev
 	@echo "Fullstack running on http://localhost:3000"
 
+# setup environment
 setup-env:
-	@echo "Setting up environment..."
 	@node .\scripts\setup-env.js
-	@ls 
 
-
-# generate session secret
-gen-ses-secret:
-	@echo "Generating session secret..."
-	@.\scripts\gen_ses_secret.sh
-	@echo "SESSION_SECRET=$(shell node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\")" > .env
+gen-ses-secret: setup-env
+	@node .\scripts\gen-ses-secret.js
+	@echo  .. updated .env with session secret
 
 
 # help
@@ -62,7 +58,8 @@ help:
 	@echo "  "
 	@echo " - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -"
 	@echo "  "
-	@echo "  gen-ses-secret: Generate session secret and input into backend/.env"
+	@echo "  setup-env: Setup environment"
+	@echo "  gen-ses-secret: Generate session secret and input into .env"
 	@echo "  "
 	@echo " - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -"
 	@echo "  "
