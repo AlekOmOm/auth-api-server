@@ -39,6 +39,14 @@ Use the information below to decide *which mode* fits your project and to unders
 
 ## 1. Frontend-Login-Proxy
 
+**Perfect for:** Frontend applications that want to use Auth-System's built-in UI and session management.
+
+### Key Features
+- ✅ **Zero UI development** - Use Auth-System's ready-made login/register forms
+- ✅ **URL-based tenant detection** - Automatic schema detection from return URLs
+- ✅ **Persistent schema connection** - Survives application redeployments
+- ✅ **Session-based security** - HTTP-only cookies for web applications
+
 ### Typical Flow
 
 ```mermaid
@@ -61,23 +69,16 @@ sequenceDiagram
     Client-->>User: Render requested page
 ```
 
-### Minimum Integration Checklist
+### Quick Start Checklist
 
-1. **Redirect unauthenticated requests**  
-   Add middleware in your router / reverse-proxy that checks `GET /api/auth/session` (or `req.session.user`). If not present, perform a 302 redirect to:
+1. **Register your client application** with allowed return URLs
+2. **Redirect unauthenticated requests** to Auth-System with return_url parameter
+3. **Trust Auth-System's session cookie** for authentication
+4. **Validate sessions** by calling Auth-System's session endpoint
 
-   ```
-   http://<AUTH_SYSTEM_HOST>:<PORT>/login?return_url=<URL-ENCODED_CURRENT_REQUEST>
-   ```
-
-2. **Trust Auth-System's session cookie**  
-   • For local development set `FRONTEND_PORT` in `.env` so CORS & cookies match.  
-   • In production use the same top-level domain or enable `SameSite=None; Secure`.
-
-3. **(Optional) Consume user info**  
-   Call `GET /api/auth/me` to fetch the authenticated user object after redirect.
-
-See the implementation file for copy-paste middleware snippets for **Express**, **Svelte-Kit** and **Nginx**.
+> **📚 For comprehensive implementation guide, see: [Frontend-Login-Proxy_Mode.md](./Frontend-Login-Proxy_Mode.md)**
+> 
+> This guide covers client registration, persistent schema connection, troubleshooting, and best practices.
 
 ---
 
@@ -136,8 +137,9 @@ Connections are cached per socket or API token ensuring **hard multi-tenancy iso
 ## Next Steps
 
 1. Choose your mode and read the corresponding section again.  
-2. Jump to [`USAGE-IMPLEMENTATION-NEEDED.md`](./USAGE-IMPLEMENTATION-NEEDED.md) for concrete code snippets.  
-3. Review backend/README for full REST endpoint tables.
+2. For **Frontend-Login-Proxy**, see: [Frontend-Login-Proxy_Mode.md](./Frontend-Login-Proxy_Mode.md)
+3. For **API-Auth-Server**, see: [`USAGE-IMPLEMENTATION-NEEDED.md`](./USAGE-IMPLEMENTATION-NEEDED.md) for concrete code snippets.
+4. Review backend/README for full REST endpoint tables.
 
 Happy authenticating! 🚀
 

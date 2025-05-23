@@ -104,6 +104,9 @@ export const detectSchema = async (req, res, next) => {
    // Try API token first (for API mode)
    await detectSchemaFromApiToken(req, res, () => {});
 
+   // --- frontend proxy mode ---
+   // if secret_key
+
    // If no schema yet, try return_url (for frontend proxy mode)
    if (!req.schema) {
       await detectSchemaFromReturnUrl(req, res, () => {});
