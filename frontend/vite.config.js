@@ -30,29 +30,29 @@ PROD_API_URL=http://localhost:3001/api
 */
 
 const FRONTEND_PORT = isProd
-  ? process.env.PROD_FRONTEND_PORT || 3000
-  : process.env.DEV_FRONTEND_PORT || 3000;
+   ? process.env.PROD_FRONTEND_PORT || 3000
+   : process.env.DEV_FRONTEND_PORT || 3000;
 
 const FRONTEND_HOST = isProd
-  ? process.env.PROD_FRONTEND_HOST || "localhost"
-  : process.env.DEV_FRONTEND_HOST || "localhost";
+   ? process.env.PROD_FRONTEND_HOST || "localhost"
+   : process.env.DEV_FRONTEND_HOST || "localhost";
 
 const BACKEND_PORT = isProd
-  ? process.env.PROD_BACKEND_PORT || 3001
-  : process.env.DEV_BACKEND_PORT || 3001;
+   ? process.env.PROD_BACKEND_PORT || 3003
+   : process.env.DEV_BACKEND_PORT || 3003;
 
 const BACKEND_HOST = isProd
-  ? process.env.PROD_BACKEND_HOST || "localhost"
-  : process.env.DEV_BACKEND_HOST || "localhost";
+   ? process.env.PROD_BACKEND_HOST || "localhost"
+   : process.env.DEV_BACKEND_HOST || "localhost";
 
 // --- urls ---
 const BACKEND_URL = isProd
-  ? `http://${BACKEND_HOST}:${BACKEND_PORT}`
-  : `http://${BACKEND_HOST}:${BACKEND_PORT}`;
+   ? `http://${BACKEND_HOST}:${BACKEND_PORT}`
+   : `http://${BACKEND_HOST}:${BACKEND_PORT}`;
 
 const apiUrl = isProd
-  ? `http://${BACKEND_HOST}:${BACKEND_PORT}/api`
-  : `http://${BACKEND_HOST}:${BACKEND_PORT}/api`;
+   ? `http://${BACKEND_HOST}:${BACKEND_PORT}/api`
+   : `http://${BACKEND_HOST}:${BACKEND_PORT}/api`;
 
 // https://vite.dev/config/
 
@@ -60,14 +60,14 @@ const apiUrl = isProd
 // auth-system_NodeJS\frontend
 // auth-system_NodeJS\backend
 export default defineConfig({
-  plugins: [svelte()],
-  envDir: resolve(__dirname, ".."),
-  server: {
-    port: FRONTEND_PORT,
-    host: FRONTEND_HOST,
-  },
-  define: {
-    "import.meta.env.VITE_API_URL": JSON.stringify(apiUrl),
-    "import.meta.env.VITE_BACKEND_URL": JSON.stringify(apiUrl),
-  },
+   plugins: [svelte()],
+   envDir: resolve(__dirname, ".."),
+   server: {
+      port: FRONTEND_PORT,
+      host: FRONTEND_HOST,
+   },
+   define: {
+      "import.meta.env.VITE_API_URL": JSON.stringify(apiUrl),
+      "import.meta.env.VITE_BACKEND_URL": JSON.stringify(apiUrl),
+   },
 });

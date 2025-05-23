@@ -1,8 +1,6 @@
 import express from "express";
 const app = express();
-
-import dotenv from "dotenv";
-dotenv.config({ path: "../.env" });
+import config from "./src/utils/config.js";
 
 // --- environment variables ---
 const PORT = process.env.BACKEND_PORT || 3001;
@@ -30,10 +28,10 @@ app.use(express.json());
  */
 import cors from "cors";
 app.use(
-  cors({
-    origin: `http://localhost:${FRONTEND_PORT}` || "http://localhost:3000",
-    credentials: true,
-  })
+   cors({
+      origin: `http://localhost:${FRONTEND_PORT}` || "http://localhost:3000",
+      credentials: true,
+   })
 );
 
 /*
@@ -44,15 +42,15 @@ app.use(
  */
 import session from "express-session";
 app.use(
-  session({
-    secret: "" + SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: false, // https only (true in production)
-      maxAge: 1000 * 60 * 60 * 24, // 1 day
-    },
-  })
+   session({
+      secret: "" + SESSION_SECRET,
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+         secure: false, // https only (true in production)
+         maxAge: 1000 * 60 * 60 * 24, // 1 day
+      },
+   })
 );
 
 /*
@@ -62,10 +60,10 @@ app.use(
  */
 import { rateLimit } from "express-rate-limit";
 const generalLimiter = rateLimit({
-  windowMs: RATE_LIMIT_WINDOW * 60 * 1000, // 15 minutes
-  limit: RATE_LIMIT_LIMIT, // 300 requests per window
-  standardHeaders: "draft-8", // RateLimit headers
-  legacyHeaders: false, // X-RateLimit headers
+   windowMs: RATE_LIMIT_WINDOW * 60 * 1000, // 15 minutes
+   limit: RATE_LIMIT_LIMIT, // 300 requests per window
+   standardHeaders: "draft-8", // RateLimit headers
+   legacyHeaders: false, // X-RateLimit headers
 });
 app.use(generalLimiter);
 
@@ -107,6 +105,15 @@ app.use(generalLimiter);
  *  - DELETE /api/users/user
  */
 
+// --- routes ---
+
+/** * Schema detection middleware - detects client schema from URL/token */
+import { detectSchema } from "./src/middleware/schemaDetection.js";
+app.use(detectSchema);
+/** * clientServer - for host-application to connect to auth-system */
+import clientServerRoute from "./src/routes/clientServer.js";
+app.use("/api/clientServer", clientServerRoute);
+
 import authRoute from "./src/routes/auth.js";
 app.use("/api/auth", authRoute);
 
@@ -117,6 +124,6 @@ import accountRoute from "./src/routes/account.js";
 app.use("/api/account", accountRoute);
 
 app.listen(PORT, () => {
-  // For production logging
-  console.info(`Server running on port ${PORT}`);
+   // For production logging
+   console.info(`Server running on port ${PORT}`);
 });

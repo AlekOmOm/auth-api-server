@@ -1,170 +1,55 @@
-// queries in SQL for
-/**
- * DDL
- * - users table
- * - sessions table
- *
- * DML
- * - CRUD sql
- * - CRUD sessions
- * - seeding
- */
+// ----- DML QUERIES FOR POSTGRES (multi-tenant) -----
 
-// ----- DDL -----
-
-// users
-const dropTableUsers = `
-DROP TABLE IF EXISTS users;
+// Client Servers
+export const createClientServer = `
+  INSERT INTO client_servers (client_id, client_secret_hash, app_name, assigned_schema_name, allowed_return_urls)
+  VALUES ($1, $2, $3, $4, $5)
+  RETURNING *;
 `;
 
-const createTableUsers = `
-CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT, 
-    name TEXT NOT NULL, 
-    role TEXT NOT NULL,
-    email TEXT NOT NULL,
-    password TEXT NOT NULL
-);
+export const getClientServer = `
+  SELECT * FROM client_servers WHERE client_id = $1;
 `;
 
-// sessions
-const dropTableSessions = `
-DROP TABLE IF EXISTS sessions;
+export const getClientServerByClientSecretHash = `
+  SELECT * FROM client_servers WHERE client_secret_hash = $1;
 `;
 
-const createTableSessions = `
-CREATE TABLE IF NOT EXISTS sessions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    userId INTEGER NOT NULL,
-    sessionId TEXT NOT NULL,
-    FOREIGN KEY (userId) REFERENCES users(id)
-);
+export const updateClientServer = `
+  UPDATE client_servers SET client_secret_hash = $2, app_name = $3, assigned_schema_name = $4, allowed_return_urls = $5
+  WHERE client_id = $1 RETURNING *;
 `;
 
-// ----- DML -----
-/* - users
- * - sessions
- */
-
-/** ---- CRUD sessions table ---
- *
- * - create session
- * - read session
- *    - read all sessions
- * - update session
- * - delete session
- */
-
-const createSession = `
-INSERT INTO sessions (userId, sessionId) VALUES (?, ?);
+export const deleteClientServer = `
+  DELETE FROM client_servers WHERE client_id = $1;
 `;
 
-const deleteSession = `
-DELETE FROM sessions WHERE sessionId = ?;
+// Users
+export const createUser = `
+  INSERT INTO users (id, name, role, email, password_hash) VALUES ($1, $2, $3, $4, $5)
+  RETURNING *;
 `;
-
-const getSessions = `
-SELECT * FROM sessions;
-`;
-
-const getSession = `
-SELECT * FROM sessions WHERE sessionId = ?;
-`;
-
-const getSessionByUserId = `
-SELECT * FROM sessions WHERE userId = ?;
-`;
-
-const deleteSessionByUserId = `
-DELETE FROM sessions WHERE userId = ?;
-`;
-
-const deleteSessionBySessionId = `
-DELETE FROM sessions WHERE sessionId = ?;
-`;
-
-/** ---- CRUD users table ---
- *
- * - create user
- * - read user
- *    - read all users
- * - update user
- * - delete user
- */
-
-const createUser = `
-INSERT INTO users (name, role, email, password) VALUES (?, ?, ?, ?);
-`;
-
-const getUsers = `
-SELECT * FROM users;
-`;
-
-const getUser = `
-SELECT * FROM users WHERE id = ?;
-`;
-
-const getUserByNameAndEmail = `
-SELECT * FROM users WHERE name = ? AND email = ?;
-`;
-
-const getUserByEmail = `
-SELECT * FROM users WHERE email = ?;
-`;
-
-const updateUser = `
-UPDATE users SET name = ?, role = ?, email = ?, password = ? WHERE id = ?;
-`;
-
-const deleteUser = `
-DELETE FROM users WHERE id = ?;
-`;
-
-/** ---- seeding ----- */
-
-const seedDefaultUsers = (users) => {
-  let insertQueries = "";
-  users.forEach((user) => {
-    insertQueries += `INSERT INTO users (name, role, email, password) VALUES ('${user.name}', '${user.role}', '${user.email}', '${user.password}');\n`;
-  });
-  return insertQueries;
+export const createUsers = (users) => {
+   return users.map((user) => createUser(user)).join(";");
 };
 
-// ----- export -----
+export const getUsers = `SELECT * FROM users;`;
+export const getUserById = `SELECT * FROM users WHERE id = $1::uuid;`;
+export const getUserByEmail = `SELECT * FROM users WHERE email = $1;`;
+export const updateUser = `
+  UPDATE users SET name = $1, role = $2, email = $3, password_hash = $4, updated_at = NOW()
+  WHERE id = $5::uuid RETURNING *;
+`;
+export const deleteUser = `DELETE FROM users WHERE id = $1::uuid;`;
 
-const queries = {
-  // ----- DDL -----
-
-  // sessions
-  dropTableSessions,
-  createTableSessions,
-
-  // users
-  dropTableUsers,
-  createTableUsers,
-
-  // ----- DML -----
-
-  // sessions
-  getSessions,
-  createSession,
-  deleteSession,
-  getSession,
-  getSessionByUserId,
-  deleteSessionByUserId,
-  deleteSessionBySessionId,
-
-  // users
-  createUser,
-  getUsers,
-  getUser,
-  getUserByNameAndEmail,
-  getUserByEmail,
-  updateUser,
-  deleteUser,
-
-  // ----- seeding -----
-  seedDefaultUsers,
-};
-
-export default queries;
+// Sessions
+export const createSession = `
+  INSERT INTO sessions (id, user_id, session_id, ip_address, user_agent, expires_at)
+  VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6)
+  RETURNING *;
+`;
+export const getSessions = `SELECT * FROM sessions;`;
+export const getSession = `SELECT * FROM sessions WHERE session_id = $1::uuid;`;
+export const getSessionByUserId = `SELECT * FROM sessions WHERE user_id = $1::uuid;`;
+export const deleteSessionByUserId = `DELETE FROM sessions WHERE user_id = $1::uuid;`;
+export const deleteSessionBySessionId = `DELETE FROM sessions WHERE session_id = $1::uuid;`;

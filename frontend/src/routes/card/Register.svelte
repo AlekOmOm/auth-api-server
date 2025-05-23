@@ -7,6 +7,8 @@
   let email = '';
   let password = '';
   let errorMessages = [];
+  let successMessage = '';
+  let isLoading = false;
 
   async function register(event) {
     event.preventDefault();
@@ -18,12 +20,24 @@
     }
 
     errorMessages = [];
+    successMessage = '';
+    isLoading = true;
 
     try {
       const response = await authApi.register(credentials);
 
       if(response.success) {
-        navigate('/');
+        successMessage = 'success!';
+        
+        // Clear form
+        name = '';
+        email = '';
+        password = '';
+        
+        // Redirect to login after 2 seconds
+        setTimeout(() => {
+          navigate('/login');
+        }, 2000);
       } else {
         if (response.errors && Array.isArray(response.errors)) {
           errorMessages = response.errors.map(err => err.msg);
@@ -37,6 +51,8 @@
     } catch (error) {
       console.error('Register failed:', error);
       errorMessages = ['An unexpected error occurred. Please try again later.'];
+    } finally {
+      isLoading = false;
     }
   }
 </script>
@@ -45,18 +61,22 @@
 
   <h2> ___ </h2>
 
-
   <form onsubmit={register}>
-      <input id="name" bind:value={name} name="name" placeholder="name"  required autocomplete="name"/>
-      <input id="email" bind:value={email} name="email" placeholder="email" required autocomplete="email"/>
-      <input id="password" bind:value={password} name="password" type="password" placeholder="password" required autocomplete="new-password"/>
+      <input id="name" bind:value={name} name="name" placeholder="name" required autocomplete="name" disabled={isLoading}/>
+      <input id="email" bind:value={email} name="email" placeholder="email" required autocomplete="email" disabled={isLoading}/>
+      <input id="password" bind:value={password} name="password" type="password" placeholder="password (must be strong)" required autocomplete="new-password" disabled={isLoading}/>
       
+      {#if successMessage}
+        <div class="success-message">{successMessage}</div>
+      {/if}
           
       {#if errorMessages.length > 0}
         <ErrorMessage errors={errorMessages} />
       {/if}
 
-      <button type="submit">register</button>
+      <button type="submit" disabled={isLoading}>
+        {isLoading ? 'Registering...' : 'register'}
+      </button>
   </form>
 
   <nav>
@@ -67,6 +87,7 @@
   </nav>
 
 </div>
+
 <style>
     form {
         display: flex;

@@ -1,43 +1,34 @@
-import db from "./connection/connection.js";
-import queries from "./connection/queries.js";
-import seedData from "./connection/seedData.json" with { type: "json" };
+// Simple DB bootstrap for development / CI
+// Usage:
+//   node src/db/setupDB.js        – ensures default schema & tables
+//   node src/db/setupDB.js --delete  – drops existing tables first then reseeds
+import config from "../utils/config.js";
+import seedDB from "./seed/seedDB.js";
+import getPool from "./connection/auth.js";
+import { getPoolForSchema } from "./connection/clientServers.js";
 
-// Delete mode
 const deleteMode = process.argv.includes("--delete");
 
-if (deleteMode) {
-  await db.exec(queries.dropTableUsers);
-  await db.exec(queries.dropTableSessions);
+async function setupDB() {
+   const defaultSchema = seedDB.SEED_SCHEMA;
+   const pool = await getPool();
+   const poolForSchema = await getPoolForSchema(defaultSchema);
+
+   if (deleteMode) {
+      console.log("dropping tables");
+      await pool.query("DROP TABLE IF EXISTS client_servers CASCADE;");
+      await poolForSchema.query("DROP TABLE IF EXISTS sessions CASCADE;");
+      await poolForSchema.query("DROP TABLE IF EXISTS users CASCADE;");
+   }
+
+   // getPoolForSchema already (re)creates tables via template
+   if (deleteMode) {
+      console.log(" seeding");
+      await seedDB();
+   }
+
+   console.log("✅  Database setup complete");
+   process.exit(0);
 }
 
-// DDL
-await db.exec(queries.createTableUsers);
-await db.exec(queries.createTableSessions);
-
-// DML
-
-// -- seeding --
-
-if (deleteMode) {
-  const seedQueries = queries.seedDefaultUsers(seedData.users);
-  await db.exec(seedQueries);
-}
-
-// ------ print out ------
-
-try {
-  await db.all(queries.getUsers);
-} catch (error) {
-  console.error("Error retrieving users:", error);
-}
-
-try {
-  const sessions = await db.all(queries.getSessions);
-  sessions.forEach((session) => {
-    session.password = undefined;
-    session.role = undefined;
-    session.id = undefined;
-  });
-} catch (error) {
-  console.error("Error retrieving sessions:", error);
-}
+setupDB();
