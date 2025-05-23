@@ -1,30 +1,96 @@
 import { verifyApiToken } from "../services/clientServerService.js";
 import * as clientServersRepo from "../db/repositories/clientServersRepository.js";
-import { Pool } from "pg";
 import config from "../utils/config.js";
-import { ddl as authInternalDDL } from "../db/schemas/auth_internal/client_servers.js";
-import getPool from "../db/connection/auth.js";
+import getPool from "../db/connection/pools/auth.js";
+import getPoolForSchema from "../db/connection/pools/clientServers.js";
 
 /**
- * Middleware to detect and set database schema in session/request context
- * Handles multiple scenarios:
- * 1. Frontend-Login-Proxy mode (return_url parameter)
- * 2. API-Auth-Server mode (Bearer token)
- * 3. Default/admin mode (fallback to SEED_SCHEMA)
+ * Enhanced middleware to detect and set database schema + pool context in session
+ *
+ * User Role Hierarchy:
+ * 1. admin - System administrator (seeded in DB, full access)
+ * 2. owner - Client server owner (registered user who owns client_servers)
+ * 3. user - Tenant user (end-users of client applications)
+ *
+ * Pool Context Mapping:
+ * 1. Frontend-Login-Proxy mode (return_url) → CLIENT_TENANT pool (tenant users)
+ * 2. API-Auth-Server mode (Bearer token) → API_CLIENT pool (server-to-server)
+ * 3. Owner mode (user owns client_servers) → AUTH_INTERNAL pool (client management)
+ * 4. Admin mode (system admin) → AUTH_INTERNAL pool (system management)
+ * 5. Default mode → DEFAULT pool (fallback)
  */
 
 /**
+ * Pool context types for session storage
+ */
+export const POOL_CONTEXTS = {
+   AUTH_INTERNAL: "auth_internal", // For admin/client owners
+   CLIENT_TENANT: "client_tenant", // For tenant users
+   API_CLIENT: "api_client", // For API clients
+   DEFAULT: "default", // For default/fallback
+};
+
+/**
+ * User role types
+ */
+export const USER_ROLES = {
+   ADMIN: "admin", // System administrator
+   OWNER: "owner", // Client server owner
+   USER: "user", // Tenant user
+};
+
+/**
+ * Resolve actual pool from session context
+ * @param {Object} req - Request object with session
+ * @returns {Object} Database pool
+ */
+export const resolvePoolFromSession = async (req) => {
+   const poolContext = req.session?.poolContext || POOL_CONTEXTS.DEFAULT;
+   const schema =
+      req.session?.schema || process.env.SEED_SCHEMA || "client_template";
+
+   switch (poolContext) {
+      case POOL_CONTEXTS.AUTH_INTERNAL:
+         return await getPool(); // Auth internal pool for admin/owner operations
+
+      case POOL_CONTEXTS.CLIENT_TENANT:
+      case POOL_CONTEXTS.API_CLIENT:
+         return await getPoolForSchema(schema); // Tenant-specific pool
+
+      case POOL_CONTEXTS.DEFAULT:
+      default:
+         return await getPoolForSchema(schema); // Default tenant pool
+   }
+};
+
+/**
+ * Set pool context in session
+ * @param {Object} req - Request object
+ * @param {string} context - Pool context type
+ * @param {string} schema - Database schema
+ * @param {Object} metadata - Additional context metadata
+ */
+const setPoolContext = (req, context, schema, metadata = {}) => {
+   req.session.poolContext = context;
+   req.session.schema = schema;
+   req.session.poolMetadata = metadata;
+   req.schema = schema; // Also set on request for immediate use
+
+   console.log(`🎯 Pool context set: ${context} | Schema: ${schema}`, metadata);
+};
+
+/**
  * Detect schema from return_url parameter for Frontend-Login-Proxy mode
+ * Sets CLIENT_TENANT pool context (for tenant users)
  */
 export const detectSchemaFromReturnUrl = async (req, res, next) => {
    try {
       const { return_url } = req.query;
 
       if (return_url) {
-         // Parse the return_url to find matching client server
          const authInternalPool = await getPool();
 
-         // Get all client servers and find the one with matching allowed_return_urls
+         // Get all client servers and find matching one
          const { rows: clientServers } = await authInternalPool.query(
             "SELECT * FROM client_servers"
          );
@@ -36,24 +102,32 @@ export const detectSchemaFromReturnUrl = async (req, res, next) => {
          );
 
          if (matchingClient) {
-            req.session.schema = matchingClient.assigned_schema_name;
-            req.session.client_id = matchingClient.client_id;
-            req.schema = matchingClient.assigned_schema_name;
-            console.log(
-               `Schema detected from return_url: ${matchingClient.assigned_schema_name}`
+            // Set CLIENT_TENANT context - this is a tenant user, not admin/owner
+            setPoolContext(
+               req,
+               POOL_CONTEXTS.CLIENT_TENANT,
+               matchingClient.assigned_schema_name,
+               {
+                  client_id: matchingClient.client_id,
+                  app_name: matchingClient.app_name,
+                  client_mode: matchingClient.client_mode,
+                  return_url: return_url,
+                  user_role: USER_ROLES.USER,
+               }
             );
          }
       }
 
       next();
    } catch (error) {
-      console.error("Error detecting schema from return_url:", error);
+      console.error("❌ Error detecting schema from return_url:", error);
       next(); // Continue with default behavior
    }
 };
 
 /**
  * Detect schema from API Bearer token for API-Auth-Server mode
+ * Sets API_CLIENT pool context (for server-to-server calls)
  */
 export const detectSchemaFromApiToken = async (req, res, next) => {
    try {
@@ -64,33 +138,102 @@ export const detectSchemaFromApiToken = async (req, res, next) => {
 
          try {
             const clientInfo = await verifyApiToken(token);
-            req.schema = clientInfo.schema;
-            req.clientContext = clientInfo;
-            console.log(`Schema detected from API token: ${clientInfo.schema}`);
+
+            // Set API_CLIENT context - this is a server-to-server API call
+            setPoolContext(req, POOL_CONTEXTS.API_CLIENT, clientInfo.schema, {
+               client_id: clientInfo.client_id,
+               app_name: clientInfo.app_name,
+               allowed_return_urls: clientInfo.allowed_return_urls,
+               token_type: "api_token",
+               user_role: "api_client",
+            });
+
+            req.clientContext = clientInfo; // Backward compatibility
          } catch (tokenError) {
-            // Invalid token, continue without setting schema
-            console.log("Invalid API token, using default schema");
+            console.log("⚠️ Invalid API token, using default schema");
          }
       }
 
       next();
    } catch (error) {
-      console.error("Error detecting schema from API token:", error);
+      console.error("❌ Error detecting schema from API token:", error);
       next(); // Continue with default behavior
    }
 };
 
 /**
- * Set default schema if none detected
+ * Detect user role and set appropriate context
+ * - admin: System administrator (role = 'admin')
+ * - owner: Client server owner (has client_servers records)
+ * - user: Regular user (default)
+ */
+export const detectUserRole = async (req, res, next) => {
+   try {
+      // Only check if user is logged in and no other context is set
+      if (req.session?.userId && !req.session?.poolContext) {
+         const userRole = req.session?.role;
+
+         // Check if user is system admin
+         if (userRole === "admin") {
+            setPoolContext(req, POOL_CONTEXTS.AUTH_INTERNAL, "auth_internal", {
+               user_id: req.session.userId,
+               user_role: USER_ROLES.ADMIN,
+               system_admin: true,
+            });
+            return next();
+         }
+
+         // Check if user owns any client servers (making them an owner)
+         const authInternalPool = await getPool();
+         const { rows: userClients } = await authInternalPool.query(
+            "SELECT COUNT(*) as client_count FROM client_servers WHERE user_id = $1",
+            [req.session.userId]
+         );
+
+         if (userClients[0]?.client_count > 0) {
+            // User owns client servers - they are an owner
+            setPoolContext(req, POOL_CONTEXTS.AUTH_INTERNAL, "auth_internal", {
+               user_id: req.session.userId,
+               user_role: USER_ROLES.OWNER,
+               owned_clients: userClients[0].client_count,
+            });
+         } else {
+            // Regular user - will use default tenant pool
+            setPoolContext(
+               req,
+               POOL_CONTEXTS.DEFAULT,
+               process.env.SEED_SCHEMA || "client_template",
+               {
+                  user_id: req.session.userId,
+                  user_role: USER_ROLES.USER,
+                  reason: "regular_user",
+               }
+            );
+         }
+      }
+
+      next();
+   } catch (error) {
+      console.error("❌ Error detecting user role:", error);
+      next(); // Continue with default behavior
+   }
+};
+
+/**
+ * Set default schema and pool context if none detected
  */
 export const setDefaultSchema = (req, res, next) => {
-   // If no schema set yet, use default
-   if (!req.schema && !req.session.schema) {
-      req.session.schema = process.env.SEED_SCHEMA || "client_template";
-      req.schema = req.session.schema;
-      console.log(`Using default schema: ${req.schema}`);
+   // If no pool context set yet, use default
+   if (!req.session?.poolContext) {
+      const defaultSchema = process.env.SEED_SCHEMA || "client_template";
+
+      setPoolContext(req, POOL_CONTEXTS.DEFAULT, defaultSchema, {
+         fallback: true,
+         reason: "no_specific_context",
+         user_role: USER_ROLES.USER,
+      });
    } else if (req.session.schema && !req.schema) {
-      // Use schema from session if available
+      // Ensure req.schema is set from session
       req.schema = req.session.schema;
    }
 
@@ -98,22 +241,29 @@ export const setDefaultSchema = (req, res, next) => {
 };
 
 /**
- * Combined middleware that tries all detection methods
+ * Combined middleware that tries all detection methods in priority order
  */
 export const detectSchema = async (req, res, next) => {
-   // Try API token first (for API mode)
-   await detectSchemaFromApiToken(req, res, () => {});
+   try {
+      // 1. Try API token first (highest priority - server-to-server)
+      await detectSchemaFromApiToken(req, res, () => {});
 
-   // --- frontend proxy mode ---
-   // if secret_key
+      // 2. If no API context, try return_url (frontend proxy mode - tenant users)
+      if (!req.session?.poolContext) {
+         await detectSchemaFromReturnUrl(req, res, () => {});
+      }
 
-   // If no schema yet, try return_url (for frontend proxy mode)
-   if (!req.schema) {
-      await detectSchemaFromReturnUrl(req, res, () => {});
+      // 3. If no specific context, detect user role (admin/owner/user)
+      if (!req.session?.poolContext) {
+         await detectUserRole(req, res, () => {});
+      }
+
+      // 4. Set default if still no context
+      setDefaultSchema(req, res, next);
+   } catch (error) {
+      console.error("❌ Error in schema detection:", error);
+      setDefaultSchema(req, res, next);
    }
-
-   // Set default if still no schema
-   setDefaultSchema(req, res, next);
 };
 
 /**
@@ -128,10 +278,72 @@ export const getSchemaFromRequest = (req) => {
    );
 };
 
+/**
+ * Get user role from session metadata
+ */
+export const getUserRole = (req) => {
+   return req.session?.poolMetadata?.user_role || USER_ROLES.USER;
+};
+
+/**
+ * Check if user is system admin
+ */
+export const isSystemAdmin = (req) => {
+   return getUserRole(req) === USER_ROLES.ADMIN;
+};
+
+/**
+ * Check if user is client server owner
+ */
+export const isClientOwner = (req) => {
+   return getUserRole(req) === USER_ROLES.OWNER;
+};
+
+/**
+ * Check if user is tenant user
+ */
+export const isTenantUser = (req) => {
+   return getUserRole(req) === USER_ROLES.USER;
+};
+
+/**
+ * Get pool context information for debugging/logging
+ */
+export const getPoolContextInfo = (req) => {
+   return {
+      poolContext: req.session?.poolContext,
+      schema: req.session?.schema,
+      metadata: req.session?.poolMetadata,
+      userId: req.session?.userId,
+      userRole: getUserRole(req),
+   };
+};
+
+/**
+ * Middleware to log pool context (useful for debugging)
+ */
+export const logPoolContext = (req, res, next) => {
+   if (process.env.NODE_ENV === "development") {
+      const context = getPoolContextInfo(req);
+      console.log("📊 Current Pool Context:", context);
+   }
+   next();
+};
+
 export default {
    detectSchemaFromReturnUrl,
    detectSchemaFromApiToken,
+   detectUserRole,
    setDefaultSchema,
    detectSchema,
    getSchemaFromRequest,
+   resolvePoolFromSession,
+   getPoolContextInfo,
+   logPoolContext,
+   getUserRole,
+   isSystemAdmin,
+   isClientOwner,
+   isTenantUser,
+   POOL_CONTEXTS,
+   USER_ROLES,
 };

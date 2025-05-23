@@ -120,9 +120,6 @@ app.use("/api/auth", authRoute);
 import userRoute from "./src/routes/user.js";
 app.use("/api/users", userRoute);
 
-import accountRoute from "./src/routes/account.js";
-app.use("/api/account", accountRoute);
-
 app.listen(PORT, () => {
    // For production logging
    console.info(`Server running on port ${PORT}`);

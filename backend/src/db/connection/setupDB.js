@@ -2,10 +2,10 @@
 // Usage:
 //   node src/db/setupDB.js        – ensures default schema & tables
 //   node src/db/setupDB.js --delete  – drops existing tables first then reseeds
-import config from "../utils/config.js";
-import seedDB from "./seed/seedDB.js";
-import getPool from "./connection/auth.js";
-import { getPoolForSchema } from "./connection/clientServers.js";
+import config from "../../utils/config.js";
+import seedDB from "../seed/seedDB.js";
+import getPool from "./pools/auth.js";
+import { getPoolForSchema } from "./pools/clientServers.js";
 
 const deleteMode = process.argv.includes("--delete");
 

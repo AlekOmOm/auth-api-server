@@ -6,8 +6,8 @@
  * - client_servers table
  */
 import { Pool } from "pg";
-import config from "../../utils/config.js";
-import { ddl } from "../../db/schemas/auth_internal/client_servers.js";
+import config from "../../../utils/config.js";
+import { ddl } from "../../schemas/auth_internal/client_servers.js";
 
 // cache
 let pool;

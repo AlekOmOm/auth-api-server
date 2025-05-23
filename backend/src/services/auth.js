@@ -1,6 +1,6 @@
 import { AuthError, ValidationError } from "../middleware/errorHandler.js";
 import { v4 as uuidv4 } from "uuid";
-import db from "../db/clientRepository.js"; // Import the repository
+import db from "../db/userRepository.js"; // Import the repository
 
 /** ------- auth service ------- */
 

@@ -1,6 +1,6 @@
 import { Pool } from "pg";
-import config from "../../utils/config.js";
-import { ddl } from "../../db/schemas/client_servers/client_server_template.js";
+import config from "../../../utils/config.js";
+import { ddl } from "../../schemas/client_servers/client_server_template.js";
 
 // Cache
 const schemas = {};

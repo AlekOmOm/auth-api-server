@@ -1,6 +1,19 @@
 import { Router } from "express";
 const router = Router();
 
+/** -- authentication of a normal user --
+ * 
+ * responsible for:
+ *  - login
+ *  - logout
+ *  - register
+ *  - getCurrentUser
+ *  - getSessions
+ * 
+ * uses:
+ *  - userService to interact with repository
+ */
+
 // --- controllers ---
 import {
   register,

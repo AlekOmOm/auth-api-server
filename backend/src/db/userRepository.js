@@ -2,7 +2,7 @@
 import * as userRepo from "./repositories/userRepository.js";
 import * as sessionRepo from "./repositories/sessionRepository.js";
 
-import { getPoolForSchema } from "./connection/clientServers.js";
+import { getPoolForSchema } from "./connection/pools/clientServers.js";
 import { v4 as uuidv4 } from "uuid";
 
 let DEFAULT_SCHEMA = process.env.SEED_SCHEMA;

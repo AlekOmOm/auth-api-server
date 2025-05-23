@@ -1,4 +1,4 @@
-import db from "../db/clientRepository.js";
+import db from "../db/userRepository.js";
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.js";
 
 // ---- utils ----

@@ -2,8 +2,8 @@
 
 // Client Servers
 export const createClientServer = `
-  INSERT INTO client_servers (client_id, client_secret_hash, app_name, assigned_schema_name, allowed_return_urls)
-  VALUES ($1, $2, $3, $4, $5)
+  INSERT INTO client_servers (client_id, client_secret_hash, app_name, assigned_schema_name, allowed_return_urls, user_id, client_mode)
+  VALUES ($1, $2, $3, $4, $5, $6, $7)
   RETURNING *;
 `;
 
@@ -16,12 +16,25 @@ export const getClientServerByClientSecretHash = `
 `;
 
 export const updateClientServer = `
-  UPDATE client_servers SET client_secret_hash = $2, app_name = $3, assigned_schema_name = $4, allowed_return_urls = $5
+  UPDATE client_servers SET client_secret_hash = $2, app_name = $3, assigned_schema_name = $4, allowed_return_urls = $5, client_mode = $6
   WHERE client_id = $1 RETURNING *;
 `;
 
 export const deleteClientServer = `
   DELETE FROM client_servers WHERE client_id = $1;
+`;
+
+// User-specific client server queries
+export const getClientServersByUserId = `
+  SELECT * FROM client_servers WHERE user_id = $1 ORDER BY created_at DESC;
+`;
+
+export const getClientServerByUserIdAndClientId = `
+  SELECT * FROM client_servers WHERE user_id = $1 AND client_id = $2;
+`;
+
+export const deleteClientServerByUserIdAndClientId = `
+  DELETE FROM client_servers WHERE user_id = $1 AND client_id = $2 RETURNING *;
 `;
 
 // Users
@@ -53,3 +66,15 @@ export const getSession = `SELECT * FROM sessions WHERE session_id = $1::uuid;`;
 export const getSessionByUserId = `SELECT * FROM sessions WHERE user_id = $1::uuid;`;
 export const deleteSessionByUserId = `DELETE FROM sessions WHERE user_id = $1::uuid;`;
 export const deleteSessionBySessionId = `DELETE FROM sessions WHERE session_id = $1::uuid;`;
+
+export const getSessionBySessionId = `
+  SELECT * FROM sessions WHERE session_id = $1 AND (expires_at IS NULL OR expires_at > NOW());
+`;
+
+export const deleteSession = `
+  DELETE FROM sessions WHERE session_id = $1;
+`;
+
+export const deleteExpiredSessions = `
+  DELETE FROM sessions WHERE expires_at IS NOT NULL AND expires_at <= NOW();
+`;

@@ -1,7 +1,7 @@
 import seedData from "./seedData.json" with { type: "json" };
 import * as userRepo from "../repositories/userRepository.js";
-import getPool from "../connection/auth.js";
-import getPoolForSchema from "../connection/clientServers.js";
+import getPool from "../connection/pools/auth.js";
+import getPoolForSchema from "../connection/pools/clientServers.js";
 import { v4 as uuidv4 } from "uuid";
 
 export const SEED_SCHEMA_NAME = seedData.assigned_schema_name || "client_template";

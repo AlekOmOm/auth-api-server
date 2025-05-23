@@ -6,6 +6,8 @@ CREATE TABLE client_servers (
     app_name VARCHAR(255) NOT NULL,
     assigned_schema_name VARCHAR(255) UNIQUE NOT NULL, -- e.g., 'client_acme_corp_users'
     allowed_return_urls TEXT[] NOT NULL, -- Array of allowed URLs for redirection
+    user_id UUID NOT NULL, -- Links to user who owns this client
+    client_mode VARCHAR(50) DEFAULT 'frontend-login-proxy', -- 'frontend-login-proxy' or 'api-auth-server'
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
