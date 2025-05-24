@@ -50,13 +50,21 @@ export async function login(credentials, session, schema) {
       const sessionId = uuidv4();
       await db.createSession(schema, [user.id, sessionId]);
 
-      return createSuccessResponse(
-         "Login successful",
-         removePasswordFromUser({
-            userId: user.id,
-            role: user.role,
-         })
-      );
+      /**
+       * returns:
+       * {
+       *    message: ...,
+       *    data: {
+       *       userId: ...,
+       *       role: ...,
+       *       email: ...,
+       *       name: ...,
+       *       allowedUrls: [...],
+       *    },
+       * }
+       */
+      const userResponseData = removePasswordFromUser(user);
+      return createSuccessResponse("Login successful", userResponseData);
    } catch (error) {
       throw error;
    }
@@ -199,6 +207,13 @@ function createSuccessResponse(message, data = null) {
    if (data) {
       response.data = data;
    }
+   /**
+    * returns:
+    * {
+    *    message: ...,
+    *    data: ...,
+    * }
+    */
    return response;
 }
 
@@ -208,5 +223,15 @@ function removePasswordFromUser(user) {
       const { password, password_hash, ...userWithoutPassword } = user;
       return userWithoutPassword;
    }
+   /**
+    * returns:
+    * {
+    *    userId: ...,
+    *    role: ...,
+    *    email: ...,
+    *    name: ...,
+    *    allowedUrls: [...],
+    * }
+    */
    return user;
 }

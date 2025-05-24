@@ -1,4 +1,4 @@
-import db from "../db/userRepository.js";
+import repo from "../repo/userRepository.js";
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.js";
 
 // ---- utils ----
@@ -9,7 +9,7 @@ import { removePasswordFromUser } from "../utils/authUtils.js";
 // Read all users
 export async function getUsers(schema) {
    try {
-      const users = await db.getUsers(schema);
+      const users = await repo.getUsers(schema);
 
       // Filter sensitive data
       const filteredUsers = users.map((user) => removePasswordFromUser(user));
@@ -32,7 +32,7 @@ export async function getUserById(id, schema) {
          throw new ValidationError("User ID is required");
       }
 
-      const user = await db.getUser(schema, id);
+      const user = await repo.getUser(schema, id);
 
       if (!user) {
          throw new NotFoundError(`User with ID ${id} not found`);
@@ -57,7 +57,7 @@ export async function getUserByNameAndEmail(name, email, schema) {
          throw new ValidationError("Name and email are required");
       }
 
-      const user = await db.getUserByNameAndEmail(schema, name, email);
+      const user = await repo.getUserByNameAndEmail(schema, name, email);
 
       if (!user) {
          throw new NotFoundError("User not found");
@@ -88,7 +88,7 @@ export async function createUser(user, schema) {
          role: user.role || "user",
       };
 
-      const result = await db.createUser(schema, [
+      const result = await repo.createUser(schema, [
          userWithRole.name,
          userWithRole.role,
          userWithRole.email,
@@ -120,7 +120,7 @@ export async function updateUser(id, userData, schema) {
       }
 
       // Get existing user
-      const existingUser = await db.getUser(schema, id);
+      const existingUser = await repo.getUser(schema, id);
 
       if (!existingUser) {
          throw new NotFoundError(`User with ID ${id} not found`);
@@ -134,7 +134,7 @@ export async function updateUser(id, userData, schema) {
          password: userData.password || existingUser.password,
       };
 
-      await db.updateUser(schema, [
+      await repo.updateUser(schema, [
          updatedUser.name,
          updatedUser.role,
          updatedUser.email,
@@ -164,13 +164,13 @@ export async function deleteUser(id, schema) {
          throw new ValidationError("User ID is required");
       }
 
-      const user = await db.getUser(schema, id);
+      const user = await repo.getUser(schema, id);
 
       if (!user) {
          throw new NotFoundError(`User with ID ${id} not found`);
       }
 
-      await db.deleteUser(schema, id);
+      await repo.deleteUser(schema, id);
 
       return {
          message: "User deleted successfully",

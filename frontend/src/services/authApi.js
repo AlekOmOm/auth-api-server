@@ -4,21 +4,6 @@ import { authStore } from "../stores/authStore";
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
 const BACKEND_URL_AUTH = `${BACKEND_URL}/auth`;
-const BACKEND_URL_USERS = `${BACKEND_URL}/users`;
-
-/**
- * Test API connection by fetching users
- * @returns {Promise<Object>} The API response with users
- */
-const testApi = async () => {
-   try {
-      const result = await fetchGet(`${BACKEND_URL_USERS}`);
-
-      return result;
-   } catch (error) {
-      throw error;
-   }
-};
 
 /**
  * Register a new user
@@ -70,7 +55,7 @@ const register = async (credentials) => {
 
 /**
  * Login a user with credentials
- * @param {Object} credentials - User credentials with name, email and password
+ * @param {Object} credentials - User credentials with email and password (name removed)
  * @returns {Promise<Object>} Login result with success status
  */
 const login = async (credentials) => {
@@ -83,40 +68,42 @@ const login = async (credentials) => {
          };
       }
 
+      /**
+       * fetchPost
+       * - response.success = true if login is successful
+       * - response.message = error message if login fails
+       *
+       * @returns {Promise<Object>}
+       *   {
+       *      data: {
+       *         userId: ...,
+       *         role: ...,
+       *         email: ...,
+       *         name: ...,
+       *         allowedUrls: [...],
+       *      },
+       *      message: ...,
+       *      errors: ...,
+       *   }
+       */
       const response = await fetchPost(
          `${BACKEND_URL_AUTH}/login`,
          credentials
       );
 
-      // fetchPost returns { success, data, message, errors }
       if (!response.success) {
          // Return the structured error from fetchPost
-         return response;
+         return {
+            ...response,
+            success: false,
+         };
       }
 
-      // --- Added: Update authStore on successful login ---
-      // Check if the response indicates success and contains essential user data (like userId)
-      if (response.success && response.data && response.data.userId) {
-         authStore.login(response.data); // Pass the whole data object
-         return {
-            ...response, // Keep other potential info from response
-            success: true,
-         };
-      } else if (response.success) {
-         // Handle case where login API reports success but essential data (userId) is missing
-         console.warn(
-            "Login successful, but essential user data (userId) missing in response:",
-            response.data
-         );
-         return {
-            ...response, // Keep other potential info from response
-            success: false,
-            message: "Login successful, but user data is incomplete.", // More specific message
-         };
-      } else {
-         // Handle the case where fetchPost already indicated failure
-         return response; // Return the original error response from fetchPost
-      }
+      // success
+      return {
+         ...response,
+         success: true,
+      };
    } catch (error) {
       console.error("Login error:", error);
       return {
@@ -134,7 +121,6 @@ const logout = async () => {
    try {
       const response = await fetchPost(`${BACKEND_URL_AUTH}/logout`, {});
 
-      authStore.logout();
       return {
          ...response,
          success: true,
@@ -150,7 +136,6 @@ const logout = async () => {
 
 // --- export ---
 const authApi = {
-   testApi,
    register,
    login,
    logout,

@@ -7,9 +7,9 @@ import {
    NotFoundError,
 } from "../middleware/errorHandler.js";
 // client repo has: internal operations with the client's specific schema
-import * as clientRepo from "../db/authServerRepository.js";
+import * as clientRepo from "../repo/authServerRepository.js";
 // client servers repo has: operations with the client_servers table
-import * as clientServersRepo from "../db/repositories/clientServersRepository.js";
+import * as clientServersRepo from "../repo/repositories/clientServersRepository.js";
 import config from "../utils/config.js";
 /**
  * Client Server Service

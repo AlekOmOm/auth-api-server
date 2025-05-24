@@ -1,6 +1,6 @@
 <script>
   import { navigate, Route, Link } from 'svelte-routing';
-  import authApi from '../../services/authApi.js'
+  import { authStore } from '../../stores/authStore.js'; // Import authStore
   import ErrorMessage from '../../components/ErrorMessage.svelte';
 
   let name = '';
@@ -24,17 +24,17 @@
     isLoading = true;
 
     try {
-      const response = await authApi.register(credentials);
+      // authStore
+      const response = await authStore.register(credentials);
 
       if(response.success) {
-        successMessage = 'success!';
+        successMessage = 'Registration successful! Please log in.'; // Updated message
         
-        // Clear form
         name = '';
         email = '';
         password = '';
         
-        // Redirect to login after 2 seconds
+        // redirect after 2 seconds
         setTimeout(() => {
           navigate('/login');
         }, 2000);

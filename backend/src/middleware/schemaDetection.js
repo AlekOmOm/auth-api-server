@@ -1,8 +1,8 @@
 import { verifyApiToken } from "../services/clientServerService.js";
-import * as clientServersRepo from "../db/repositories/clientServersRepository.js";
+import * as clientServersRepo from "../repo/repositories/clientServersRepository.js";
 import config from "../utils/config.js";
-import getPool from "../db/connection/pools/auth.js";
-import getPoolForSchema from "../db/connection/pools/clientServers.js";
+import getPool from "../repo/connection/pools/auth.js";
+import getPoolForSchema from "../repo/connection/pools/clientServers.js";
 
 /**
  * Enhanced middleware to detect and set database schema + pool context in session
