@@ -64,7 +64,10 @@ export async function login(credentials, session, schema) {
        * }
        */
       const userResponseData = removePasswordFromUser(user);
-      return createSuccessResponse("Login successful", userResponseData);
+      return createSuccessResponse("Login successful", {
+         ...userResponseData,
+         poolMetadata: session.poolMetadata || null,
+      });
    } catch (error) {
       throw error;
    }

@@ -65,18 +65,13 @@ export const resolvePoolFromSession = async (req) => {
 
 /**
  * Set pool context in session
- * @param {Object} req - Request object
  * @param {string} context - Pool context type
- * @param {string} schema - Database schema
  * @param {Object} metadata - Additional context metadata
  */
 const setPoolContext = (req, context, schema, metadata = {}) => {
    req.session.poolContext = context;
    req.session.schema = schema;
    req.session.poolMetadata = metadata;
-   req.schema = schema; // Also set on request for immediate use
-
-   console.log(`🎯 Pool context set: ${context} | Schema: ${schema}`, metadata);
 };
 
 /**
@@ -85,9 +80,9 @@ const setPoolContext = (req, context, schema, metadata = {}) => {
  */
 export const detectSchemaFromReturnUrl = async (req, res, next) => {
    try {
-      const { return_url } = req.query;
+      const returnUrl = req.body.returnUrl;
 
-      if (return_url) {
+      if (returnUrl !== null) {
          const authInternalPool = await getPool();
 
          // Get all client servers and find matching one
@@ -97,12 +92,34 @@ export const detectSchemaFromReturnUrl = async (req, res, next) => {
 
          const matchingClient = clientServers.find((client) =>
             client.allowed_return_urls.some((allowedUrl) =>
-               return_url.startsWith(allowedUrl)
+               /**
+                *
+                * example:
+                * - allowedUrl: ['https://example.com/dashboard', 'https://example.com/profile']
+                * - returnUrl: 'https://example.com/dashboard'
+                * - result: true (because 'https://example.com/dashboard' starts with itself)
+                *
+                * - allowedUrl: ['https://example.com/dashboard', 'https://example.com/profile']
+                * - returnUrl: 'https://example.com/settings'
+                * - result: false (because 'https://example.com/settings' does not start with 'https://example.com/dashboard' or 'https://example.com/profile')
+                */
+               allowedUrl.some((allowedUrl) => returnUrl.startsWith(allowedUrl))
             )
          );
 
          if (matchingClient) {
             // Set CLIENT_TENANT context - this is a tenant user, not admin/owner
+            /**
+             * structure:
+             *
+             * {
+             *    poolContext: POOL_CONTEXTS.CLIENT_TENANT,
+             *    schema: matchingClient.assigned_schema_name,
+             *    poolMetadata: {
+             *       ...
+             *    }
+             * }
+             */
             setPoolContext(
                req,
                POOL_CONTEXTS.CLIENT_TENANT,
@@ -112,6 +129,7 @@ export const detectSchemaFromReturnUrl = async (req, res, next) => {
                   app_name: matchingClient.app_name,
                   client_mode: matchingClient.client_mode,
                   return_url: return_url,
+                  allowed_return_urls: matchingClient.allowed_return_urls,
                   user_role: USER_ROLES.USER,
                }
             );
@@ -121,7 +139,7 @@ export const detectSchemaFromReturnUrl = async (req, res, next) => {
       next();
    } catch (error) {
       console.error("❌ Error detecting schema from return_url:", error);
-      next(); // Continue with default behavior
+      next();
    }
 };
 

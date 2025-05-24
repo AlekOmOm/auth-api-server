@@ -2,6 +2,7 @@
 
 This document provides a complete guide to implementing and understanding the **Frontend-Login-Proxy Mode** in the Auth-System. This mode enables client applications to seamlessly redirect users to the Auth-System's built-in UI for authentication, while maintaining persistent connection to their specific database schema.
 
+
 ## Table of Contents
 1. [Overview](#overview)
 2. [Client Registration Process](#client-registration-process)
@@ -10,6 +11,7 @@ This document provides a complete guide to implementing and understanding the **
 5. [Schema Detection Flow](#schema-detection-flow)
 6. [Troubleshooting](#troubleshooting)
 7. [Best Practices](#best-practices)
+8. [URL Migration & Updates](#url-migration-updates)
 
 ---
 
@@ -168,6 +170,42 @@ const CLIENT_CONFIG = {
 window.location.href = `${AUTH_SYSTEM_URL}/login?return_url=${returnUrl}`;
 ```
 
+#### **API-Auth-Server Mode (Different Use Case)**
+```javascript
+// ✅ SECURE: Server-side only
+const CLIENT_SECRET = process.env.CLIENT_SECRET;  // ✅ Environment variable
+
+// ✅ SECURE: Server-to-server handshake
+const token = await fetch('/api/clientServer/handshake', {
+  method: 'POST',
+  body: JSON.stringify({
+    client_id: CLIENT_ID,
+    client_secret: CLIENT_SECRET  // ✅ Backend server only
+  })
+});
+```
+
+### **Security Benefits of URL-Based Detection**
+
+1. **✅ No Secret Storage**: Frontend never needs to store sensitive credentials
+2. **✅ No Secret Transmission**: No secrets sent over the network from frontend
+3. **✅ Tamper-Resistant**: URLs are validated against pre-registered whitelist
+4. **✅ Audit Trail**: All redirects are logged and traceable
+
+### **When `client_secret` IS Used**
+
+The `client_secret` is **only used for**:
+- 🔧 **API-Auth-Server mode** - Server-to-server authentication
+- 🔧 **Administrative operations** - Updating client settings
+- 🔧 **Backend integrations** - Mobile app backends, microservices
+
+The `client_secret` is **never used for**:
+- ❌ Frontend applications
+- ❌ Browser-based authentication
+- ❌ User login flows
+- ❌ Session management
+
+---
 
 ## Implementation Guide
 
@@ -510,6 +548,215 @@ async function checkAuthCached(sessionId) {
   authCache.set(sessionId, { user, timestamp: Date.now() });
   return user;
 }
+```
+
+---
+
+## URL Migration & Updates
+
+### **Production Deployment: Updating URLs Safely**
+
+When deploying from development to production (e.g., `localhost:4000` → `trade.devalek.dev`), you need to update your `allowed_return_urls` to maintain schema access.
+
+#### **The Challenge**
+```javascript
+// 🚨 PROBLEM: URLs don't match after deployment
+// Development URLs: ["http://localhost:4000"]
+// Production URLs:   ["https://trade.devalek.dev"]
+// Result: Schema detection fails!
+```
+
+#### **The Solution: Secure URL Updates**
+
+**Step 1: Create Update Script (Server-Side Only)**
+
+```javascript
+// scripts/update-urls.js
+// ⚠️ RUN ON SERVER ONLY - NEVER IN FRONTEND!
+
+const updateAllowedUrls = async () => {
+  try {
+    // 🔐 Use your stored credentials
+    const CLIENT_ID = process.env.CLIENT_ID;
+    const CLIENT_SECRET = process.env.CLIENT_SECRET;
+    const AUTH_SYSTEM_URL = process.env.AUTH_SYSTEM_URL;
+
+    console.log('🔐 Authenticating with Auth-System...');
+    
+    // 1. Get authentication token
+    const authResponse = await fetch(`${AUTH_SYSTEM_URL}/api/clientServer/handshake`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET
+      })
+    });
+
+    if (!authResponse.ok) {
+      throw new Error('Authentication failed');
+    }
+
+    const { token } = (await authResponse.json()).data;
+    console.log('✅ Authentication successful');
+
+    // 2. Update allowed URLs
+    console.log('🔄 Updating allowed return URLs...');
+    
+    const updateResponse = await fetch(`${AUTH_SYSTEM_URL}/api/clientServer/me`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        allowed_return_urls: [
+          // 🏠 Keep development URLs (for testing)
+          "http://localhost:4000",
+          "http://localhost:4000/dashboard",
+          "http://localhost:4000/profile",
+          
+          // 🚀 Add production URLs
+          "https://trade.devalek.dev",
+          "https://trade.devalek.dev/dashboard", 
+          "https://trade.devalek.dev/profile",
+          "https://trade.devalek.dev/auth/callback",
+          
+          // 🧪 Add staging URLs (optional)
+          "https://staging.trade.devalek.dev",
+          "https://staging.trade.devalek.dev/dashboard"
+        ]
+      })
+    });
+
+    if (!updateResponse.ok) {
+      throw new Error('URL update failed');
+    }
+
+    const result = await updateResponse.json();
+    console.log('✅ URLs updated successfully!');
+    console.log('📋 Updated URLs:', result.data.allowed_return_urls);
+    
+  } catch (error) {
+    console.error('❌ Update failed:', error);
+    process.exit(1);
+  }
+};
+
+// Run the update
+updateAllowedUrls();
+```
+
+**Step 2: Environment Variables**
+
+```bash
+# .env.production
+CLIENT_ID=client_f47ac10b58cc4372a5670e02b2c3d479
+CLIENT_SECRET=550e8400-e29b-41d4-a716-446655440000  # From initial registration
+AUTH_SYSTEM_URL=https://auth.yourcompany.com
+```
+
+**Step 3: Run During Deployment**
+
+```bash
+# In your CI/CD pipeline or deployment script
+node scripts/update-urls.js
+```
+
+### **Built-in Security Safeguards**
+
+The update process has multiple layers of security:
+
+#### **1. Authentication Required**
+- ✅ Must provide valid `client_secret`
+- ✅ JWT token expires (24 hours)
+- ✅ Token tied to specific client
+
+#### **2. Authorization Checks**
+```javascript
+// Only the client can update their own URLs
+// middleware/clientServerAuth.js validates:
+// - Token signature
+// - Token expiration  
+// - Client existence
+// - Scope restrictions
+```
+
+#### **3. Validation Rules**
+- ✅ URLs must be valid format
+- ✅ HTTPS required in production
+- ✅ No wildcard patterns allowed
+- ✅ Audit trail logged
+
+### **Best Practices for URL Management**
+
+#### **✅ Progressive URL Addition**
+```javascript
+// Good: Add new URLs while keeping old ones
+allowed_return_urls: [
+  "http://localhost:4000",        // Keep for dev
+  "https://staging.yourdomain.com", // Add staging  
+  "https://yourdomain.com"        // Add production
+]
+```
+
+#### **✅ Environment-Specific Configurations**
+```javascript
+// config/urls.js
+const getUrlsForEnvironment = (env) => {
+  const baseUrls = {
+    development: ["http://localhost:4000"],
+    staging: ["https://staging.trade.devalek.dev"], 
+    production: ["https://trade.devalek.dev"]
+  };
+  
+  // Always include all environments for flexibility
+  return Object.values(baseUrls).flat();
+};
+```
+
+#### **✅ Automated URL Updates**
+```yaml
+# .github/workflows/deploy.yml
+- name: Update Auth URLs
+  run: |
+    export CLIENT_ID=${{ secrets.CLIENT_ID }}
+    export CLIENT_SECRET=${{ secrets.CLIENT_SECRET }}
+    node scripts/update-urls.js
+```
+
+### **Emergency URL Recovery**
+
+If you lose access due to URL mismatch:
+
+#### **Option 1: Admin Override (if available)**
+```bash
+# Direct database access (admin only)
+UPDATE client_servers 
+SET allowed_return_urls = array['https://trade.devalek.dev']
+WHERE client_id = 'your_client_id';
+```
+
+#### **Option 2: Support Contact**
+Contact Auth-System administrators with:
+- Your `client_id`
+- Proof of domain ownership
+- New URLs to add
+
+### **Monitoring URL Changes**
+
+```javascript
+// Monitor for URL-related authentication failures
+const monitorAuthFailures = async () => {
+  // Log when return_url doesn't match any client
+  if (!matchingClient) {
+    console.warn('🚨 URL Mismatch:', {
+      attempted_url: return_url,
+      timestamp: new Date(),
+      user_agent: req.headers['user-agent']
+    });
+  }
+};
 ```
 
 ---

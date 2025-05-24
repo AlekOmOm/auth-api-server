@@ -35,8 +35,23 @@ const register = async (req, res, next) => {
  */
 const login = async (req, res, next) => {
    try {
-      const schema = getSchemaFromRequest(req);
-      const result = await authService.login(req.body, req.session, schema);
+      /**
+       * req.body and req.session data:
+       * - body:
+       *    {
+       *       email: string,
+       *       password: string,
+       *    }
+       * - session:
+       *    {
+       *       poolContext: POOL_CONTEXTS.CLIENT_TENANT,
+       *       schema: string,
+       *       poolMetadata: {
+       *          ...
+       *       }
+       *    }
+       */
+      const result = await authService.login(req.body, req.session);
       res.status(200).json(result);
    } catch (error) {
       next(error); // Pass error to global error handler

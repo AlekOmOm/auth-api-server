@@ -48,6 +48,9 @@ function createAuthStore() {
     */
    async function checkAuth() {
       const { isAuthenticated, user, loading } = get(authStore);
+      if (!isAuthenticated) {
+         checkSession();
+      }
       return { isAuthenticated, user, loading };
    }
 
@@ -80,7 +83,7 @@ function createAuthStore() {
     * @param {Object} credentials - User credentials
     * @returns {Promise<Object>} API response
     */
-   async function login(credentials) {
+   async function login(credentials, returnUrl = null) {
       update((state) => ({ ...state, loading: true }));
       try {
          /**
@@ -89,7 +92,7 @@ function createAuthStore() {
           * - response.message = error message if login fails
           *
           */
-         const response = await authApi.login(credentials);
+         const response = await authApi.login(credentials, returnUrl);
          if (response.success && response.data && response.data.userId) {
             set({ isAuthenticated: true, user: response.data, loading: false });
          } else {

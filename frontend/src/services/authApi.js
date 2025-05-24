@@ -57,42 +57,52 @@ const register = async (credentials) => {
  * Login a user with credentials
  * @param {Object} credentials - User credentials with email and password (name removed)
  * @returns {Promise<Object>} Login result with success status
+ * - invalid input (credentials):
+ *    {
+ *       message: ...,
+ *       success: false,
+ *    }
+ * - sucess:
+ *    {
+ *       data: {
+ *          ... // user data
+ *          allowedUrls: [...],
+ *       },
+ *       message: ...,
+ *       errors: ...,
+ *    }
+ * - failure:
+ *    {
+ *       message: ...,
+ *       success: false,
+ *    }
  */
-const login = async (credentials) => {
+const login = async (credentials, returnUrl = null) => {
    try {
-      // Input validation (assuming email/password for login)
+      // validation
       if (!credentials.email || !credentials.password) {
          return {
             message: "Email and password are required",
             success: false,
          };
       }
-
       /**
-       * fetchPost
-       * - response.success = true if login is successful
-       * - response.message = error message if login fails
+       * sends Post request to /login
        *
-       * @returns {Promise<Object>}
+       * req:
        *   {
-       *      data: {
-       *         userId: ...,
-       *         role: ...,
-       *         email: ...,
-       *         name: ...,
-       *         allowedUrls: [...],
-       *      },
-       *      message: ...,
-       *      errors: ...,
+       *     body: {
+       *       credentials: { email, password },
+       *       returnUrl: ...
+       *     }
        *   }
        */
-      const response = await fetchPost(
-         `${BACKEND_URL_AUTH}/login`,
-         credentials
-      );
+      const response = await fetchPost(`${BACKEND_URL_AUTH}/login`, {
+         credentials,
+         returnUrl,
+      });
 
       if (!response.success) {
-         // Return the structured error from fetchPost
          return {
             ...response,
             success: false,

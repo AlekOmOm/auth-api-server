@@ -2,6 +2,7 @@
   import { Router, Route, navigate, Link } from 'svelte-routing';
   // import authApi from '../../services/authApi.js' // No longer directly used
   import { authStore } from '../../stores/authStore.js'; // Import and use authStore
+  import { loginRedirect } from '../../util/loginRedirect.js';
 
   let name = '';
   let email = '';
@@ -13,9 +14,12 @@
     event.preventDefault();
 
     const credentials = {
-      // name: name.trim(), // Name is not used for login in authApi or authStore
       email: email.trim(),
       password: password.trim()
+    }
+    let returnUrl = null;
+    if (window.location.search.includes('return_url')) {
+      returnUrl = new URL(window.location.href).searchParams.get('return_url');
     }
 
     errorMessage = '';
@@ -27,27 +31,9 @@
        * - response.success = true if login is successful
        * - response.message = error message if login fails
       */
-      const response = await authStore.login(credentials);
-      
+      const response = await authStore.login(credentials, returnUrl);
       if (response.success) { 
-        /**
-         * two cases:
-         * - client frontend has redirect
-         * - client frontend does not have redirect
-         */
-        const currentUrl = window.location.href;
-        if (currentUrl.includes('return_url=')) {
-          // extract return_url from window.location.href
-          const encodedReturnUrl = currentUrl.split('return_url=')[1].split('&')[0]; 
-          const decodedReturnUrl = decodeURIComponent(encodedReturnUrl);
-          console.log('Redirecting to returnUrl:', decodedReturnUrl);
-          // redirect to return_url
-          window.location.href = decodedReturnUrl;
-        } else {
-          // redirect to home
-          console.log('Redirecting to /home');
-          navigate('/home', { replace: true });
-        }
+        loginRedirect(response);
       } else {
         errorMessage = response.message || 'Login failed.';
       }

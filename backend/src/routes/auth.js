@@ -25,9 +25,16 @@ import {
 
 // --- middleware ---
 import { hasRole, isAuthenticated, isNotAdmin } from "../middleware/auth.js";
-
+import { detectSchema } from "../middleware/schemaDetection.js";
 // --- utils ---
 import validation from "../utils/validation.js"; // types and XSS
+
+
+/**
+ * detectSchema middleware for all routes
+ * - sets schema context for user (whether admin, owner or user (tenantUser))
+ */
+router.use(detectSchema);
 
 // --- routes ---
 router.post("/register", validation.register, register);

@@ -8,6 +8,13 @@
  * - admin: System administrator (seeded in DB, full access to auth_internal)
  * - owner: Client server owner (manages client servers, auth_internal access)
  * - user: Tenant user (basic auth only, tenant pool access)
+ *
+ * session updates:
+ * - poolContext:
+ *    - auth_internal: system admin or client owner
+ *    - client_tenant: tenant user
+ *    - api_client: api client
+ * -
  */
 
 import {

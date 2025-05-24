@@ -1,5 +1,5 @@
 export function isAuthenticated(req, res, next) {
-  return checkSession(req, res, next);
+   return checkSession(req, res, next);
 }
 
 /**
@@ -15,13 +15,13 @@ export function isAuthenticated(req, res, next) {
  *   - failure: returns 401 with 'Only for current user. Data protected' message
  */
 export function isNotAdmin(req, res, next) {
-  if (req.session.role === "admin") {
-    return res
-      .status(401)
-      .json({ message: "Only for current user. Data protected" });
-  }
+   if (req.session.role === "admin") {
+      return res
+         .status(401)
+         .json({ message: "Only for current user. Data protected" });
+   }
 
-  next();
+   next();
 }
 
 /**
@@ -30,24 +30,38 @@ export function isNotAdmin(req, res, next) {
  * @returns {function} - the middleware function
  */
 export function hasRole(role) {
-  return (req, res, next) => {
-    if (!req.session || !req.session.userId) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
+   return (req, res, next) => {
+      if (!req.session || !req.session.userId) {
+         return res.status(401).json({ message: "Authentication required" });
+      }
 
-    if (req.session.role !== role && req.session.role !== "admin") {
-      return res.status(401).json({ message: "Insufficient permissions" });
-    }
+      if (req.session.role !== role && req.session.role !== "admin") {
+         return res.status(401).json({ message: "Insufficient permissions" });
+      }
 
-    next();
-  };
+      next();
+   };
 }
 
 // ---------------------
+/**
+ * @description middleware to check if user is authenticated
+ * @param {*} req
+ * @param {*} res
+ * @param {*} next
+ * @returns
+ * - success: next() is called
+ * - failure: returns 401 with 'Authentication required' message
+ *  response:
+ *  {
+ *    message: ...,
+ *    status: 401,
+ *  }
+ */
 async function checkSession(req, res, next) {
-  if (!req.session || !req.session.userId) {
-    return res.status(401).json({ message: "Authentication required" });
-  }
+   if (!req.session || !req.session.userId) {
+      return res.status(401).json({ message: "Authentication required" });
+   }
 
-  next();
+   next();
 }

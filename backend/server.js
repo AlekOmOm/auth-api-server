@@ -47,6 +47,7 @@ app.use(
       resave: false,
       saveUninitialized: false,
       cookie: {
+         sameSite: "lax", // allow same origin different subdomains (fx. trade.devalek.dev and devalek.dev)
          secure: false, // https only (true in production)
          maxAge: 1000 * 60 * 60 * 24, // 1 day
       },
