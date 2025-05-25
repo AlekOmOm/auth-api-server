@@ -7,7 +7,7 @@
  * is used automatically.
  */
 import * as queries from "../connection/queries.js";
-import { getPoolForRequest } from "../services/poolService.js";
+import { getPoolForRequest } from "../../services/poolService.js";
 
 /**
  * Create a new client server

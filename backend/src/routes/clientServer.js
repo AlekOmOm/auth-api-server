@@ -36,7 +36,7 @@ const router = express.Router();
  */
 router.post("/register", async (req, res, next) => {
    try {
-      const result = await clientServerService.registerClientServer(req.body);
+      const result = await clientServerService.registerClientServer(req);
       res.status(201).json(result);
    } catch (error) {
       next(error);
@@ -50,7 +50,7 @@ router.post("/register", async (req, res, next) => {
 router.post("/handshake", async (req, res, next) => {
    try {
       const result = await clientServerService.authenticateClientServer(
-         req.body
+         req
       );
       res.json(result);
    } catch (error) {
@@ -66,9 +66,7 @@ router.post("/handshake", async (req, res, next) => {
  */
 router.get("/me", authenticateClientServer, async (req, res, next) => {
    try {
-      const result = await clientServerService.getClientServerInfo(
-         req.clientContext.client_id
-      );
+      const result = await clientServerService.getClientServerInfo(req);
       res.json(result);
    } catch (error) {
       next(error);

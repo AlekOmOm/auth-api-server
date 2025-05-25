@@ -13,9 +13,9 @@ run:
 	@echo "Starting all services with Docker Compose..."
 	@docker compose up -d
 	@echo "Services are running in the background"
-	@echo " Frontend: http://localhost:{FRONTEND_PORT}"
-	@echo " Backend: http://localhost:{BACKEND_PORT}"
-	@echo " Database: localhost:{POSTGRES_PORT}"
+	@echo " Frontend: http://localhost:$(FRONTEND_PORT)"
+	@echo " Backend: http://localhost:$(BACKEND_PORT)"
+	@echo " Database: localhost:$(POSTGRES_PORT)"
 
 # Stop all services
 stop:

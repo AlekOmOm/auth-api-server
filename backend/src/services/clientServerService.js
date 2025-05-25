@@ -6,17 +6,19 @@ import {
    ValidationError,
    NotFoundError,
 } from "../middleware/errorHandler.js";
-// client repo has: internal operations with the client's specific schema
-import * as clientRepo from "../repo/authServerRepository.js";
-// client servers repo has: operations with the client_servers table
-import * as clientServersRepo from "../repo/repositories/clientServersRepository.js";
+import * as repo from "../repo/adminRepository.js";
 import config from "../utils/config.js";
 /**
  * Client Server Service
  * Handles client server registration, authentication, and management
  */
 
-// Pool for auth_internal schema operations
+/**
+ * session context
+ * 
+ * 
+ */
+
 
 /**
  * Register a new client server (Public API - no user required)
@@ -50,7 +52,7 @@ export async function registerClientServer(clientData) {
       const pool = await getAuthInternalPool();
 
       // Create client server record (no user_id for public API)
-      const clientServer = await clientServersRepo.createClientServer(pool, {
+      const clientServer = await repo.createClientServer(pool, {
          client_id,
          client_secret_hash,
          app_name,
@@ -125,7 +127,7 @@ export async function registerClientServerForUser(clientData, userId) {
       const pool = await getAuthInternalPool();
 
       // Create client server record with user ownership
-      const clientServer = await clientServersRepo.createClientServer(pool, {
+      const clientServer = await repo.createClientServer(pool, {
          client_id,
          client_secret_hash,
          app_name,
@@ -317,7 +319,7 @@ export async function authenticateClientServer(credentials) {
       }
 
       const pool = await getAuthInternalPool();
-      const clientServer = await clientServersRepo.getClientServer(
+      const clientServer = await repo.getClientServer(
          pool,
          client_id
       );
@@ -380,7 +382,7 @@ export async function verifyApiToken(token) {
       }
 
       const pool = await getAuthInternalPool();
-      const clientServer = await clientServersRepo.getClientServer(
+      const clientServer = await repo.getClientServer(
          pool,
          decoded.client_id
       );
@@ -418,7 +420,7 @@ export async function getClientServerInfo(client_id) {
       }
 
       const pool = await getAuthInternalPool();
-      const clientServer = await clientServersRepo.getClientServer(
+      const clientServer = await repo.getClientServer(
          pool,
          client_id
       );
@@ -452,7 +454,7 @@ export async function updateClientServer(client_id, updateData) {
       }
 
       const pool = await getAuthInternalPool();
-      const existingClient = await clientServersRepo.getClientServer(
+      const existingClient = await repo.getClientServer(
          pool,
          client_id
       );
@@ -473,7 +475,7 @@ export async function updateClientServer(client_id, updateData) {
          client_mode: updateData.client_mode || existingClient.client_mode,
       };
 
-      const result = await clientServersRepo.updateClientServer(
+      const result = await repo.updateClientServer(
          pool,
          updatedClient
       );
@@ -502,7 +504,7 @@ export async function deleteClientServer(client_id) {
       }
 
       const pool = await getAuthInternalPool();
-      const existingClient = await clientServersRepo.getClientServer(
+      const existingClient = await repo.getClientServer(
          pool,
          client_id
       );
@@ -511,7 +513,7 @@ export async function deleteClientServer(client_id) {
          throw new NotFoundError("Client server not found");
       }
 
-      await clientServersRepo.deleteClientServer(pool, client_id);
+      await repo.deleteClientServer(pool, client_id);
 
       return {
          message: "Client server deleted successfully",

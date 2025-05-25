@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js NODE_ENV=production",
     "run": "node server.js",
-    "dev": "npm run init-db && npm run nodemonDev",
+    "dev": "npm run nodemonDev",
     "nodemonDev": "nodemon server.js",
     "init-db": "node ./src/db/setupDB.js",
     "reset-db": "node ./src/db/setupDB.js --delete",

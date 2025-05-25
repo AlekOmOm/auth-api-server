@@ -1,6 +1,6 @@
 import { AuthError, ValidationError } from "../middleware/errorHandler.js";
 import { v4 as uuidv4 } from "uuid";
-import db from "../db/userRepository.js"; // Import the repository
+import repo from "../repo/userRepository.js"; // Import the repository
 
 /** ------- auth service ------- */
 
@@ -18,19 +18,42 @@ import db from "../db/userRepository.js"; // Import the repository
  */
 
 /**
- * Login a user and create a session
- * @param {Object} credentials - User credentials (email, password)
- * @param {Object} session - Express session object
- * @param {string} schema - Database schema (retrieved from session/request context)
- * @returns {Object} Login success response
+ * structure for login/register/logout
+ *
+ * @param {Object} req
+ * - req.body: {
+ *    credentials: { email, password },
+ *    returnUrl: "https://client.com/dashboard"
+ * }
+ * - req.session: {
+ *    poolContext: "client_tenant",
+ *    schema: "client_schema_name",
+ *    poolMetadata: { client_id, user_role: "user", ... }
+ * }
+ * @returns {Object} return
+ * - sucess response (createSuccessResponse)
+ *   - res {
+ *     message: ...,
+ *     data: {
+ *       userId: ...,
+ *       role: ...,
+ *       email: ...,
+ *       name: ...,
+ *     }
+ *   }
+ * - error response (throw error)
  */
-export async function login(credentials, session, schema) {
+
+/**
+ * Login a user and create a session
+ */
+export async function login(req) {
    try {
       if (!credentials.email || !credentials.password) {
          throw new ValidationError("Email and password are required");
       }
 
-      const user = await db.getUserByEmail(schema, credentials.email);
+      const user = await repo.getUserByEmail(schema, credentials.email);
 
       if (!user) {
          throw new AuthError("Invalid credentials");
@@ -46,23 +69,10 @@ export async function login(credentials, session, schema) {
       session.role = user.role;
       // Schema is already in session from middleware
 
-      // Create session in database for tracking
+      // session creation
       const sessionId = uuidv4();
-      await db.createSession(schema, [user.id, sessionId]);
+      await repo.createSession(schema, [user.id, sessionId]);
 
-      /**
-       * returns:
-       * {
-       *    message: ...,
-       *    data: {
-       *       userId: ...,
-       *       role: ...,
-       *       email: ...,
-       *       name: ...,
-       *       allowedUrls: [...],
-       *    },
-       * }
-       */
       const userResponseData = removePasswordFromUser(user);
       return createSuccessResponse("Login successful", {
          ...userResponseData,
@@ -75,21 +85,24 @@ export async function login(credentials, session, schema) {
 
 /**
  * Logout a user and destroy their session
- * @param {Object} session - Express session object
- * @param {string} schema - Database schema (retrieved from session/request context)
- * @returns {Object} Logout success response
+ *
+ * @returns {Object} return
+ * - sucess response
+ *   - req.session.destroy()
+ *   - createSuccessResponse("Logout successful")
+ * - error response (throw error)
  */
-export async function logout(session, schema) {
+export async function logout(req) {
    try {
-      if (!session || !session.userId) {
+      if (!req.session || !req.session.userId) {
          throw new AuthError("No active session");
       }
 
       // Delete session from database
-      await db.deleteSessionByUserId(schema, session.userId);
+      await repo.deleteSessionByUserId(req.schema, req.session.userId);
 
       // Destroy session
-      session.destroy();
+      req.session.destroy();
 
       return createSuccessResponse("Logout successful");
    } catch (error) {
@@ -110,7 +123,7 @@ export async function register(userData, schema) {
       }
 
       // Check if user already exists
-      const existingUser = await db.getUserByEmail(schema, userData.email);
+      const existingUser = await repo.getUserByEmail(schema, userData.email);
 
       if (existingUser) {
          throw new ValidationError("User with this email already exists");
@@ -118,7 +131,7 @@ export async function register(userData, schema) {
 
       // Create new user
       const role = userData.role || "user";
-      const result = await db.createUser(schema, [
+      const result = await repo.createUser(schema, [
          userData.name,
          role,
          userData.email,
@@ -146,7 +159,7 @@ export async function getSessions(session, schema) {
       if (!session || !session.userId) {
          throw new AuthError("Authentication required");
       }
-      const sessions = await db.getSessions(schema, session.userId);
+      const sessions = await repo.getSessions(schema, session.userId);
       return createSuccessResponse("Sessions retrieved successfully", sessions);
    } catch (error) {
       throw error;
@@ -165,7 +178,7 @@ export async function getSession(session, sessionId, schema) {
       if (!session || !session.userId) {
          throw new AuthError("Authentication required");
       }
-      const sessionData = await db.getSession(schema, sessionId);
+      const sessionData = await repo.getSession(schema, sessionId);
       return createSuccessResponse(
          "Session retrieved successfully",
          sessionData
@@ -187,7 +200,7 @@ export async function getCurrentUser(session, schema) {
          throw new AuthError("Authentication required");
       }
 
-      const user = await db.getUser(schema, session.userId);
+      const user = await repo.getUser(schema, session.userId);
 
       if (!user) {
          throw new AuthError("User not found");

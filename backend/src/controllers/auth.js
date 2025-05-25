@@ -2,7 +2,6 @@
 import * as authService from "../services/auth.js";
 
 // --- utils ---
-import { getSchemaFromRequest } from "../middleware/schemaDetection.js";
 
 // --- controller ---
 /**
@@ -21,8 +20,7 @@ import { getSchemaFromRequest } from "../middleware/schemaDetection.js";
  */
 const register = async (req, res, next) => {
    try {
-      const schema = getSchemaFromRequest(req);
-      const result = await authService.register(req.body, schema);
+      const result = await authService.register(req);
       res.status(201).json(result); // 201 Created for registration
    } catch (error) {
       next(error); // Pass error to global error handler
@@ -51,7 +49,7 @@ const login = async (req, res, next) => {
        *       }
        *    }
        */
-      const result = await authService.login(req.body, req.session);
+      const result = await authService.login(req);
       res.status(200).json(result);
    } catch (error) {
       next(error); // Pass error to global error handler
@@ -64,8 +62,7 @@ const login = async (req, res, next) => {
  */
 const logout = async (req, res, next) => {
    try {
-      const schema = getSchemaFromRequest(req);
-      const result = await authService.logout(req.session, schema);
+      const result = await authService.logout(req);
       res.status(200).json(result);
    } catch (error) {
       next(error); // Pass error to global error handler
@@ -80,8 +77,7 @@ const logout = async (req, res, next) => {
  */
 const getSessions = async (req, res, next) => {
    try {
-      const schema = getSchemaFromRequest(req);
-      const result = await authService.getSessions(req.session, schema);
+      const result = await authService.getSessions(req);
       res.status(200).json(result);
    } catch (error) {
       next(error);
@@ -94,12 +90,7 @@ const getSessions = async (req, res, next) => {
  */
 const getSession = async (req, res, next) => {
    try {
-      const schema = getSchemaFromRequest(req);
-      const result = await authService.getSession(
-         req.session,
-         req.params.sessionId,
-         schema
-      );
+      const result = await authService.getSession(req);
       res.status(200).json(result);
    } catch (error) {
       next(error);
@@ -113,8 +104,7 @@ const getSession = async (req, res, next) => {
  */
 const getCurrentUser = async (req, res, next) => {
    try {
-      const schema = getSchemaFromRequest(req);
-      const result = await authService.getCurrentUser(req.session, schema);
+      const result = await authService.getCurrentUser(req);
       res.status(200).json(result);
    } catch (error) {
       next(error); // Pass error to global error handler

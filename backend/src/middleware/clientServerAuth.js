@@ -19,12 +19,7 @@ export const authenticateClientServer = async (req, res, next) => {
       const clientInfo = await verifyApiToken(token);
 
       // Set client context in request
-      req.clientContext = {
-         client_id: clientInfo.client_id,
-         schema: clientInfo.schema,
-         app_name: clientInfo.app_name,
-         allowed_return_urls: clientInfo.allowed_return_urls,
-      };
+      req.isClientServer = true;
 
       next();
    } catch (error) {

@@ -50,13 +50,16 @@ export const resolvePoolFromSession = async (req) => {
       req.session?.schema || process.env.SEED_SCHEMA || "client_template";
 
    switch (poolContext) {
+      // admin or owner
       case POOL_CONTEXTS.AUTH_INTERNAL:
-         return await getPool(); // Auth internal pool for admin/owner operations
+         return await getPool();
 
+      // user (tenant) - call from 1) frontend redirect or 2) api server-server
       case POOL_CONTEXTS.CLIENT_TENANT:
       case POOL_CONTEXTS.API_CLIENT:
          return await getPoolForSchema(schema); // Tenant-specific pool
 
+      // default
       case POOL_CONTEXTS.DEFAULT:
       default:
          return await getPoolForSchema(schema); // Default tenant pool
@@ -69,6 +72,16 @@ export const resolvePoolFromSession = async (req) => {
  * @param {Object} metadata - Additional context metadata
  */
 const setPoolContext = (req, context, schema, metadata = {}) => {
+   /**
+    * req:
+    *  {
+    *    session: {
+    *      poolContext: context,
+    *      schema: schema,
+    *      poolMetadata: metadata
+    *    }
+    *  }
+    */
    req.session.poolContext = context;
    req.session.schema = schema;
    req.session.poolMetadata = metadata;
@@ -109,17 +122,6 @@ export const detectSchemaFromReturnUrl = async (req, res, next) => {
 
          if (matchingClient) {
             // Set CLIENT_TENANT context - this is a tenant user, not admin/owner
-            /**
-             * structure:
-             *
-             * {
-             *    poolContext: POOL_CONTEXTS.CLIENT_TENANT,
-             *    schema: matchingClient.assigned_schema_name,
-             *    poolMetadata: {
-             *       ...
-             *    }
-             * }
-             */
             setPoolContext(
                req,
                POOL_CONTEXTS.CLIENT_TENANT,
@@ -209,7 +211,7 @@ export const detectUserRole = async (req, res, next) => {
          );
 
          if (userClients[0]?.client_count > 0) {
-            // User owns client servers - they are an owner
+            // Owner owns client servers - they are an owner
             setPoolContext(req, POOL_CONTEXTS.AUTH_INTERNAL, "auth_internal", {
                user_id: req.session.userId,
                user_role: USER_ROLES.OWNER,

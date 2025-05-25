@@ -15,7 +15,6 @@ import bcrypt from "bcrypt";
 import {
    requireClientOwner,
    requireSystemAdmin,
-   isSystemAdmin,
 } from "../services/poolService.js";
 
 /**
@@ -34,12 +33,12 @@ export const createClientServer = async (req, clientServerData) => {
          client_mode = "frontend-login-proxy",
       } = clientServerData;
 
-      // Generate UUIDs in JavaScript
+      // UUID generation
       const client_id = `client_${uuidv4().replace(/-/g, "")}`;
       const client_secret = uuidv4();
       const client_secret_hash = await bcrypt.hash(client_secret, 12);
 
-      // Validate required fields
+      // validation
       if (!app_name || !assigned_schema_name || !allowed_return_urls) {
          throw new Error(
             "app_name, assigned_schema_name, and allowed_return_urls are required"
@@ -52,20 +51,18 @@ export const createClientServer = async (req, clientServerData) => {
          app_name,
          assigned_schema_name,
          allowed_return_urls,
-         user_id: user_id || null, // Nullable for public API
+         user_id: user_id || null,
          client_mode,
       };
 
-      // Use request-based repository (automatically resolves pool from session)
       const result = await clientServersRepo.createClientServer(
          req,
          completeClientData
       );
 
-      // Return with the original client_secret (only time it's exposed)
       return {
          ...result,
-         client_secret, // Add the unhashed secret for one-time return
+         client_secret, // unhashed secret for one-time return
       };
    } catch (error) {
       console.error("Admin Service - Create Client Server Error:", error);

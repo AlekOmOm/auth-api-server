@@ -371,47 +371,7 @@ auth.checkAuth().then(user => {
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
-### Technical Implementation
-
-The schema detection happens in the `detectSchemaFromReturnUrl` middleware:
-
-```javascript
-// backend/src/middleware/schemaDetection.js
-export const detectSchemaFromReturnUrl = async (req, res, next) => {
-   try {
-      const { return_url } = req.query;
-
-      if (return_url) {
-         // Get all client servers from database
-         const { rows: clientServers } = await authInternalPool.query(
-            "SELECT * FROM client_servers"
-         );
-
-         // Find client with matching allowed_return_urls
-         const matchingClient = clientServers.find((client) =>
-            client.allowed_return_urls.some((allowedUrl) =>
-               return_url.startsWith(allowedUrl)
-            )
-         );
-
-         if (matchingClient) {
-            // Set schema in session for persistent connection
-            req.session.schema = matchingClient.assigned_schema_name;
-            req.session.client_id = matchingClient.client_id;
-            req.schema = matchingClient.assigned_schema_name;
-            
-            console.log(`Schema detected: ${matchingClient.assigned_schema_name}`);
-         }
-      }
-
-      next();
-   } catch (error) {
-      console.error("Error detecting schema:", error);
-      next(); // Continue with default behavior
-   }
-};
-```
-
+****
 ---
 
 ## Troubleshooting

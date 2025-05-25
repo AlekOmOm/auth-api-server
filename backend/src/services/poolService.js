@@ -27,8 +27,8 @@ import {
    isTenantUser,
    getUserRole,
 } from "../middleware/schemaDetection.js";
-import getPool from "../db/connection/pools/auth.js";
-import getPoolForSchema from "../db/connection/pools/clientServers.js";
+import getPool from "../repo/connection/pools/auth.js";
+import getPoolForSchema from "../repo/connection/pools/clientServers.js";
 
 /**
  * Get the appropriate database pool for the current request context
@@ -48,6 +48,9 @@ export const getPoolForRequest = async (req) => {
 
 /**
  * Get admin pool (auth_internal) - for system and client server management
+ * - admin (auth-system admin)
+ * - owner (client-server owner)
+ *
  * @returns {Object} Auth internal database pool
  */
 export const getAdminPool = async () => {
@@ -56,6 +59,8 @@ export const getAdminPool = async () => {
 
 /**
  * Get tenant pool for specific schema - for direct schema access
+ * - user (tenant user)
+ * 
  * @param {string} schema - Schema name
  * @returns {Object} Tenant-specific database pool
  */
