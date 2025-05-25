@@ -3,7 +3,7 @@ import { fetchGet } from "../util/fetch";
 import authApi from "../services/authApi"; // Import authApi
 
 const BACKEND_URL =
-   import.meta.env.VITE_BACKEND_URL || "http://localhost:3001/api";
+   import.meta.env.VITE_BACKEND_URL || "http://localhost:3003/api";
 const BACKEND_URL_AUTH = `${BACKEND_URL}/auth`;
 
 /** AuthStore

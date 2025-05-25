@@ -2,39 +2,31 @@ import { Router } from "express";
 const router = Router();
 
 /** -- authentication of a normal user --
- * 
+ *
  * responsible for:
  *  - login
  *  - logout
  *  - register
  *  - getCurrentUser
  *  - getSessions
- * 
+ *
  * uses:
  *  - userService to interact with repository
  */
 
 // --- controllers ---
 import {
-  register,
-  login,
-  logout,
-  getCurrentUser,
-  getSessions,
+   register,
+   login,
+   logout,
+   getCurrentUser,
+   getSessions,
 } from "../controllers/auth.js";
 
 // --- middleware ---
 import { hasRole, isAuthenticated, isNotAdmin } from "../middleware/auth.js";
-import { detectSchema } from "../middleware/schemaDetection.js";
 // --- utils ---
 import validation from "../utils/validation.js"; // types and XSS
-
-
-/**
- * detectSchema middleware for all routes
- * - sets schema context for user (whether admin, owner or user (tenantUser))
- */
-router.use(detectSchema);
 
 // --- routes ---
 router.post("/register", validation.register, register);

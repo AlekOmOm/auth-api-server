@@ -60,7 +60,7 @@ export const getAdminPool = async () => {
 /**
  * Get tenant pool for specific schema - for direct schema access
  * - user (tenant user)
- * 
+ *
  * @param {string} schema - Schema name
  * @returns {Object} Tenant-specific database pool
  */
@@ -321,16 +321,6 @@ export const poolService = {
    executeSystemAdminQuery,
    getConnectionInfo,
    getAvailableOperations,
-
-   // Re-export role checkers for convenience
-   isSystemAdmin,
-   isClientOwner,
-   isTenantUser,
-   getUserRole,
-
-   // Re-export constants
-   USER_ROLES,
-   POOL_CONTEXTS,
 };
 
 export default poolService;

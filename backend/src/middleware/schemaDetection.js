@@ -93,34 +93,90 @@ const setPoolContext = (req, context, schema, metadata = {}) => {
  */
 export const detectSchemaFromReturnUrl = async (req, res, next) => {
    try {
-      const returnUrl = req.body.returnUrl;
+      console.log(
+         "🔍 [SCHEMA DETECTION] Starting schema detection from return URL"
+      );
+      console.log("🔍 [SCHEMA DETECTION] req.method:", req.method);
+      console.log("🔍 [SCHEMA DETECTION] req.url:", req.url);
+      console.log(
+         "🔍 [SCHEMA DETECTION] req.body:",
+         JSON.stringify(req.body, null, 2)
+      );
+      console.log(
+         "🔍 [SCHEMA DETECTION] req.query:",
+         JSON.stringify(req.query, null, 2)
+      );
 
-      if (returnUrl !== null) {
+      const returnUrl = req.body?.returnUrl;
+      console.log(
+         "🔍 [SCHEMA DETECTION] Extracted returnUrl from req.body:",
+         returnUrl
+      );
+
+      if (returnUrl !== null && returnUrl !== undefined) {
+         console.log(
+            "🔍 [SCHEMA DETECTION] Return URL found, proceeding with client lookup"
+         );
+
          const authInternalPool = await getPool();
+         console.log("🔍 [SCHEMA DETECTION] Got auth internal pool");
 
          // Get all client servers and find matching one
          const { rows: clientServers } = await authInternalPool.query(
-            "SELECT * FROM client_servers"
+            "SELECT * FROM auth_internal.client_servers UNION ALL SELECT * FROM public.client_servers"
          );
 
-         const matchingClient = clientServers.find((client) =>
-            client.allowed_return_urls.some((allowedUrl) =>
-               /**
-                *
-                * example:
-                * - allowedUrl: ['https://example.com/dashboard', 'https://example.com/profile']
-                * - returnUrl: 'https://example.com/dashboard'
-                * - result: true (because 'https://example.com/dashboard' starts with itself)
-                *
-                * - allowedUrl: ['https://example.com/dashboard', 'https://example.com/profile']
-                * - returnUrl: 'https://example.com/settings'
-                * - result: false (because 'https://example.com/settings' does not start with 'https://example.com/dashboard' or 'https://example.com/profile')
-                */
-               allowedUrl.some((allowedUrl) => returnUrl.startsWith(allowedUrl))
-            )
+         console.log(
+            "🔍 [SCHEMA DETECTION] Found client servers:",
+            clientServers.length,
+            clientServers.map((c) => ({
+               client_id: c.client_id,
+               app_name: c.app_name,
+               assigned_schema_name: c.assigned_schema_name,
+               allowed_return_urls: c.allowed_return_urls,
+            }))
          );
+
+         const matchingClient = clientServers.find((client) => {
+            console.log(
+               "🔍 [SCHEMA DETECTION] Checking client:",
+               client.client_id,
+               "app_name:",
+               client.app_name,
+               "allowed_return_urls:",
+               client.allowed_return_urls,
+               "type:",
+               typeof client.allowed_return_urls
+            );
+
+            const isMatch = client.allowed_return_urls.some((allowedUrl) => {
+               console.log(
+                  "🔍 [SCHEMA DETECTION] Checking allowedUrl:",
+                  allowedUrl,
+                  "type:",
+                  typeof allowedUrl,
+                  "against returnUrl:",
+                  returnUrl
+               );
+
+               const matches =
+                  allowedUrl && returnUrl && returnUrl.startsWith(allowedUrl);
+               console.log("🔍 [SCHEMA DETECTION] URL match result:", matches);
+               return matches;
+            });
+
+            console.log("🔍 [SCHEMA DETECTION] Client match result:", isMatch);
+            return isMatch;
+         });
 
          if (matchingClient) {
+            console.log("🔍 [SCHEMA DETECTION] ✅ Found matching client:", {
+               client_id: matchingClient.client_id,
+               app_name: matchingClient.app_name,
+               schema: matchingClient.assigned_schema_name,
+               client_mode: matchingClient.client_mode,
+            });
+
             // Set CLIENT_TENANT context - this is a tenant user, not admin/owner
             setPoolContext(
                req,
@@ -130,17 +186,49 @@ export const detectSchemaFromReturnUrl = async (req, res, next) => {
                   client_id: matchingClient.client_id,
                   app_name: matchingClient.app_name,
                   client_mode: matchingClient.client_mode,
-                  return_url: return_url,
+                  return_url: returnUrl,
                   allowed_return_urls: matchingClient.allowed_return_urls,
                   user_role: USER_ROLES.USER,
                }
             );
+
+            console.log("🔍 [SCHEMA DETECTION] ✅ Set pool context:", {
+               poolContext: POOL_CONTEXTS.CLIENT_TENANT,
+               schema: matchingClient.assigned_schema_name,
+               metadata: {
+                  client_id: matchingClient.client_id,
+                  app_name: matchingClient.app_name,
+                  return_url: returnUrl,
+               },
+            });
+         } else {
+            console.log(
+               "🔍 [SCHEMA DETECTION] ❌ No matching client found for returnUrl:",
+               returnUrl
+            );
+            console.log(
+               "🔍 [SCHEMA DETECTION] Available clients:",
+               clientServers.map((c) => ({
+                  client_id: c.client_id,
+                  allowed_urls: c.allowed_return_urls,
+               }))
+            );
          }
+      } else {
+         console.log(
+            "🔍 [SCHEMA DETECTION] No return URL found in request body, skipping client lookup"
+         );
       }
 
+      console.log(
+         "🔍 [SCHEMA DETECTION] Schema detection completed, calling next()"
+      );
       next();
    } catch (error) {
-      console.error("❌ Error detecting schema from return_url:", error);
+      console.error(
+         "❌ [SCHEMA DETECTION] Error detecting schema from return_url:",
+         error
+      );
       next();
    }
 };

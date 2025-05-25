@@ -65,6 +65,30 @@ export default defineConfig({
    server: {
       port: FRONTEND_PORT,
       host: FRONTEND_HOST,
+      proxy: {
+         // Proxy API requests from frontend port to backend port
+         // This allows client applications to connect to http://localhost:3000/api
+         // and have requests forwarded to http://localhost:3003/api
+         "/api": {
+            target: BACKEND_URL,
+            changeOrigin: true,
+            secure: false,
+            configure: (proxy, options) => {
+               proxy.on("error", (err, req, res) => {
+                  console.log("Proxy error:", err);
+               });
+               proxy.on("proxyReq", (proxyReq, req, res) => {
+                  console.log(
+                     "Proxying request:",
+                     req.method,
+                     req.url,
+                     "->",
+                     options.target + req.url
+                  );
+               });
+            },
+         },
+      },
    },
    define: {
       "import.meta.env.VITE_API_URL": JSON.stringify(apiUrl),

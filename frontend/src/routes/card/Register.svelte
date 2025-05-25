@@ -10,6 +10,25 @@
   let successMessage = '';
   let isLoading = false;
 
+  // Debug: Check URL on component load
+  console.log("🔍 Register component loaded - URL:", window.location.href, "Search:", window.location.search);
+  
+  // Store return_url in sessionStorage if present in URL
+  let storedReturnUrl = null;
+  if (window.location.search.includes('return_url')) {
+    storedReturnUrl = new URL(window.location.href).searchParams.get('return_url');
+    if (storedReturnUrl) {
+      sessionStorage.setItem('auth_return_url', storedReturnUrl);
+      console.log("🔍 Stored return_url in sessionStorage:", storedReturnUrl);
+    }
+  } else {
+    // Check if we have a stored return_url from a previous page load
+    storedReturnUrl = sessionStorage.getItem('auth_return_url');
+    if (storedReturnUrl) {
+      console.log("🔍 Retrieved return_url from sessionStorage:", storedReturnUrl);
+    }
+  }
+
   async function register(event) {
     event.preventDefault();
 
@@ -34,9 +53,11 @@
         email = '';
         password = '';
         
-        // redirect after 2 seconds
+        // redirect after 2 seconds, preserving return_url
         setTimeout(() => {
-          navigate('/login');
+          const returnUrl = storedReturnUrl || sessionStorage.getItem('auth_return_url');
+          const loginUrl = returnUrl ? `/login?return_url=${encodeURIComponent(returnUrl)}` : '/login';
+          navigate(loginUrl);
         }, 2000);
       } else {
         if (response.errors && Array.isArray(response.errors)) {
@@ -81,7 +102,13 @@
 
   <nav>
     <p>already have an account?</p>
-    <a href="/login" onclick={(event) => { event.preventDefault(); navigate('/login'); }}>
+    <a href="/login" onclick={(event) => { 
+      event.preventDefault(); 
+      // Preserve return_url when navigating to login
+      const returnUrl = storedReturnUrl || sessionStorage.getItem('auth_return_url');
+      const loginUrl = returnUrl ? `/login?return_url=${encodeURIComponent(returnUrl)}` : '/login';
+      navigate(loginUrl); 
+    }}>
       login
     </a>
   </nav>

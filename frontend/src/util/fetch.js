@@ -54,6 +54,7 @@ export async function fetchPost(url, body) {
       }
 
       // If response is ok and was JSON, ensure success: true is set if not present
+      const contentType = response.headers.get("content-type");
       if (
          response.ok &&
          contentType &&

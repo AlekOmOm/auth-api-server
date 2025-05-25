@@ -8,6 +8,13 @@ import {
 } from "../middleware/errorHandler.js";
 import * as repo from "../repo/adminRepository.js";
 import config from "../utils/config.js";
+import getPool from "../repo/connection/pools/auth.js";
+import getPoolForSchema from "../repo/connection/pools/clientServers.js";
+
+// Helper function to get auth internal pool
+const getAuthInternalPool = async () => {
+   return await getPool();
+};
 /**
  * Client Server Service
  * Handles client server registration, authentication, and management
@@ -15,19 +22,18 @@ import config from "../utils/config.js";
 
 /**
  * session context
- * 
- * 
+ *
+ *
  */
-
 
 /**
  * Register a new client server (Public API - no user required)
- * @param {Object} clientData - Client server data
+ * @param {Object} req - Express request object
  * @returns {Object} Registration response with client_id and client_secret
  */
-export async function registerClientServer(clientData) {
+export async function registerClientServer(req) {
    try {
-      const { app_name, allowed_return_urls } = clientData;
+      const { app_name, allowed_return_urls } = req.body;
 
       if (
          !app_name ||
@@ -83,10 +89,10 @@ export async function registerClientServer(clientData) {
 /**
  * Register a new client server for logged-in user
  * @param {Object} clientData - Client server data
- * @param {string} userId - ID of the user registering the client
+ * @param {Object} req - Express request object with session
  * @returns {Object} Registration response with client_id and client_secret
  */
-export async function registerClientServerForUser(clientData, userId) {
+export async function registerClientServerForUser(clientData, req) {
    try {
       const {
          app_name,
@@ -94,6 +100,7 @@ export async function registerClientServerForUser(clientData, userId) {
          client_mode = "frontend-login-proxy",
       } = clientData;
 
+      const userId = req.session?.userId;
       if (!userId) {
          throw new ValidationError("User ID is required");
       }
@@ -158,11 +165,12 @@ export async function registerClientServerForUser(clientData, userId) {
 
 /**
  * Get all client servers for a user
- * @param {string} userId - User ID
+ * @param {Object} req - Express request object with session
  * @returns {Object} List of user's client servers
  */
-export async function getUserClientServers(userId) {
+export async function getUserClientServers(req) {
    try {
+      const userId = req.session?.userId;
       if (!userId) {
          throw new ValidationError("User ID is required");
       }
@@ -184,12 +192,13 @@ export async function getUserClientServers(userId) {
 
 /**
  * Get specific client server for a user
- * @param {string} userId - User ID
+ * @param {Object} req - Express request object with session
  * @param {string} clientId - Client ID
  * @returns {Object} Client server details
  */
-export async function getUserClientServer(userId, clientId) {
+export async function getUserClientServer(req, clientId) {
    try {
+      const userId = req.session?.userId;
       if (!userId || !clientId) {
          throw new ValidationError("User ID and Client ID are required");
       }
@@ -215,13 +224,14 @@ export async function getUserClientServer(userId, clientId) {
 
 /**
  * Update client server for a user
- * @param {string} userId - User ID
+ * @param {Object} req - Express request object with session
  * @param {string} clientId - Client ID
  * @param {Object} updateData - Data to update
  * @returns {Object} Updated client server
  */
-export async function updateUserClientServer(userId, clientId, updateData) {
+export async function updateUserClientServer(req, clientId, updateData) {
    try {
+      const userId = req.session?.userId;
       if (!userId || !clientId) {
          throw new ValidationError("User ID and Client ID are required");
       }
@@ -274,12 +284,13 @@ export async function updateUserClientServer(userId, clientId, updateData) {
 
 /**
  * Delete client server for a user
- * @param {string} userId - User ID
+ * @param {Object} req - Express request object with session
  * @param {string} clientId - Client ID
  * @returns {Object} Deletion response
  */
-export async function deleteUserClientServer(userId, clientId) {
+export async function deleteUserClientServer(req, clientId) {
    try {
+      const userId = req.session?.userId;
       if (!userId || !clientId) {
          throw new ValidationError("User ID and Client ID are required");
       }
@@ -307,22 +318,19 @@ export async function deleteUserClientServer(userId, clientId) {
 
 /**
  * Authenticate client server and return API token
- * @param {Object} credentials - Client credentials
+ * @param {Object} req - Express request object
  * @returns {Object} Authentication response with API token
  */
-export async function authenticateClientServer(credentials) {
+export async function authenticateClientServer(req) {
    try {
-      const { client_id, client_secret } = credentials;
+      const { client_id, client_secret } = req.body;
 
       if (!client_id || !client_secret) {
          throw new ValidationError("client_id and client_secret are required");
       }
 
       const pool = await getAuthInternalPool();
-      const clientServer = await repo.getClientServer(
-         pool,
-         client_id
-      );
+      const clientServer = await repo.getClientServer(pool, client_id);
 
       if (!clientServer) {
          throw new AuthError("Invalid client credentials");
@@ -382,10 +390,7 @@ export async function verifyApiToken(token) {
       }
 
       const pool = await getAuthInternalPool();
-      const clientServer = await repo.getClientServer(
-         pool,
-         decoded.client_id
-      );
+      const clientServer = await repo.getClientServer(pool, decoded.client_id);
 
       if (!clientServer) {
          throw new AuthError("Client server not found");
@@ -420,10 +425,7 @@ export async function getClientServerInfo(client_id) {
       }
 
       const pool = await getAuthInternalPool();
-      const clientServer = await repo.getClientServer(
-         pool,
-         client_id
-      );
+      const clientServer = await repo.getClientServer(pool, client_id);
 
       if (!clientServer) {
          throw new NotFoundError("Client server not found");
@@ -454,10 +456,7 @@ export async function updateClientServer(client_id, updateData) {
       }
 
       const pool = await getAuthInternalPool();
-      const existingClient = await repo.getClientServer(
-         pool,
-         client_id
-      );
+      const existingClient = await repo.getClientServer(pool, client_id);
 
       if (!existingClient) {
          throw new NotFoundError("Client server not found");
@@ -475,10 +474,7 @@ export async function updateClientServer(client_id, updateData) {
          client_mode: updateData.client_mode || existingClient.client_mode,
       };
 
-      const result = await repo.updateClientServer(
-         pool,
-         updatedClient
-      );
+      const result = await repo.updateClientServer(pool, updatedClient);
 
       // Remove sensitive data
       const { client_secret_hash, ...clientInfo } = result;
@@ -504,10 +500,7 @@ export async function deleteClientServer(client_id) {
       }
 
       const pool = await getAuthInternalPool();
-      const existingClient = await repo.getClientServer(
-         pool,
-         client_id
-      );
+      const existingClient = await repo.getClientServer(pool, client_id);
 
       if (!existingClient) {
          throw new NotFoundError("Client server not found");

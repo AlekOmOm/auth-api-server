@@ -8,6 +8,9 @@ const FRONTEND_PORT = process.env.FRONTEND_PORT || 3000;
 const SESSION_SECRET = process.env.SESSION_SECRET;
 const RATE_LIMIT_WINDOW = process.env.RATE_LIMIT_WINDOW || 15;
 const RATE_LIMIT_LIMIT = process.env.RATE_LIMIT_LIMIT || 300;
+const ALLOWED_CLIENT_ORIGINS =
+   process.env.ALLOWED_CLIENT_ORIGINS ||
+   "http://localhost:5173,http://localhost:5174,http://localhost:4173";
 
 // --- middleware ---
 /*
@@ -23,13 +26,31 @@ app.use(express.json());
 
 /*
  * cors
- * - set origin to frontend port
+ * - set origin to allow multiple frontends (Auth-server frontend + client applications)
  * - set credentials to true
  */
 import cors from "cors";
+
+// Define allowed origins for CORS
+const allowedOrigins = [
+   `http://localhost:${FRONTEND_PORT}`, // Auth-server frontend (default: 3000)
+   "http://localhost:3000", // Auth-server frontend (fallback)
+   ...ALLOWED_CLIENT_ORIGINS.split(",").map((origin) => origin.trim()), // Client applications from env
+];
+
 app.use(
    cors({
-      origin: `http://localhost:${FRONTEND_PORT}` || "http://localhost:3000",
+      origin: function (origin, callback) {
+         // Allow requests with no origin (like mobile apps or curl requests)
+         if (!origin) return callback(null, true);
+
+         if (allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+         } else {
+            console.warn(`CORS blocked origin: ${origin}`);
+            callback(new Error("Not allowed by CORS"));
+         }
+      },
       credentials: true,
    })
 );

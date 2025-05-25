@@ -33,12 +33,30 @@ const check = async (schema = DEFAULT_SCHEMA) => {
 
 // --- User helpers (array based to stay compatible with existing services) ---
 const createUser = async (schema = DEFAULT_SCHEMA, paramsArray) => {
+   console.log("🗄️ [USER REPO] Creating user in schema:", schema);
+   console.log("🗄️ [USER REPO] User data:", paramsArray);
+
    const pool = await check(schema);
    if (!pool) {
+      console.log(
+         "🗄️ [USER REPO] ❌ Failed to obtain database pool for schema:",
+         schema
+      );
       throw new Error("Failed to obtain a database pool in createUser.");
    }
+
+   console.log("🗄️ [USER REPO] ✅ Got database pool for schema:", schema);
+
    const [name, role, email, password_hash] = paramsArray;
    const id = uuidv4();
+
+   console.log(
+      "🗄️ [USER REPO] Creating user with ID:",
+      id,
+      "in schema:",
+      schema
+   );
+
    return userRepo
       .createUser(pool, schema, {
          id,
@@ -47,7 +65,18 @@ const createUser = async (schema = DEFAULT_SCHEMA, paramsArray) => {
          email,
          password_hash,
       })
-      .then((user) => ({ lastID: user.id }));
+      .then((user) => {
+         console.log("🗄️ [USER REPO] ✅ User created successfully:", {
+            userId: user.id,
+            email: email,
+            schema: schema,
+         });
+         return { lastID: user.id };
+      })
+      .catch((error) => {
+         console.log("🗄️ [USER REPO] ❌ Failed to create user:", error.message);
+         throw error;
+      });
 };
 
 const getUsers = async (schema = DEFAULT_SCHEMA) => {
@@ -61,10 +90,61 @@ const getUser = async (schema = DEFAULT_SCHEMA, id) => {
 };
 
 const getUserByEmail = async (schema = DEFAULT_SCHEMA, email) => {
+   console.log(
+      "🔍 [USER REPO] Looking up user by email in schema:",
+      schema,
+      "email:",
+      email
+   );
+
    const pool = await check(schema);
+   if (!pool) {
+      console.log(
+         "🔍 [USER REPO] ❌ Failed to obtain database pool for schema:",
+         schema
+      );
+      throw new Error("Failed to obtain a database pool in getUserByEmail.");
+   }
+
+   console.log("🔍 [USER REPO] ✅ Got database pool for schema:", schema);
+
    return userRepo
       .getUsers(pool, schema)
-      .then((users) => users.find((u) => u.email === email));
+      .then((users) => {
+         console.log(
+            "🔍 [USER REPO] Retrieved",
+            users.length,
+            "users from schema:",
+            schema
+         );
+         const user = users.find((u) => u.email === email);
+
+         if (user) {
+            console.log("🔍 [USER REPO] ✅ User found:", {
+               userId: user.id,
+               email: user.email,
+               name: user.name,
+               schema: schema,
+            });
+         } else {
+            console.log(
+               "🔍 [USER REPO] ❌ User not found with email:",
+               email,
+               "in schema:",
+               schema
+            );
+            console.log(
+               "🔍 [USER REPO] Available users in schema:",
+               users.map((u) => ({ id: u.id, email: u.email }))
+            );
+         }
+
+         return user;
+      })
+      .catch((error) => {
+         console.log("🔍 [USER REPO] ❌ Error looking up user:", error.message);
+         throw error;
+      });
 };
 
 const getUserByNameAndEmail = async (schema = DEFAULT_SCHEMA, name, email) => {

@@ -2,16 +2,16 @@
 
 This document provides a complete guide to implementing and understanding the **Frontend-Login-Proxy Mode** in the Auth-System. This mode enables client applications to seamlessly redirect users to the Auth-System's built-in UI for authentication, while maintaining persistent connection to their specific database schema.
 
-
 ## Table of Contents
 1. [Overview](#overview)
-2. [Client Registration Process](#client-registration-process)
-3. [Persistent Schema Connection](#persistent-schema-connection)
-4. [Implementation Guide](#implementation-guide)
-5. [Schema Detection Flow](#schema-detection-flow)
-6. [Troubleshooting](#troubleshooting)
-7. [Best Practices](#best-practices)
-8. [URL Migration & Updates](#url-migration-updates)
+2. [Owner User Registration & Client Management](#owner-user-registration--client-management)
+3. [Client Registration Process](#client-registration-process)
+4. [Persistent Schema Connection](#persistent-schema-connection)
+5. [Implementation Guide](#implementation-guide)
+6. [Schema Detection Flow](#schema-detection-flow)
+7. [Troubleshooting](#troubleshooting)
+8. [Best Practices](#best-practices)
+9. [URL Migration & Updates](#url-migration-updates)
 
 ---
 
@@ -31,27 +31,139 @@ The Frontend-Login-Proxy Mode allows your client application to:
 
 ---
 
+## Owner User Registration & Client Management
+
+### Step 1: Register as an Owner User
+
+Before you can create client servers, you need to register as an **Owner User** on the Auth-System:
+
+**Frontend Registration:**
+1. Visit: `http://localhost:3000/register` (Auth-System frontend)
+2. Fill out the registration form:
+   - **Name**: Your name or company name
+   - **Email**: Your email address
+   - **Password**: Strong password
+
+**API Registration (Alternative):**
+```bash
+curl -X POST http://localhost:3003/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "John Doe",
+    "email": "owner@example.com",
+    "password": "StrongPassword123!"
+  }'
+```
+
+**Response:**
+```json
+{
+  "message": "Registration successful",
+  "data": {
+    "userId": "5cc1811b-19d2-4f89-bf40-bf9d4b320c7d"
+  }
+}
+```
+
+### Step 2: Login as Owner User
+
+**Frontend Login:**
+1. Visit: `http://localhost:3000/login`
+2. Enter your credentials
+
+**API Login:**
+```bash
+curl -X POST http://localhost:3003/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "credentials": {
+      "email": "owner@example.com",
+      "password": "StrongPassword123!"
+    }
+  }'
+```
+
+**Response:**
+```json
+{
+  "message": "Login successful",
+  "data": {
+    "id": "5cc1811b-19d2-4f89-bf40-bf9d4b320c7d",
+    "name": "John Doe",
+    "role": "user",
+    "email": "owner@example.com",
+    "poolMetadata": {
+      "user_role": "owner",
+      "owned_clients": 0
+    }
+  }
+}
+```
+
+### Step 3: Manage Client Servers
+
+Once logged in as an owner, you can manage your client servers using these endpoints:
+
+#### Create Client Server
+```bash
+curl -X POST http://localhost:3003/api/clientServer/user/register \
+  -H "Content-Type: application/json" \
+  -H "Cookie: connect.sid=YOUR_SESSION_COOKIE" \
+  -d '{
+    "app_name": "TradingSimulator",
+    "allowed_return_urls": [
+      "http://localhost:5173/",
+      "http://localhost:5173"
+    ],
+    "client_mode": "frontend-login-proxy"
+  }'
+```
+
+#### List Your Client Servers
+```bash
+curl -X GET http://localhost:3003/api/clientServer/user/clients \
+  -H "Cookie: connect.sid=YOUR_SESSION_COOKIE"
+```
+
+#### Update Client Server
+```bash
+curl -X PUT http://localhost:3003/api/clientServer/user/clients/CLIENT_ID \
+  -H "Content-Type: application/json" \
+  -H "Cookie: connect.sid=YOUR_SESSION_COOKIE" \
+  -d '{
+    "app_name": "UpdatedAppName",
+    "allowed_return_urls": ["http://localhost:5173/", "https://myapp.com"]
+  }'
+```
+
+#### Delete Client Server
+```bash
+curl -X DELETE http://localhost:3003/api/clientServer/user/clients/CLIENT_ID \
+  -H "Cookie: connect.sid=YOUR_SESSION_COOKIE"
+```
+
+---
+
 ## Client Registration Process
 
 ### Step 1: Register Your Client Application
 
 Your client application must be registered with the Auth-System before it can use the Frontend-Login-Proxy mode.
 
-**Endpoint:** `POST /api/clientServer/register`
+**Endpoint:** `POST /api/clientServer/user/register`
 
 **Request:**
 ```bash
-curl -X POST http://localhost:3001/api/clientServer/register \
+curl -X POST http://localhost:3003/api/clientServer/user/register \
   -H "Content-Type: application/json" \
+  -H "Cookie: connect.sid=YOUR_SESSION_COOKIE" \
   -d '{
-    "app_name": "MyAwesomeApp",
+    "app_name": "TradingSimulator",
     "allowed_return_urls": [
-      "http://localhost:4000",
-      "http://localhost:4000/dashboard", 
-      "http://localhost:4000/profile",
-      "https://myapp.com",
-      "https://myapp.com/dashboard"
-    ]
+      "http://localhost:5173/",
+      "http://localhost:5173"
+    ],
+    "client_mode": "frontend-login-proxy"
   }'
 ```
 
@@ -60,17 +172,12 @@ curl -X POST http://localhost:3001/api/clientServer/register \
 {
   "message": "Client server registered successfully",
   "data": {
-    "client_id": "client_f47ac10b58cc4372a5670e02b2c3d479",
-    "client_secret": "550e8400-e29b-41d4-a716-446655440000",
-    "app_name": "MyAwesomeApp",
-    "assigned_schema_name": "client_myawesomeapp_1703123456789",
-    "allowed_return_urls": [
-      "http://localhost:4000",
-      "http://localhost:4000/dashboard",
-      "http://localhost:4000/profile", 
-      "https://myapp.com",
-      "https://myapp.com/dashboard"
-    ]
+    "client_id": "client_3c24d51aa030479b818d4edb84307dcc",
+    "client_secret": "64a8a211-6444-4f9d-856b-334494346cda",
+    "app_name": "TradingSimulator",
+    "assigned_schema_name": "client_tradingsimulator_1748187540074",
+    "allowed_return_urls": ["http://localhost:5173/"],
+    "client_mode": "frontend-login-proxy"
   }
 }
 ```
@@ -84,7 +191,7 @@ curl -X POST http://localhost:3001/api/clientServer/register \
 2. **Database Schema Created:**
    - `assigned_schema_name`: Your dedicated PostgreSQL schema
    - Format: `client_{app_name}_{timestamp}`
-   - Example: `client_myawesomeapp_1703123456789`
+   - Example: `client_tradingsimulator_1748187540074`
 
 3. **URL Validation Setup:**
    - `allowed_return_urls`: Whitelist of URLs Auth-System can redirect to
@@ -110,20 +217,18 @@ When your client application redeploys, you need to ensure users can still acces
 // Store in environment variables, database, or secure config
 const CLIENT_CONFIG = {
   // Required for schema reconnection
-  "app_name": "MyAwesomeApp",
+  "app_name": "TradingSimulator",
   "allowed_return_urls": [
-    "http://localhost:4000",
-    "http://localhost:4000/dashboard",
-    "https://myapp.com",
-    "https://myapp.com/dashboard"
+    "http://localhost:5173/",
+    "http://localhost:5173"
   ],
   
   // Optional: For API mode if needed
-  "client_id": "client_f47ac10b58cc4372a5670e02b2c3d479",
-  "client_secret": "550e8400-e29b-41d4-a716-446655440000",
+  "client_id": "client_3c24d51aa030479b818d4edb84307dcc",
+  "client_secret": "64a8a211-6444-4f9d-856b-334494346cda",
   
   // Auth-System configuration
-  "auth_system_url": "http://localhost:3001"
+  "auth_system_url": "http://localhost:3003"
 };
 ```
 
@@ -131,19 +236,22 @@ const CLIENT_CONFIG = {
 
 The Auth-System uses **allowed_return_urls** to identify your client:
 
-1. **User visits protected page:** `http://localhost:4000/dashboard`
+1. **User visits protected page:** `http://localhost:5173/`
 2. **Your app redirects to Auth-System:** 
    ```
-   http://localhost:3001/login?return_url=http%3A%2F%2Flocalhost%3A4000%2Fdashboard
+   http://localhost:3000/login?return_url=http%3A%2F%2Flocalhost%3A5173%2F
    ```
 3. **Auth-System queries database:**
    ```sql
-   SELECT * FROM client_servers 
-   WHERE 'http://localhost:4000/dashboard' LIKE ANY(allowed_return_urls)
+   SELECT * FROM auth_internal.client_servers 
+   UNION ALL 
+   SELECT * FROM public.client_servers
+   WHERE 'http://localhost:5173/' = ANY(allowed_return_urls)
    ```
 4. **Schema automatically detected:**
    ```javascript
-   req.session.schema = 'client_myawesomeapp_1703123456789'
+   req.session.schema = 'client_tradingsimulator_1748187540074'
+   req.session.poolContext = 'client_tenant'
    ```
 
 ### Key Insight: No Client ID Required!
@@ -162,8 +270,8 @@ This is a **deliberate security design** that separates concerns:
 ```javascript
 // ✅ SECURE: No secrets in frontend
 const CLIENT_CONFIG = {
-  "allowed_return_urls": ["http://localhost:4000"],  // ✅ Public URLs only
-  "auth_system_url": "http://localhost:3001"         // ✅ Public endpoint
+  "allowed_return_urls": ["http://localhost:5173/"],  // ✅ Public URLs only
+  "auth_system_url": "http://localhost:3003"          // ✅ Public endpoint
 };
 
 // ✅ SECURE: URL-based schema detection
@@ -218,11 +326,11 @@ Here's how to integrate Frontend-Login-Proxy mode into your application:
 ```javascript
 // config.js
 export const AUTH_CONFIG = {
-  AUTH_SYSTEM_URL: process.env.AUTH_SYSTEM_URL || 'http://localhost:3001',
+  AUTH_SYSTEM_URL: process.env.AUTH_SYSTEM_URL || 'http://localhost:3003',
+  AUTH_FRONTEND_URL: process.env.AUTH_FRONTEND_URL || 'http://localhost:3000',
   ALLOWED_RETURN_URLS: [
-    'http://localhost:4000',
-    'http://localhost:4000/dashboard',
-    'http://localhost:4000/profile',
+    'http://localhost:5173/',
+    'http://localhost:5173',
     // Add all your protected routes
   ]
 };
@@ -237,7 +345,7 @@ import { AUTH_CONFIG } from '../config.js';
 export async function requireAuth(req, res, next) {
   try {
     // Check if user has valid session
-    const response = await fetch(`${AUTH_CONFIG.AUTH_SYSTEM_URL}/api/auth/me`, {
+    const response = await fetch(`${AUTH_CONFIG.AUTH_SYSTEM_URL}/api/auth/session`, {
       headers: {
         'Cookie': req.headers.cookie || ''
       }
@@ -250,7 +358,7 @@ export async function requireAuth(req, res, next) {
     } else {
       // Redirect to Auth-System with current URL
       const returnUrl = encodeURIComponent(`${req.protocol}://${req.get('host')}${req.originalUrl}`);
-      res.redirect(`${AUTH_CONFIG.AUTH_SYSTEM_URL}/login?return_url=${returnUrl}`);
+      res.redirect(`${AUTH_CONFIG.AUTH_FRONTEND_URL}/login?return_url=${returnUrl}`);
     }
   } catch (error) {
     console.error('Auth check failed:', error);
@@ -259,46 +367,19 @@ export async function requireAuth(req, res, next) {
 }
 ```
 
-#### 3. Express.js Implementation
-
-```javascript
-// app.js
-import express from 'express';
-import { requireAuth } from './middleware/auth.js';
-
-const app = express();
-
-// Public routes (no authentication required)
-app.get('/', (req, res) => {
-  res.send('Welcome to MyAwesomeApp!');
-});
-
-// Protected routes (authentication required)
-app.get('/dashboard', requireAuth, (req, res) => {
-  res.send(`Welcome to dashboard, ${req.user.name}!`);
-});
-
-app.get('/profile', requireAuth, (req, res) => {
-  res.send(`Profile for ${req.user.email}`);
-});
-
-app.listen(4000, () => {
-  console.log('Client app running on http://localhost:4000');
-});
-```
-
-#### 4. Frontend JavaScript Implementation
+#### 3. Frontend JavaScript Implementation
 
 ```javascript
 // For single-page applications
 class AuthService {
   constructor() {
-    this.authSystemUrl = 'http://localhost:3001';
+    this.authSystemUrl = 'http://localhost:3003';
+    this.authFrontendUrl = 'http://localhost:3000';
   }
 
   async checkAuth() {
     try {
-      const response = await fetch(`${this.authSystemUrl}/api/auth/me`, {
+      const response = await fetch(`${this.authSystemUrl}/api/auth/session`, {
         credentials: 'include' // Include cookies
       });
       
@@ -314,7 +395,7 @@ class AuthService {
 
   redirectToLogin() {
     const returnUrl = encodeURIComponent(window.location.href);
-    window.location.href = `${this.authSystemUrl}/login?return_url=${returnUrl}`;
+    window.location.href = `${this.authFrontendUrl}/login?return_url=${returnUrl}`;
   }
 
   async logout() {
@@ -348,6 +429,31 @@ auth.checkAuth().then(user => {
 });
 ```
 
+#### 4. Real-World Example: Trading Simulator Integration
+
+Based on our successful end-to-end test with the Trading Simulator:
+
+```javascript
+// Trading Simulator (http://localhost:5173)
+// When user clicks "Login" button:
+
+function handleLogin() {
+  // Redirect to Auth-System with return URL
+  const returnUrl = encodeURIComponent(window.location.href);
+  window.location.href = `http://localhost:3000/login?return_url=${returnUrl}`;
+}
+
+// Result: User is redirected to:
+// http://localhost:3000/login?return_url=http%3A%2F%2Flocalhost%3A5173%2F
+
+// Auth-System automatically:
+// 1. Detects return_url: http://localhost:5173/
+// 2. Finds matching client: client_3c24d51aa030479b818d4edb84307dcc
+// 3. Sets schema: client_tradingsimulator_1748187540074
+// 4. Authenticates user in correct tenant database
+// 5. Returns user data with pool metadata
+```
+
 ---
 
 ## Schema Detection Flow
@@ -357,6 +463,7 @@ auth.checkAuth().then(user => {
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   Your App      │    │   Auth-System   │    │   Database      │
+│ (localhost:5173)│    │ (localhost:3000)│    │                 │
 │                 │    │                 │    │                 │
 │ 1. User visits  │    │ 3. Extract      │    │ 4. Query        │
 │    /dashboard   │───▶│    return_url   │───▶│    client_servers│
@@ -371,7 +478,61 @@ auth.checkAuth().then(user => {
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
-****
+### Detailed Technical Flow
+
+1. **Client App Redirect:**
+   ```
+   http://localhost:5173/ → http://localhost:3000/login?return_url=http%3A%2F%2Flocalhost%3A5173%2F
+   ```
+
+2. **Auth-System Frontend:**
+   - Extracts `return_url` from URL parameters
+   - Stores in sessionStorage for persistence
+   - Sends login request with `returnUrl` in body
+
+3. **Backend Schema Detection:**
+   ```javascript
+   // detectSchemaFromReturnUrl middleware
+   const returnUrl = req.body?.returnUrl; // "http://localhost:5173/"
+   
+   // Query both schemas for client servers
+   const { rows: clientServers } = await authInternalPool.query(
+     "SELECT * FROM auth_internal.client_servers UNION ALL SELECT * FROM public.client_servers"
+   );
+   
+   // Find matching client
+   const matchingClient = clientServers.find(client => 
+     client.allowed_return_urls.some(allowedUrl => 
+       returnUrl.startsWith(allowedUrl)
+     )
+   );
+   
+   // Set session context
+   req.session.poolContext = 'client_tenant';
+   req.session.schema = matchingClient.assigned_schema_name;
+   ```
+
+4. **Authentication Response:**
+   ```json
+   {
+     "message": "Login successful",
+     "data": {
+       "id": "6a62826e-0073-45c9-9dd2-fdb185eef416",
+       "name": "Trading User",
+       "role": "user",
+       "email": "trader@example.com",
+       "poolMetadata": {
+         "client_id": "client_3c24d51aa030479b818d4edb84307dcc",
+         "app_name": "TradingSimulator",
+         "client_mode": "frontend-login-proxy",
+         "return_url": "http://localhost:5173/",
+         "allowed_return_urls": ["http://localhost:5173/"],
+         "user_role": "user"
+       }
+     }
+   }
+   ```
+
 ---
 
 ## Troubleshooting
@@ -384,16 +545,34 @@ auth.checkAuth().then(user => {
 
 **Solution:**
 1. Verify your `allowed_return_urls` include the exact URL being used
-2. Check for trailing slashes: `http://localhost:4000` vs `http://localhost:4000/`
+2. Check for trailing slashes: `http://localhost:5173` vs `http://localhost:5173/`
 3. Ensure protocol matches: `http` vs `https`
 
 ```bash
-# Check registered URLs
-curl -X GET http://localhost:3001/api/clientServer/me \
-  -H "Authorization: Bearer YOUR_API_TOKEN"
+# Check registered URLs (as owner user)
+curl -X GET http://localhost:3003/api/clientServer/user/clients \
+  -H "Cookie: connect.sid=YOUR_SESSION_COOKIE"
 ```
 
-#### Issue 2: Session Lost After Redirect
+#### Issue 2: Wrong Port Configuration
+
+**Problem:** Frontend trying to connect to wrong backend port.
+
+**Solution:**
+Check your port configuration:
+- **Auth-System Frontend**: `http://localhost:3000`
+- **Auth-System Backend**: `http://localhost:3003` (mapped from container port 3001)
+- **Your Client App**: `http://localhost:5173` (or your chosen port)
+
+```javascript
+// Correct configuration
+const AUTH_CONFIG = {
+  AUTH_SYSTEM_URL: 'http://localhost:3003',      // Backend API
+  AUTH_FRONTEND_URL: 'http://localhost:3000'     // Frontend UI
+};
+```
+
+#### Issue 3: Session Lost After Redirect
 
 **Problem:** User gets redirected back but Auth-System doesn't recognize them.
 
@@ -413,21 +592,20 @@ app.use(session({
 }));
 ```
 
-#### Issue 3: Multiple Schemas Created
+#### Issue 4: req.body is undefined
 
-**Problem:** New schema created on each deployment instead of reusing existing one.
+**Problem:** Backend receives `req.body: undefined` causing schema detection to fail.
 
 **Solution:**
-1. Don't register your app multiple times
-2. Store registration data permanently
-3. Use update endpoint instead of re-registering
+1. Ensure body parser middleware is properly configured
+2. Check middleware order in Express app
+3. Verify Content-Type headers are set correctly
 
 ```javascript
-// Instead of registering again, update your client
-curl -X PUT http://localhost:3001/api/clientServer/me \
-  -H "Authorization: Bearer YOUR_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"allowed_return_urls": ["http://localhost:4000", "https://myapp.com"]}'
+// Proper middleware order
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(detectSchema); // After body parsers
 ```
 
 ---
@@ -466,7 +644,7 @@ curl -X PUT http://localhost:3001/api/clientServer/me \
 // Robust error handling
 export async function requireAuth(req, res, next) {
   try {
-    const response = await fetch(`${AUTH_CONFIG.AUTH_SYSTEM_URL}/api/auth/me`, {
+    const response = await fetch(`${AUTH_CONFIG.AUTH_SYSTEM_URL}/api/auth/session`, {
       headers: { 'Cookie': req.headers.cookie || '' },
       timeout: 5000 // Prevent hanging requests
     });
@@ -516,75 +694,115 @@ async function checkAuthCached(sessionId) {
 
 ### **Production Deployment: Updating URLs Safely**
 
-When deploying from development to production (e.g., `localhost:4000` → `trade.devalek.dev`), you need to update your `allowed_return_urls` to maintain schema access.
+When deploying from development to production (e.g., `localhost:5173` → `trade.devalek.dev`), you need to update your `allowed_return_urls` to maintain schema access.
 
 #### **The Challenge**
 ```javascript
 // 🚨 PROBLEM: URLs don't match after deployment
-// Development URLs: ["http://localhost:4000"]
+// Development URLs: ["http://localhost:5173/"]
 // Production URLs:   ["https://trade.devalek.dev"]
 // Result: Schema detection fails!
 ```
 
-#### **The Solution: Secure URL Updates**
+#### **The Solution: Owner User Updates**
 
-**Step 1: Create Update Script (Server-Side Only)**
+**Step 1: Login as Owner User**
+
+```bash
+# Login to get session cookie
+curl -X POST http://localhost:3003/api/auth/login \
+  -H "Content-Type: application/json" \
+  -c cookies.txt \
+  -d '{
+    "credentials": {
+      "email": "owner@example.com",
+      "password": "StrongPassword123!"
+    }
+  }'
+```
+
+**Step 2: Update Client Server URLs**
+
+```bash
+# Update your client server
+curl -X PUT http://localhost:3003/api/clientServer/user/clients/CLIENT_ID \
+  -H "Content-Type: application/json" \
+  -b cookies.txt \
+  -d '{
+    "allowed_return_urls": [
+      "http://localhost:5173/",
+      "https://trade.devalek.dev",
+      "https://trade.devalek.dev/"
+    ]
+  }'
+```
+
+**Step 3: Verify Updates**
+
+```bash
+# Check updated URLs
+curl -X GET http://localhost:3003/api/clientServer/user/clients \
+  -b cookies.txt
+```
+
+### **Automated Update Script**
 
 ```javascript
 // scripts/update-urls.js
-// ⚠️ RUN ON SERVER ONLY - NEVER IN FRONTEND!
-
 const updateAllowedUrls = async () => {
   try {
-    // 🔐 Use your stored credentials
-    const CLIENT_ID = process.env.CLIENT_ID;
-    const CLIENT_SECRET = process.env.CLIENT_SECRET;
-    const AUTH_SYSTEM_URL = process.env.AUTH_SYSTEM_URL;
-
-    console.log('🔐 Authenticating with Auth-System...');
+    console.log('🔐 Logging in as owner...');
     
-    // 1. Get authentication token
-    const authResponse = await fetch(`${AUTH_SYSTEM_URL}/api/clientServer/handshake`, {
+    // 1. Login as owner user
+    const loginResponse = await fetch('http://localhost:3003/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        client_id: CLIENT_ID,
-        client_secret: CLIENT_SECRET
+        credentials: {
+          email: process.env.OWNER_EMAIL,
+          password: process.env.OWNER_PASSWORD
+        }
       })
     });
 
-    if (!authResponse.ok) {
-      throw new Error('Authentication failed');
+    if (!loginResponse.ok) {
+      throw new Error('Owner login failed');
     }
 
-    const { token } = (await authResponse.json()).data;
-    console.log('✅ Authentication successful');
+    const cookies = loginResponse.headers.get('set-cookie');
+    console.log('✅ Owner login successful');
 
-    // 2. Update allowed URLs
+    // 2. Get client servers
+    const clientsResponse = await fetch('http://localhost:3003/api/clientServer/user/clients', {
+      headers: { 'Cookie': cookies }
+    });
+
+    const { data: clients } = await clientsResponse.json();
+    const targetClient = clients.find(c => c.app_name === 'TradingSimulator');
+
+    if (!targetClient) {
+      throw new Error('TradingSimulator client not found');
+    }
+
+    // 3. Update URLs
     console.log('🔄 Updating allowed return URLs...');
     
-    const updateResponse = await fetch(`${AUTH_SYSTEM_URL}/api/clientServer/me`, {
+    const updateResponse = await fetch(`http://localhost:3003/api/clientServer/user/clients/${targetClient.client_id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+        'Cookie': cookies
       },
       body: JSON.stringify({
         allowed_return_urls: [
-          // 🏠 Keep development URLs (for testing)
-          "http://localhost:4000",
-          "http://localhost:4000/dashboard",
-          "http://localhost:4000/profile",
+          // Keep development URLs
+          "http://localhost:5173/",
+          "http://localhost:5173",
           
-          // 🚀 Add production URLs
+          // Add production URLs
           "https://trade.devalek.dev",
-          "https://trade.devalek.dev/dashboard", 
-          "https://trade.devalek.dev/profile",
-          "https://trade.devalek.dev/auth/callback",
-          
-          // 🧪 Add staging URLs (optional)
-          "https://staging.trade.devalek.dev",
-          "https://staging.trade.devalek.dev/dashboard"
+          "https://trade.devalek.dev/",
+          "https://trade.devalek.dev/dashboard"
         ]
       })
     });
@@ -607,129 +825,26 @@ const updateAllowedUrls = async () => {
 updateAllowedUrls();
 ```
 
-**Step 2: Environment Variables**
-
-```bash
-# .env.production
-CLIENT_ID=client_f47ac10b58cc4372a5670e02b2c3d479
-CLIENT_SECRET=550e8400-e29b-41d4-a716-446655440000  # From initial registration
-AUTH_SYSTEM_URL=https://auth.yourcompany.com
-```
-
-**Step 3: Run During Deployment**
-
-```bash
-# In your CI/CD pipeline or deployment script
-node scripts/update-urls.js
-```
-
-### **Built-in Security Safeguards**
-
-The update process has multiple layers of security:
-
-#### **1. Authentication Required**
-- ✅ Must provide valid `client_secret`
-- ✅ JWT token expires (24 hours)
-- ✅ Token tied to specific client
-
-#### **2. Authorization Checks**
-```javascript
-// Only the client can update their own URLs
-// middleware/clientServerAuth.js validates:
-// - Token signature
-// - Token expiration  
-// - Client existence
-// - Scope restrictions
-```
-
-#### **3. Validation Rules**
-- ✅ URLs must be valid format
-- ✅ HTTPS required in production
-- ✅ No wildcard patterns allowed
-- ✅ Audit trail logged
-
-### **Best Practices for URL Management**
-
-#### **✅ Progressive URL Addition**
-```javascript
-// Good: Add new URLs while keeping old ones
-allowed_return_urls: [
-  "http://localhost:4000",        // Keep for dev
-  "https://staging.yourdomain.com", // Add staging  
-  "https://yourdomain.com"        // Add production
-]
-```
-
-#### **✅ Environment-Specific Configurations**
-```javascript
-// config/urls.js
-const getUrlsForEnvironment = (env) => {
-  const baseUrls = {
-    development: ["http://localhost:4000"],
-    staging: ["https://staging.trade.devalek.dev"], 
-    production: ["https://trade.devalek.dev"]
-  };
-  
-  // Always include all environments for flexibility
-  return Object.values(baseUrls).flat();
-};
-```
-
-#### **✅ Automated URL Updates**
-```yaml
-# .github/workflows/deploy.yml
-- name: Update Auth URLs
-  run: |
-    export CLIENT_ID=${{ secrets.CLIENT_ID }}
-    export CLIENT_SECRET=${{ secrets.CLIENT_SECRET }}
-    node scripts/update-urls.js
-```
-
-### **Emergency URL Recovery**
-
-If you lose access due to URL mismatch:
-
-#### **Option 1: Admin Override (if available)**
-```bash
-# Direct database access (admin only)
-UPDATE client_servers 
-SET allowed_return_urls = array['https://trade.devalek.dev']
-WHERE client_id = 'your_client_id';
-```
-
-#### **Option 2: Support Contact**
-Contact Auth-System administrators with:
-- Your `client_id`
-- Proof of domain ownership
-- New URLs to add
-
-### **Monitoring URL Changes**
-
-```javascript
-// Monitor for URL-related authentication failures
-const monitorAuthFailures = async () => {
-  // Log when return_url doesn't match any client
-  if (!matchingClient) {
-    console.warn('🚨 URL Mismatch:', {
-      attempted_url: return_url,
-      timestamp: new Date(),
-      user_agent: req.headers['user-agent']
-    });
-  }
-};
-```
-
 ---
 
 ## Conclusion
 
-The Frontend-Login-Proxy Mode provides a powerful, secure, and scalable solution for multi-tenant authentication. By understanding the registration process, schema detection mechanism, and implementing proper error handling, you can create a seamless authentication experience for your users while maintaining complete data isolation between clients.
+The Frontend-Login-Proxy Mode provides a powerful, secure, and scalable solution for multi-tenant authentication. By understanding the owner user registration process, client server management, schema detection mechanism, and implementing proper error handling, you can create a seamless authentication experience for your users while maintaining complete data isolation between clients.
 
 ### Key Takeaways:
-- ✅ **One-time registration** creates permanent schema connection
-- ✅ **URL-based detection** survives application redeployments  
-- ✅ **Session-based security** provides robust web authentication
+- ✅ **Owner user registration** required before creating client servers
+- ✅ **Session-based client management** via owner user endpoints
+- ✅ **URL-based schema detection** survives application redeployments  
 - ✅ **Automatic tenant isolation** ensures data security
-- ✅ **Zero maintenance** schema management after initial setup
+- ✅ **Real-world tested** with Trading Simulator integration
+- ✅ **Complete CRUD operations** for client server management
+
+### Verified End-to-End Flow:
+1. **Owner Registration**: `POST /api/auth/register` → Owner user created
+2. **Owner Login**: `POST /api/auth/login` → Session established
+3. **Client Creation**: `POST /api/clientServer/user/register` → Schema created
+4. **User Authentication**: Trading Simulator → Auth-System → Tenant database
+5. **Schema Detection**: Return URL → Client match → Correct schema
+6. **Session Persistence**: Pool metadata maintained across requests
 
 For API-based integration or more advanced use cases, see the [API_EXAMPLES.md](./API_EXAMPLES.md) documentation.

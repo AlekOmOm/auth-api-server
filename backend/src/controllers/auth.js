@@ -20,9 +20,26 @@ import * as authService from "../services/auth.js";
  */
 const register = async (req, res, next) => {
    try {
+      console.log("🎯 [AUTH CONTROLLER] Register request received");
+      console.log(
+         "🎯 [AUTH CONTROLLER] Request body:",
+         JSON.stringify(req.body, null, 2)
+      );
+      console.log("🎯 [AUTH CONTROLLER] Session data:", {
+         poolContext: req.session?.poolContext,
+         schema: req.session?.schema,
+         poolMetadata: req.session?.poolMetadata,
+      });
+
       const result = await authService.register(req);
+
+      console.log("🎯 [AUTH CONTROLLER] ✅ Registration successful");
       res.status(201).json(result); // 201 Created for registration
    } catch (error) {
+      console.log(
+         "🎯 [AUTH CONTROLLER] ❌ Registration failed:",
+         error.message
+      );
       next(error); // Pass error to global error handler
    }
 };
@@ -33,6 +50,17 @@ const register = async (req, res, next) => {
  */
 const login = async (req, res, next) => {
    try {
+      console.log("🎯 [AUTH CONTROLLER] Login request received");
+      console.log(
+         "🎯 [AUTH CONTROLLER] Request body:",
+         JSON.stringify(req.body, null, 2)
+      );
+      console.log("🎯 [AUTH CONTROLLER] Session data:", {
+         poolContext: req.session?.poolContext,
+         schema: req.session?.schema,
+         poolMetadata: req.session?.poolMetadata,
+      });
+
       /**
        * req.body and req.session data:
        * - body:
@@ -50,8 +78,11 @@ const login = async (req, res, next) => {
        *    }
        */
       const result = await authService.login(req);
+
+      console.log("🎯 [AUTH CONTROLLER] ✅ Login successful");
       res.status(200).json(result);
    } catch (error) {
+      console.log("🎯 [AUTH CONTROLLER] ❌ Login failed:", error.message);
       next(error); // Pass error to global error handler
    }
 };

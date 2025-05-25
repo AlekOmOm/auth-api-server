@@ -53,7 +53,7 @@ services:
     environment:
       NODE_ENV: development
       DEV_FRONTEND_PORT: ${DEV_FRONTEND_PORT:-3000}
-      DEV_BACKEND_PORT: ${DEV_BACKEND_PORT:-3001}
+      DEV_BACKEND_PORT: 3003
     depends_on:
       - backend
     volumes:

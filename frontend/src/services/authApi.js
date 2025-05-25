@@ -1,7 +1,8 @@
 import { fetchGet, fetchPost } from "../util/fetch";
 import { authStore } from "../stores/authStore";
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
+const BACKEND_URL =
+   import.meta.env.VITE_BACKEND_URL || "http://localhost:3003/api";
 
 const BACKEND_URL_AUTH = `${BACKEND_URL}/auth`;
 

@@ -1,37 +1,96 @@
-# Technical Implementation
+# Technical Implementation - Login Proxy Mode
 
-## req and res from frontend to backend
+## Data Structures & Session Persistence
 
+### Request/Response Structures
+
+#### Frontend → Backend Login Request
 ```javascript
-// frontend/src/services/authApi.js
-
-// --- frontend --- 
+// POST /api/auth/login
 {
-  credentials: { email, password },
-  returnUrl: "https://client.com/dashboard"
+  credentials: {
+    email: "user@example.com",
+    password: "password123"
+  },
+  returnUrl: "https://client.com/dashboard"  // Optional, for proxy mode
 }
-
-// --- backend --- 
-
-// 1. schemaDetection middleware
-{
-  poolContext: "client_tenant",
-  schema: "client_schema_name", 
-  poolMetadata: { client_id, user_role: "user", ... }
-}
-
-// 2. authController.js
-{
-  user: { id, name, email, role },
-  session: { id, userId, expiresAt }
-}
-
-
-
 ```
 
+#### Backend Response (Success)
+```javascript
+{
+  message: "Login successful",
+  data: {
+    userId: "123",
+    role: "user",
+    email: "user@example.com", 
+    name: "John Doe",
+    poolMetadata: {
+      client_id: "client_123",
+      user_role: "user",
+      app_name: "Client App",
+      // ... additional context
+    }
+  }
+}
+```
 
-## core component: detectSchema
+#### Backend Response (Error)
+```javascript
+{
+  message: "Invalid credentials",
+  success: false
+}
+```
+
+### Session Structure & Persistence
+
+#### Backend Session (req.session)
+```javascript
+{
+  // User authentication
+  userId: "123",
+  role: "user",
+  
+  // Schema detection context
+  poolContext: "client_tenant",  // AUTH_INTERNAL | CLIENT_TENANT | API_CLIENT | DEFAULT
+  schema: "client_schema_name",
+  poolMetadata: {
+    client_id: "client_123",
+    app_name: "Client App", 
+    user_role: "user",           // admin | owner | user
+    return_url: "https://client.com/dashboard",
+    allowed_return_urls: ["https://client.com/dashboard", "https://client.com/profile"],
+    // ... additional context
+  }
+}
+```
+
+#### Session Persistence Flow
+1. **Backend Sets Session**: `detectSchema` middleware sets session data
+2. **Session Storage**: Express-session stores in memory/database with cookie
+3. **Frontend Access**: Frontend gets session via `GET /api/auth/session`
+4. **Cross-Request Persistence**: Session persists across requests via cookie
+
+#### Frontend Session Access
+```javascript
+// Frontend calls this to get current session
+const sessionData = await fetchGet('/api/auth/session');
+
+// Returns same structure as login response:
+{
+  message: "User retrieved successfully",
+  data: {
+    userId: "123",
+    role: "user", 
+    email: "user@example.com",
+    name: "John Doe",
+    poolMetadata: { /* session context */ }
+  }
+}
+```
+
+## Core Component: detectSchema Middleware
 
 The schema detection happens in the `detectSchemaFromReturnUrl` middleware:
 
@@ -39,82 +98,188 @@ The schema detection happens in the `detectSchemaFromReturnUrl` middleware:
 // backend/src/middleware/schemaDetection.js
 export const detectSchemaFromReturnUrl = async (req, res, next) => {
    try {
-      const { return_url } = req.body;
+      const returnUrl = req.body.returnUrl;  // Note: from req.body, not req.query
 
-      if (return_url) {
-         // Get all client servers from database
+      if (returnUrl !== null) {
+         const authInternalPool = await getPool();
+
+         // Get all client servers and find matching one
          const { rows: clientServers } = await authInternalPool.query(
             "SELECT * FROM client_servers"
          );
 
-         // Find client with matching allowed_return_urls
          const matchingClient = clientServers.find((client) =>
             client.allowed_return_urls.some((allowedUrl) =>
-               return_url.startsWith(allowedUrl)
+               allowedUrl.some((allowedUrl) => returnUrl.startsWith(allowedUrl))
             )
          );
 
          if (matchingClient) {
-            /**
-             * req:
-             *  {
-             *    body: {
-             *      return_url: 'http://localhost:4000/dashboard'
-             *    },
-             *    session: {
-             *      schema: 'auth_internal',
-             *      client_id: '123'
-             *    }
-             * }
-             */
-            req.session.schema = matchingClient.assigned_schema_name;
-            req.session.client_id = matchingClient.client_id;
-            req.schema = matchingClient.assigned_schema_name;
-            
-            console.log(`Schema detected: ${matchingClient.assigned_schema_name}`);
+            // Set CLIENT_TENANT context - this is a tenant user
+            setPoolContext(
+               req,
+               POOL_CONTEXTS.CLIENT_TENANT,
+               matchingClient.assigned_schema_name,
+               {
+                  client_id: matchingClient.client_id,
+                  app_name: matchingClient.app_name,
+                  user_role: USER_ROLES.USER,
+                  return_url: returnUrl,
+                  allowed_return_urls: matchingClient.allowed_return_urls,
+               }
+            );
          }
       }
 
       next();
    } catch (error) {
-      console.error("Error detecting schema:", error);
-      next(); // Continue with default behavior
+      console.error("❌ Error detecting schema from return_url:", error);
+      next();
    }
 };
 ```
 
-## frontend implementation for login proxy mode
-- receive users in login/register page [login](../frontend/src/routes/card/Login.svelte) [register](../frontend/src/routes/card/Register.svelte)
-- decode return_url from params
-- send request to backend api with return_url to get schema
-    - [authStore.js](../frontend/src/stores/authStore.js)
-    - [authApi.js](../frontend/src/services/authApi.js)
-- backend receives api/login api/register request with return_url in req.body
-    - [auth.js](../backend/src/routes/auth.js)
+## Frontend Implementation Flow
 
-- backend decode return_url to get schema (detechSchema middleware on all routes) [schemaDetection.js](../backend/src/middleware/schemaDetection.js)
-  - flow:
-    - if no return_url, set schema to default schema (auth_internal)
-    - if return_url, set schema to the schema of the client
-  - persistence: 
-    - req and session:
-        - set schema in session
-        - set req.schema
-    - session persistence:
-        - backend sets session data  
-        - frontend can access session data from backend 
-           - by /api/auth/session
+### 1. Login/Register Pages
+- **Files**: `frontend/src/routes/card/Login.svelte`, `frontend/src/routes/card/Register.svelte`
+- **Extract return_url**: From URL query parameters
+- **Send to backend**: Via authStore → authApi
 
-- backend authentication:
-    - [authController.js](../backend/src/controllers/auth.js)
-    - [authService.js](../backend/src/services/auth.js)
-    - [userRepository.js](../backend/src/repo/userRepository.js)
-  - login/register logic with credentials in the correct schema
-  - return user to frontend
-- frontend receives user
-  - [authApi.js](../frontend/src/services/authApi.js)
-  - [authStore.js](../frontend/src/stores/authStore.js)
+```javascript
+// Login.svelte
+let returnUrl = null;
+if (window.location.search.includes('return_url')) {
+  returnUrl = new URL(window.location.href).searchParams.get('return_url');
+}
 
-## backend implementation for login proxy mode
-- receive return_url in api/login api/register request
-- decode return_url to get schema
+const response = await authStore.login(credentials, returnUrl);
+```
+
+### 2. Auth Store Layer
+- **File**: `frontend/src/stores/authStore.js`
+- **Manages**: Client-side authentication state
+- **Session Access**: Calls `/api/auth/session` to get current user + session context
+
+```javascript
+async function login(credentials, returnUrl = null) {
+  const response = await authApi.login(credentials, returnUrl);
+  if (response.success && response.data && response.data.userId) {
+    set({ isAuthenticated: true, user: response.data, loading: false });
+  }
+  return response;
+}
+```
+
+### 3. API Service Layer  
+- **File**: `frontend/src/services/authApi.js`
+- **Sends**: Structured request to backend
+
+```javascript
+const login = async (credentials, returnUrl = null) => {
+  const response = await fetchPost(`${BACKEND_URL_AUTH}/login`, {
+    credentials,
+    returnUrl,
+  });
+  return response;
+};
+```
+
+## Backend Implementation Flow
+
+### 1. Route Handler
+- **File**: `backend/src/routes/auth.js`
+- **Middleware**: `detectSchema` runs on ALL routes
+- **Schema Context**: Available in `req.session` for all subsequent handlers
+
+```javascript
+// All routes use detectSchema middleware
+router.use(detectSchema);
+
+router.post("/login", validation.login, login);
+router.post("/register", validation.register, register);
+```
+
+### 2. Schema Detection Priority
+The `detectSchema` middleware tries multiple detection methods:
+
+1. **API Token** (highest priority) → `API_CLIENT` context
+2. **Return URL** (proxy mode) → `CLIENT_TENANT` context  
+3. **User Role** (admin/owner) → `AUTH_INTERNAL` context
+4. **Default** (fallback) → `DEFAULT` context
+
+### 3. Controller Layer
+- **File**: `backend/src/controllers/auth.js`
+- **Receives**: Full request with session context
+- **Passes**: Complete request object to service
+
+```javascript
+const login = async (req, res, next) => {
+  try {
+    // req.session already contains schema context from detectSchema middleware
+    const result = await authService.login(req);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+```
+
+### 4. Service Layer
+- **File**: `backend/src/services/auth.js`  
+- **Uses**: Schema from session context
+- **Updates**: Session with user authentication data
+
+```javascript
+export async function login(req) {
+  const { credentials } = req.body;
+  const schema = req.session.schema;
+  
+  // Authenticate user in correct schema
+  const user = await repo.getUserByEmail(schema, credentials.email);
+  
+  // Update session with user data
+  req.session.userId = user.id;
+  req.session.role = user.role;
+  
+  return createSuccessResponse("Login successful", {
+    ...removePasswordFromUser(user),
+    poolMetadata: req.session.poolMetadata || null,
+  });
+}
+```
+
+### 5. Repository Layer
+- **File**: `backend/src/repo/userRepository.js`
+- **Uses**: Correct database pool based on schema context
+- **Performs**: Database operations in tenant-specific schema
+
+## Session Persistence Details
+
+### Backend Session Configuration
+```javascript
+// backend/server.js
+app.use(session({
+  secret: SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    sameSite: "lax",
+    secure: false,      // true in production
+    maxAge: 1000 * 60 * 60 * 24, // 1 day
+  },
+}));
+```
+
+### Frontend Session Access
+- **Available**: Session data accessible via `/api/auth/session` endpoint
+- **Automatic**: authStore calls this on initialization
+- **Persistent**: Cookie-based session persists across browser sessions
+- **Cross-Request**: Session context available for all subsequent API calls
+
+### Session Lifecycle
+1. **Detection**: `detectSchema` middleware sets initial context
+2. **Authentication**: Login/register updates session with user data  
+3. **Persistence**: Express-session handles cookie storage
+4. **Access**: Frontend retrieves via session endpoint
+5. **Cleanup**: Logout destroys session and database records
