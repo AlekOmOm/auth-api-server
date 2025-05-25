@@ -11,6 +11,7 @@
     import Home from './routes/home/Home.svelte'
     import Register from './routes/card/Register.svelte'
     import Login from './routes/card/Login.svelte'
+    import OwnerPanel from './routes/owner/OwnerPanel.svelte'
 
     export let url = "";
     
@@ -29,6 +30,7 @@
         <Route path="/login"><Login /></Route>
 
         <ProtectedRoute path="/home"><Home /></ProtectedRoute>
+        <ProtectedRoute path="/owner"><OwnerPanel /></ProtectedRoute>
       </div>
     </Router>
   </div>

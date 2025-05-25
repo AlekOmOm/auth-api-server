@@ -142,6 +142,10 @@ app.use("/api/auth", authRoute);
 import userRoute from "./src/routes/user.js";
 app.use("/api/users", userRoute);
 
+/** * owner - for client server owners to manage their applications and users */
+import ownerRoute from "./src/routes/owner.js";
+app.use("/api/owner", ownerRoute);
+
 app.listen(PORT, () => {
    // For production logging
    console.info(`Server running on port ${PORT}`);
