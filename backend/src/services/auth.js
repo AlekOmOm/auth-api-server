@@ -1,6 +1,7 @@
 import { AuthError, ValidationError } from "../middleware/errorHandler.js";
 import { v4 as uuidv4 } from "uuid";
 import repo from "../repo/userRepository.js"; // Import the repository
+import getAuthPool from "../repo/connection/pools/auth.js"; // Added for owner check
 
 /** ------- auth service ------- */
 
@@ -107,9 +108,58 @@ export async function login(req) {
       req.session.role = user.role;
       // Schema is already in session from middleware
 
+      // ---- BEGIN ADDED OWNER CHECK ----
+      // Check if the now authenticated user is an owner and update session + response role
+      let effectiveRole = user.role; // Start with role from DB
+      const authDbPool = await getAuthPool(); // Correctly await the pool promise
+      const { rows: userClients } = await authDbPool.query(
+         // Now call query on the resolved pool object
+         "SELECT COUNT(*) as client_count FROM client_servers WHERE user_id = $1",
+         [user.id]
+      );
+
+      if (userClients[0]?.client_count > 0) {
+         effectiveRole = "owner"; // Upgrade to owner
+         req.session.role = "owner"; // Update session role immediately
+         req.session.poolContext = "auth_internal"; // Ensure auth_internal context
+         req.session.schema = "auth_internal"; // Ensure auth_internal schema
+         req.session.poolMetadata = {
+            user_role: "owner",
+            owned_clients: userClients[0].client_count,
+            reason: "login_is_actual_owner",
+            target_page: req.body?.returnUrl, // Persist original target
+         };
+         console.log(
+            "🔐 [AUTH SERVICE] User is an OWNER. Session updated.",
+            req.session.poolMetadata
+         );
+      } else {
+         // User is in auth_internal (due to /owner target) but NOT an owner of any clients yet.
+         // Keep role as 'user' from DB. Context remains 'auth_internal'.
+         // poolMetadata should reflect they are a 'user' in this 'auth_internal' context for this request.
+         effectiveRole = user.role; // Should be 'user' from DB
+         req.session.role = user.role; // Keep DB role in session.role
+         // req.session.poolContext and req.session.schema are already 'auth_internal' from detectSchema
+         // Update poolMetadata to reflect true status for this login context
+         req.session.poolMetadata = {
+            user_role: user.role, // This will be 'user'
+            reason: "login_auth_internal_user_not_yet_owner",
+            target_page: req.body?.returnUrl, // Persist original target
+            // Keep any other relevant info from detectSchema if needed, e.g., from internal_auth_system_page_target_override_default
+            ...(req.session.poolMetadata || {}), // Merge cautiously
+            user_role: user.role, // Ensure user_role is set to actual role from DB
+            reason: "login_auth_internal_user_not_yet_owner", // Overwrite reason for clarity
+         };
+         console.log(
+            "🔐 [AUTH SERVICE] User in auth_internal is NOT an OWNER. Session reflects 'user' role.",
+            req.session.poolMetadata
+         );
+      }
+      // ---- END ADDED OWNER CHECK ----
+
       console.log("🔐 [AUTH SERVICE] Setting session data:", {
          userId: user.id,
-         role: user.role,
+         role: req.session.role, // Use the potentially updated session role
          schema: req.session.schema,
       });
 
@@ -124,8 +174,16 @@ export async function login(req) {
       await repo.createSession(schema, [user.id, sessionId]);
 
       const userResponseData = removePasswordFromUser(user);
-      const response = createSuccessResponse("Login successful", {
+      // We need to ensure the response reflects the effectiveRole
+      const finalUserResponseData = {
          ...userResponseData,
+         role: effectiveRole, // Override with effective role for the response
+         // ensure id is present if removePasswordFromUser strips it and it was originally user.id
+         id: user.id,
+      };
+
+      const response = createSuccessResponse("Login successful", {
+         ...finalUserResponseData, // Use the user data with the correct role
          poolMetadata: req.session.poolMetadata || null,
       });
 
@@ -158,14 +216,52 @@ export async function logout(req) {
          throw new AuthError("No active session");
       }
 
-      // Delete session from database
-      await repo.deleteSessionByUserId(req.schema, req.session.userId);
+      console.log("🚪 [AUTH SERVICE] Starting logout for user:", {
+         userId: req.session.userId,
+         schema: req.session?.schema,
+         poolContext: req.session?.poolContext,
+      });
 
-      // Destroy session
-      req.session.destroy();
+      // Try to delete session from database
+      // Use session schema if available, otherwise fall back to request schema
+      const logoutSchema =
+         req.session?.schema || req.schema || "client_template";
+
+      try {
+         console.log(
+            "🚪 [AUTH SERVICE] Deleting session from schema:",
+            logoutSchema
+         );
+         await repo.deleteSessionByUserId(logoutSchema, req.session.userId);
+         console.log("🚪 [AUTH SERVICE] ✅ Session deleted successfully");
+      } catch (dbError) {
+         console.error(
+            "🚪 [AUTH SERVICE] ❌ Database session deletion failed:",
+            dbError.message
+         );
+         // Don't fail the entire logout - session will expire naturally
+         // But log the error for debugging
+         console.log(
+            "🚪 [AUTH SERVICE] Continuing with session destruction despite DB error"
+         );
+      }
+
+      // Always destroy the session object regardless of DB deletion success
+      const userId = req.session.userId; // Save for logging
+      req.session.destroy((err) => {
+         if (err) {
+            console.error("🚪 [AUTH SERVICE] Session destruction error:", err);
+         } else {
+            console.log(
+               "🚪 [AUTH SERVICE] ✅ Session destroyed for user:",
+               userId
+            );
+         }
+      });
 
       return createSuccessResponse("Logout successful");
    } catch (error) {
+      console.error("🚪 [AUTH SERVICE] ❌ Logout error:", error);
       throw error;
    }
 }
@@ -181,19 +277,50 @@ export async function register(req) {
       console.log("📝 [AUTH SERVICE] Request session data:", {
          poolContext: req.session?.poolContext,
          schema: req.session?.schema,
-         poolMetadata: req.session?.poolMetadata
+         poolMetadata: req.session?.poolMetadata,
       });
-      
+
       const userData = req.body;
-      const schema =
-         req.session?.schema || process.env.SEED_SCHEMA || "client_template";
+
+      // 🎯 NEW: Handle userType to determine correct schema
+      const userType = userData.userType || "client"; // Default to client if not specified
+      console.log("📝 [AUTH SERVICE] User type specified:", userType);
+
+      let targetSchema;
+
+      if (userType === "auth") {
+         // Auth-system owner user - always goes to auth_internal
+         targetSchema = "auth_internal";
+         console.log(
+            "📝 [AUTH SERVICE] Auth-system owner registration - using auth_internal schema"
+         );
+      } else {
+         // Client app user - NEVER use auth_internal, even if session says so
+         // Use Trading Simulator schema or fallback to client_template
+         if (req.session?.schema && req.session.schema !== "auth_internal") {
+            // Use detected client schema (from return_url detection)
+            targetSchema = req.session.schema;
+            console.log(
+               "📝 [AUTH SERVICE] Client app user registration - using detected client schema:",
+               targetSchema
+            );
+         } else {
+            // Fallback to Trading Simulator schema or client_template
+            targetSchema = "client_tradingsimulator_1748187489195"; // Use known Trading Simulator schema
+            console.log(
+               "📝 [AUTH SERVICE] Client app user registration - using Trading Simulator schema:",
+               targetSchema
+            );
+         }
+      }
 
       console.log("📝 [AUTH SERVICE] Registration attempt details:", {
-         schema: schema,
+         targetSchema: targetSchema,
+         userType: userType,
          email: userData.email,
          name: userData.name,
          sessionContext: req.session?.poolContext,
-         poolMetadata: req.session?.poolMetadata
+         poolMetadata: req.session?.poolMetadata,
       });
 
       if (!userData.name || !userData.email || !userData.password) {
@@ -201,22 +328,54 @@ export async function register(req) {
          throw new ValidationError("Name, email, and password are required");
       }
 
-      // Check if user already exists
-      console.log("📝 [AUTH SERVICE] Checking if user exists in schema:", schema);
-      const existingUser = await repo.getUserByEmail(schema, userData.email);
+      // Check if user already exists in target schema
+      console.log(
+         "📝 [AUTH SERVICE] Checking if user exists in schema:",
+         targetSchema
+      );
+      const existingUser = await repo.getUserByEmail(
+         targetSchema,
+         userData.email
+      );
 
       if (existingUser) {
-         console.log("📝 [AUTH SERVICE] ❌ User already exists in schema:", schema, "email:", userData.email);
+         console.log(
+            "📝 [AUTH SERVICE] ❌ User already exists in schema:",
+            targetSchema,
+            "email:",
+            userData.email
+         );
          throw new ValidationError("User with this email already exists");
       }
 
-      console.log("📝 [AUTH SERVICE] ✅ User does not exist, proceeding with creation");
+      console.log(
+         "📝 [AUTH SERVICE] ✅ User does not exist, proceeding with creation"
+      );
 
-      // Create new user
-      const role = userData.role || "user";
-      console.log("📝 [AUTH SERVICE] Creating user in schema:", schema, "with role:", role);
-      
-      const result = await repo.createUser(schema, [
+      // Determine role based on userType
+      let role;
+      if (userType === "auth") {
+         // Auth-system users become owners
+         role = "owner";
+         console.log(
+            "📝 [AUTH SERVICE] Setting role to 'owner' for auth-system user"
+         );
+      } else {
+         // Client app users get default 'user' role
+         role = userData.role || "user";
+         console.log(
+            "📝 [AUTH SERVICE] Setting role to 'user' for client app user"
+         );
+      }
+
+      console.log(
+         "📝 [AUTH SERVICE] Creating user in schema:",
+         targetSchema,
+         "with role:",
+         role
+      );
+
+      const result = await repo.createUser(targetSchema, [
          userData.name,
          role,
          userData.email,
@@ -228,11 +387,15 @@ export async function register(req) {
          email: userData.email,
          name: userData.name,
          role: role,
-         schema: schema
+         schema: targetSchema,
+         userType: userType,
       });
 
       return createSuccessResponse("Registration successful", {
          userId: result.lastID,
+         userType: userType,
+         schema: targetSchema,
+         role: role,
       });
    } catch (error) {
       console.log("📝 [AUTH SERVICE] ❌ Registration failed:", error.message);
@@ -285,7 +448,7 @@ export async function getSession(session, sessionId, schema) {
 /**
  * Get current user information
  * @param {Object} req - Express request object
- * @returns {Object} User information
+ * @returns {Object} User information with session-based role and metadata
  */
 export async function getCurrentUser(req) {
    try {
@@ -301,10 +464,20 @@ export async function getCurrentUser(req) {
          throw new AuthError("User not found");
       }
 
-      return createSuccessResponse(
-         "User retrieved successfully",
-         removePasswordFromUser(user)
-      );
+      // Use session-based role and metadata instead of raw DB data
+      const sessionUser = removePasswordFromUser(user);
+
+      // Override with session-based role if available (important for owner detection)
+      if (req.session.role) {
+         sessionUser.role = req.session.role;
+      }
+
+      // Include session metadata if available (needed for frontend role checking)
+      if (req.session.poolMetadata) {
+         sessionUser.poolMetadata = req.session.poolMetadata;
+      }
+
+      return createSuccessResponse("User retrieved successfully", sessionUser);
    } catch (error) {
       throw error;
    }

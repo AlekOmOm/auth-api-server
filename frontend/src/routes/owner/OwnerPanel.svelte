@@ -1,10 +1,14 @@
 <script>
   import { onMount } from 'svelte';
   import { authStore } from '../../stores/authStore.js';
+  import { get } from 'svelte/store';
   import ClientServerCard from './components/ClientServerCard.svelte';
   import CreateClientModal from './components/CreateClientModal.svelte';
   import UserManagementModal from './components/UserManagementModal.svelte';
   import OwnerStats from './components/OwnerStats.svelte';
+
+  // Backend URL configuration
+  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:3001/api";
 
   let clientServers = [];
   let loading = true;
@@ -20,41 +24,51 @@
   });
 
   async function loadOwnerData() {
+    let localError = '';
+    let localLoadingDone = false;
+
+    loading = true;
+    error = '';
+
     try {
-      loading = true;
-      error = '';
+      const currentStoreState = get(authStore);
 
-      // Check if user has owner privileges
-      const currentUser = await authStore.getCurrentUser();
-      if (!currentUser.success) {
-        error = 'Authentication required';
+      if (!currentStoreState.isAuthenticated || !currentStoreState.user) {
+        localError = 'Authentication required to access owner panel.';
         return;
       }
 
-      userRole = currentUser.data?.poolMetadata?.user_role || 'user';
+      const userRoleFromMeta = currentStoreState.user?.poolMetadata?.user_role || 'user';
       
-      if (userRole !== 'owner' && userRole !== 'admin') {
-        error = 'Owner privileges required to access this panel';
+      if (userRoleFromMeta !== 'owner' && userRoleFromMeta !== 'admin') {
+        localError = `Owner or Admin privileges required to access this panel. Detected role: ${userRoleFromMeta}`;
         return;
       }
 
-      // Load client servers
+      userRole = userRoleFromMeta;
+
       await loadClientServers();
       
-      // Load owner statistics
-      await loadOwnerStats();
+      // Load owner stats (non-critical, don't fail if it errors)
+      try {
+        await loadOwnerStats();
+      } catch (statsError) {
+        console.warn('Owner stats failed to load, continuing without stats:', statsError);
+        // Don't throw - continue with the panel even if stats fail
+      }
 
     } catch (err) {
       console.error('Error loading owner data:', err);
-      error = 'Failed to load owner panel data';
+      localError = 'Failed to load owner panel data: ' + (err.message || 'Unknown error');
     } finally {
+      error = localError;
       loading = false;
     }
   }
 
   async function loadClientServers() {
     try {
-      const response = await fetch('/api/clientServer/user/clients', {
+      const response = await fetch(`${BACKEND_URL}/clientServer/user/clients`, {
         credentials: 'include'
       });
 
@@ -72,7 +86,7 @@
 
   async function loadOwnerStats() {
     try {
-      const response = await fetch('/api/owner/stats', {
+      const response = await fetch(`${BACKEND_URL}/owner/stats`, {
         credentials: 'include'
       });
 
@@ -106,7 +120,7 @@
     }
 
     try {
-      const response = await fetch(`/api/clientServer/user/clients/${clientServer.client_id}`, {
+      const response = await fetch(`${BACKEND_URL}/clientServer/user/clients/${clientServer.client_id}`, {
         method: 'DELETE',
         credentials: 'include'
       });
@@ -162,9 +176,11 @@
     </div>
   {:else if error}
     <div class="error">
-      <h3>❌ Access Denied</h3>
+      <h3>⚠️ Loading Issue</h3>
       <p>{error}</p>
-      <a href="/home" class="btn btn-primary">Go to Home</a>
+      <button class="btn btn-primary" on:click={loadOwnerData}>
+        🔄 Retry Loading
+      </button>
     </div>
   {:else}
     <!-- Owner Statistics -->
@@ -222,47 +238,55 @@
 {/if}
 
 <style>
+  /* Use consistent styling with app.css */
   .owner-panel {
-    max-width: 1200px;
+    max-width: 1280px;
     margin: 0 auto;
     padding: 2rem;
     min-height: 100vh;
+    text-align: center;
   }
 
   .panel-header {
-    text-align: center;
     margin-bottom: 3rem;
     position: relative;
   }
 
   .panel-header h1 {
-    font-size: 2.5rem;
+    font-size: 3.2em;
+    line-height: 1.1;
     margin-bottom: 0.5rem;
-    color: #2c3e50;
+    /* Uses CSS custom properties from :root */
   }
 
   .subtitle {
     font-size: 1.1rem;
-    color: #7f8c8d;
     margin-bottom: 1rem;
+    opacity: 0.8;
   }
 
   .admin-badge, .owner-badge {
     display: inline-block;
-    padding: 0.5rem 1rem;
-    border-radius: 20px;
-    font-weight: bold;
+    padding: 0.6em 1.2em;
+    border-radius: 8px;
+    font-weight: 500;
     font-size: 0.9rem;
+    border: 1px solid transparent;
+    transition: border-color 0.25s;
   }
 
   .admin-badge {
-    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    background-color: #e74c3c;
     color: white;
   }
 
   .owner-badge {
-    background: linear-gradient(135deg, #f39c12, #e67e22);
+    background-color: #646cff;
     color: white;
+  }
+
+  .admin-badge:hover, .owner-badge:hover {
+    border-color: #646cff;
   }
 
   .loading {
@@ -273,8 +297,8 @@
   .spinner {
     width: 40px;
     height: 40px;
-    border: 4px solid #f3f3f3;
-    border-top: 4px solid #3498db;
+    border: 4px solid rgba(255, 255, 255, 0.1);
+    border-top: 4px solid #646cff;
     border-radius: 50%;
     animation: spin 1s linear infinite;
     margin: 0 auto 1rem;
@@ -287,15 +311,16 @@
 
   .error {
     text-align: center;
-    padding: 4rem 2rem;
-    background: #fff5f5;
-    border: 1px solid #fed7d7;
+    padding: 2em;
+    background-color: rgba(255, 0, 0, 0.1);
+    border: 1px solid rgba(255, 0, 0, 0.3);
     border-radius: 8px;
-    color: #c53030;
+    margin: 2rem 0;
   }
 
   .error h3 {
     margin-bottom: 1rem;
+    color: #ff6b6b;
   }
 
   .section-header {
@@ -303,64 +328,119 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 2rem;
+    text-align: left;
   }
 
   .section-header h2 {
-    color: #2c3e50;
     margin: 0;
+    font-size: 1.8em;
   }
 
   .empty-state {
     text-align: center;
-    padding: 4rem 2rem;
-    background: #f8f9fa;
-    border-radius: 12px;
-    border: 2px dashed #dee2e6;
+    padding: 2em;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    border: 2px dashed rgba(255, 255, 255, 0.2);
+    margin: 2rem 0;
   }
 
   .empty-state h3 {
-    color: #495057;
     margin-bottom: 1rem;
   }
 
   .empty-state p {
-    color: #6c757d;
     margin-bottom: 2rem;
     max-width: 500px;
     margin-left: auto;
     margin-right: auto;
+    opacity: 0.8;
   }
 
   .client-servers-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
     gap: 2rem;
+    text-align: left;
   }
 
+  /* Use consistent button styling from app.css */
   .btn {
-    padding: 0.75rem 1.5rem;
-    border: none;
-    border-radius: 6px;
-    font-weight: 600;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    padding: 0.6em 1.2em;
+    font-size: 1em;
+    font-weight: 500;
+    font-family: inherit;
+    background-color: #1a1a1a;
+    color: rgba(255, 255, 255, 0.87);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: border-color 0.25s;
     text-decoration: none;
     display: inline-block;
     text-align: center;
   }
 
+  .btn:hover {
+    border-color: #646cff;
+  }
+
+  .btn:focus,
+  .btn:focus-visible {
+    outline: 4px auto -webkit-focus-ring-color;
+  }
+
   .btn-primary {
-    background: linear-gradient(135deg, #3498db, #2980b9);
+    background-color: #646cff;
     color: white;
   }
 
   .btn-primary:hover {
-    background: linear-gradient(135deg, #2980b9, #21618c);
-    transform: translateY(-1px);
+    background-color: #535bf2;
   }
 
   .client-servers-section {
     margin-top: 2rem;
+  }
+
+  /* Light mode support (matches app.css) */
+  @media (prefers-color-scheme: light) {
+    .admin-badge {
+      background-color: #e74c3c;
+    }
+
+    .owner-badge {
+      background-color: #747bff;
+    }
+
+    .btn {
+      background-color: #f9f9f9;
+      color: #213547;
+    }
+
+    .btn-primary {
+      background-color: #747bff;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background-color: #646cff;
+    }
+
+    .empty-state {
+      background-color: rgba(0, 0, 0, 0.05);
+      border-color: rgba(0, 0, 0, 0.2);
+    }
+
+    .error {
+      background-color: rgba(255, 0, 0, 0.1);
+      border-color: rgba(255, 0, 0, 0.3);
+    }
+
+    .spinner {
+      border-color: rgba(0, 0, 0, 0.1);
+      border-top-color: #747bff;
+    }
   }
 
   @media (max-width: 768px) {
@@ -369,7 +449,7 @@
     }
 
     .panel-header h1 {
-      font-size: 2rem;
+      font-size: 2.5em;
     }
 
     .section-header {

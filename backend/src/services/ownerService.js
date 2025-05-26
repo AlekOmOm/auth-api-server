@@ -126,11 +126,19 @@ export async function getOwnerStatistics(req) {
                clientServer.assigned_schema_name
             );
 
-            // Count users in this schema
-            const { rows: userCount } = await clientPool.query(
-               "SELECT COUNT(*) as count FROM users"
-            );
-            const schemaUsers = parseInt(userCount[0]?.count || 0);
+            // Count users in this schema (check if table exists first)
+            let schemaUsers = 0;
+            try {
+               const { rows: userCount } = await clientPool.query(
+                  "SELECT COUNT(*) as count FROM users"
+               );
+               schemaUsers = parseInt(userCount[0]?.count || 0);
+            } catch (tableError) {
+               console.log(
+                  `Users table not found in ${clientServer.assigned_schema_name}, skipping user count`
+               );
+               schemaUsers = 0;
+            }
             totalUsers += schemaUsers;
 
             // Track top client server

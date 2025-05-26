@@ -1,6 +1,5 @@
 import { verifyApiToken } from "../services/clientServerService.js";
 import * as clientServersRepo from "../repo/repositories/clientServersRepository.js";
-import config from "../utils/config.js";
 import getPool from "../repo/connection/pools/auth.js";
 import getPoolForSchema from "../repo/connection/pools/clientServers.js";
 
@@ -220,8 +219,10 @@ export const detectSchemaFromReturnUrl = async (req, res, next) => {
          );
       }
 
+      // Always call next() for this sub-middleware, as the orchestrator (detectSchema)
+      // will decide the next overall step or if a default is needed.
       console.log(
-         "🔍 [SCHEMA DETECTION] Schema detection completed, calling next()"
+         "🔍 [SCHEMA DETECTION FROM RETURN URL] Completed, calling its next()"
       );
       next();
    } catch (error) {
@@ -277,36 +278,32 @@ export const detectSchemaFromApiToken = async (req, res, next) => {
  */
 export const detectUserRole = async (req, res, next) => {
    try {
-      // Only check if user is logged in and no other context is set
-      if (req.session?.userId && !req.session?.poolContext) {
+      if (req.session?.userId) {
+         // Always check for role updates, not just when no context exists
          const userRole = req.session?.role;
 
-         // Check if user is system admin
-         if (userRole === "admin") {
-            setPoolContext(req, POOL_CONTEXTS.AUTH_INTERNAL, "auth_internal", {
-               user_id: req.session.userId,
-               user_role: USER_ROLES.ADMIN,
-               system_admin: true,
-            });
-            return next();
-         }
-
-         // Check if user owns any client servers (making them an owner)
+         // Check if user owns any client servers
          const authInternalPool = await getPool();
          const { rows: userClients } = await authInternalPool.query(
             "SELECT COUNT(*) as client_count FROM client_servers WHERE user_id = $1",
             [req.session.userId]
          );
 
+         // Update role based on current ownership status
          if (userClients[0]?.client_count > 0) {
-            // Owner owns client servers - they are an owner
             setPoolContext(req, POOL_CONTEXTS.AUTH_INTERNAL, "auth_internal", {
                user_id: req.session.userId,
                user_role: USER_ROLES.OWNER,
                owned_clients: userClients[0].client_count,
             });
+         } else if (userRole === "admin") {
+            setPoolContext(req, POOL_CONTEXTS.AUTH_INTERNAL, "auth_internal", {
+               user_id: req.session.userId,
+               user_role: USER_ROLES.ADMIN,
+               system_admin: true,
+            });
          } else {
-            // Regular user - will use default tenant pool
+            // Regular user - use default tenant pool
             setPoolContext(
                req,
                POOL_CONTEXTS.DEFAULT,
@@ -319,11 +316,10 @@ export const detectUserRole = async (req, res, next) => {
             );
          }
       }
-
       next();
    } catch (error) {
       console.error("❌ Error detecting user role:", error);
-      next(); // Continue with default behavior
+      next();
    }
 };
 
@@ -353,24 +349,266 @@ export const setDefaultSchema = (req, res, next) => {
  */
 export const detectSchema = async (req, res, next) => {
    try {
-      // 1. Try API token first (highest priority - server-to-server)
-      await detectSchemaFromApiToken(req, res, () => {});
+      const returnUrlFromBody = req.body?.returnUrl;
+      const returnUrlFromQuery = req.query?.return_url;
+      const effectiveReturnUrl = returnUrlFromBody || returnUrlFromQuery;
 
-      // 2. If no API context, try return_url (frontend proxy mode - tenant users)
-      if (!req.session?.poolContext) {
-         await detectSchemaFromReturnUrl(req, res, () => {});
+      // DEBUG: Enhanced session debugging to track session IDs
+      console.log("🔍 [DETECT SCHEMA] Enhanced session state:", {
+         path: req.path,
+         method: req.method,
+         origin: req.headers.origin,
+         referer: req.headers.referer,
+         userAgent: req.headers["user-agent"]?.substring(0, 50) + "...",
+         sessionId: req.sessionID,
+         sessionExists: !!req.session,
+         userId: req.session?.userId,
+         role: req.session?.role,
+         poolContext: req.session?.poolContext,
+         schema: req.session?.schema,
+         poolMetadata: req.session?.poolMetadata,
+         effectiveReturnUrl,
+         cookies: req.headers.cookie
+            ? req.headers.cookie.substring(0, 100) + "..."
+            : "none",
+      });
+
+      // CRITICAL FIX: Preserve existing session schema for authenticated users
+      // This prevents session check endpoints from overwriting login schema
+      if (req.session?.userId && req.session?.role) {
+         console.log(
+            "📊 detectSchema: Found authenticated user, checking session preservation...",
+            {
+               sessionId: req.sessionID,
+               userId: req.session.userId,
+               role: req.session.role,
+            }
+         );
+
+         // Check if session has valid context that should be preserved
+         if (req.session?.poolContext && req.session?.schema) {
+            console.log(
+               "📊 detectSchema: PRESERVING existing session context for authenticated user:",
+               {
+                  sessionId: req.sessionID,
+                  userId: req.session.userId,
+                  role: req.session.role,
+                  poolContext: req.session.poolContext,
+                  schema: req.session.schema,
+                  path: req.path,
+               }
+            );
+
+            // ADDITIONAL FIX: Ensure req.schema is set for downstream middleware
+            req.schema = req.session.schema;
+
+            // Session already has valid context, preserve it and skip detection
+            next();
+            return;
+         }
+
+         // If authenticated user has incomplete session context, restore from role
+         console.log(
+            "📊 detectSchema: Restoring session context for authenticated user with incomplete context:",
+            {
+               sessionId: req.sessionID,
+               userId: req.session.userId,
+               role: req.session.role,
+               path: req.path,
+               hasPoolContext: !!req.session.poolContext,
+               hasSchema: !!req.session.schema,
+            }
+         );
+
+         if (req.session.role === "owner") {
+            setPoolContext(req, POOL_CONTEXTS.AUTH_INTERNAL, "auth_internal", {
+               user_id: req.session.userId,
+               user_role: USER_ROLES.OWNER,
+               reason: "session_restoration_owner",
+            });
+         } else if (req.session.role === "admin") {
+            setPoolContext(req, POOL_CONTEXTS.AUTH_INTERNAL, "auth_internal", {
+               user_id: req.session.userId,
+               user_role: USER_ROLES.ADMIN,
+               reason: "session_restoration_admin",
+            });
+         } else {
+            setPoolContext(
+               req,
+               POOL_CONTEXTS.DEFAULT,
+               process.env.SEED_SCHEMA || "client_template",
+               {
+                  user_id: req.session.userId,
+                  user_role: USER_ROLES.USER,
+                  reason: "session_restoration_user",
+               }
+            );
+         }
+
+         console.log("📊 detectSchema: Session context restored:", {
+            sessionId: req.sessionID,
+            poolContext: req.session.poolContext,
+            schema: req.session.schema,
+         });
+
+         // ADDITIONAL FIX: Ensure req.schema is set for downstream middleware
+         req.schema = req.session.schema;
+
+         next();
+         return;
       }
 
-      // 3. If no specific context, detect user role (admin/owner/user)
-      if (!req.session?.poolContext) {
-         await detectUserRole(req, res, () => {});
+      // Only run full detection for unauthenticated users or users without sessions
+      console.log(
+         "📊 detectSchema: Running full detection for unauthenticated user"
+      );
+
+      // Initialize: no context set yet
+      if (req.session && req.session.poolContext) {
+         // If coming from a previous middleware in the same request that already set it,
+         // for now, we'll assume it was intentional and preserve it.
+         // However, this schema detection is usually early in the chain.
+         // Consider clearing or logging if context is unexpectedly pre-set.
       }
 
-      // 4. Set default if still no context
-      setDefaultSchema(req, res, next);
+      // Path 1: Explicit internal Auth System pages (targeted by returnUrl for login)
+      // Allow overriding if current context is DEFAULT
+      if (
+         (!req.session?.poolContext ||
+            req.session?.poolContext === POOL_CONTEXTS.DEFAULT) &&
+         (effectiveReturnUrl === "/owner" || effectiveReturnUrl === "/admin")
+      ) {
+         setPoolContext(req, POOL_CONTEXTS.AUTH_INTERNAL, "auth_internal", {
+            reason: "internal_auth_system_page_target_override_default",
+            target_page: effectiveReturnUrl,
+            user_role:
+               effectiveReturnUrl === "/owner"
+                  ? USER_ROLES.OWNER
+                  : USER_ROLES.ADMIN, // Tentative role
+         });
+         console.log(
+            "📊 detectSchema: Path 1 - Set AUTH_INTERNAL for internal page target (overrode default if present)",
+            effectiveReturnUrl,
+            "New context:",
+            req.session.poolContext,
+            req.session.schema
+         );
+      }
+
+      // Path 2: Client-specific return_url (if not an internal page target and no specific context yet)
+      if (
+         !req.session?.poolContext ||
+         req.session?.poolContext === POOL_CONTEXTS.DEFAULT
+      ) {
+         if (
+            effectiveReturnUrl &&
+            !(
+               effectiveReturnUrl === "/owner" ||
+               effectiveReturnUrl === "/admin"
+            )
+         ) {
+            if (returnUrlFromQuery && !req.body.returnUrl)
+               req.body.returnUrl = returnUrlFromQuery; // Normalize
+            await new Promise((resolve) =>
+               detectSchemaFromReturnUrl(req, res, resolve)
+            );
+            console.log(
+               "📊 detectSchema: Path 2 - Attempted client return_url. Context after:",
+               req.session.poolContext,
+               req.session.schema
+            );
+         }
+      }
+
+      // Path 3: API Token (if no specific context yet or still default)
+      if (
+         !req.session?.poolContext ||
+         req.session?.poolContext === POOL_CONTEXTS.DEFAULT
+      ) {
+         await new Promise((resolve) =>
+            detectSchemaFromApiToken(req, res, resolve)
+         );
+         console.log(
+            "📊 detectSchema: Path 3 - Attempted API token. Context after:",
+            req.session.poolContext,
+            req.session.schema
+         );
+      }
+
+      // Path 4: Role of already logged-in user (for subsequent requests)
+      // Only run if no specific context is set, to avoid overwriting AUTH_INTERNAL or CLIENT_TENANT contexts
+      if (
+         req.session?.userId &&
+         (!req.session?.poolContext ||
+            req.session?.poolContext === POOL_CONTEXTS.DEFAULT)
+      ) {
+         await new Promise((resolve) => detectUserRole(req, res, resolve));
+         console.log(
+            "📊 detectSchema: Path 4 - Attempted user role detection. Context after:",
+            req.session.poolContext,
+            req.session.schema
+         );
+      }
+
+      // Path 5: Defaulting logic for direct interactions or true fallbacks
+      // Only apply if context is still not specifically set (i.e., not AUTH_INTERNAL, CLIENT_TENANT, or API_CLIENT)
+      if (
+         !req.session?.poolContext ||
+         req.session?.poolContext === POOL_CONTEXTS.DEFAULT
+      ) {
+         const isDirectAuthApiRoute =
+            !effectiveReturnUrl &&
+            (req.path.startsWith("/api/auth/login") ||
+               req.path.startsWith("/api/auth/register"));
+         // Check for direct GET requests to /login or /register pages themselves
+         const isDirectAuthPageRoute =
+            !effectiveReturnUrl &&
+            (req.path === "/login" || req.path === "/register");
+
+         if (isDirectAuthApiRoute || isDirectAuthPageRoute) {
+            // User is directly on auth system's login/register page/API. Operations should target auth_internal.
+            setPoolContext(req, POOL_CONTEXTS.AUTH_INTERNAL, "auth_internal", {
+               reason: "direct_auth_system_interaction_default",
+               user_role: USER_ROLES.USER, // Initial role, to be elevated by authService or client creation
+            });
+            console.log(
+               "📊 detectSchema: Path 5a - Defaulted to AUTH_INTERNAL for direct auth route:",
+               req.path
+            );
+         } else {
+            // Ultimate fallback: if no context is set by any other means
+            // (e.g., unmatched client return_url on a non-login/reg path, or completely unknown route).
+            await new Promise((resolve) => setDefaultSchema(req, res, resolve));
+            console.log(
+               "📊 detectSchema: Path 5b - Defaulted using setDefaultSchema (client_template). Path:",
+               req.path
+            );
+         }
+      }
+
+      // Log the final determined context if in development
+      if (process.env.NODE_ENV === "development") {
+         const finalContext = getPoolContextInfo(req);
+         console.log(
+            "📊 Final Determined Pool Context by detectSchema:",
+            finalContext
+         );
+      }
+
+      next(); // Pass control to the next middleware in the main Express chain
    } catch (error) {
-      console.error("❌ Error in schema detection:", error);
-      setDefaultSchema(req, res, next);
+      console.error("❌ Error in schema detection orchestrator:", error);
+      // Critical error in detection, try to set a safe default and proceed
+      try {
+         await new Promise((resolve) => setDefaultSchema(req, res, resolve));
+      } catch (setDefaultError) {
+         console.error(
+            "❌ Failed to set default schema after orchestrator error:",
+            setDefaultError
+         );
+         // If setDefaultSchema also fails, there's little more we can do here in middleware
+      }
+      next(error); // Pass the original error to Express error handling
    }
 };
 

@@ -1,10 +1,9 @@
 import express from "express";
 const app = express();
-import config from "./src/utils/config.js";
 
 // --- environment variables ---
-const PORT = process.env.BACKEND_PORT || 3001;
-const FRONTEND_PORT = process.env.FRONTEND_PORT || 3000;
+const PORT = process.env.DEV_BACKEND_PORT || 3001;
+const FRONTEND_PORT = process.env.DEV_FRONTEND_PORT || 3000;
 const SESSION_SECRET = process.env.SESSION_SECRET;
 const RATE_LIMIT_WINDOW = process.env.RATE_LIMIT_WINDOW || 15;
 const RATE_LIMIT_LIMIT = process.env.RATE_LIMIT_LIMIT || 300;
@@ -60,18 +59,26 @@ app.use(
  * - set secret to session secret
  * - set resave to false
  * - set saveUninitialized to false
+ * - configure for cross-domain client applications
  */
 import session from "express-session";
+
+// Determine if we're in production
+const isProduction = process.env.NODE_ENV === "production";
+
 app.use(
    session({
       secret: "" + SESSION_SECRET,
       resave: false,
       saveUninitialized: false,
       cookie: {
-         sameSite: "lax", // allow same origin different subdomains (fx. trade.devalek.dev and devalek.dev)
-         secure: false, // https only (true in production)
+         sameSite: "lax", // "lax" for development cross-origin requests
+         secure: isProduction, // true in production with HTTPS, false in development
          maxAge: 1000 * 60 * 60 * 24, // 1 day
+         httpOnly: true, // Prevent XSS attacks
+         domain: undefined, // Allow cookies to work across different ports on localhost
       },
+      name: "auth-system.sid", // Custom session name to avoid conflicts
    })
 );
 

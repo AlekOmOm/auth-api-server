@@ -7,9 +7,9 @@ import {
    NotFoundError,
 } from "../middleware/errorHandler.js";
 import * as repo from "../repo/adminRepository.js";
-import config from "../utils/config.js";
 import getPool from "../repo/connection/pools/auth.js";
 import getPoolForSchema from "../repo/connection/pools/clientServers.js";
+import { POOL_CONTEXTS, USER_ROLES } from "../middleware/schemaDetection.js";
 
 // Helper function to get auth internal pool
 const getAuthInternalPool = async () => {
@@ -146,6 +146,21 @@ export async function registerClientServerForUser(clientData, req) {
 
       // Initialize the client's schema
       await getPoolForSchema(assigned_schema_name);
+
+      // REQUIRED ADDITION: Update session context after client creation
+      if (req.session) {
+         // Clear existing pool context to trigger role re-detection
+         delete req.session.poolContext;
+         delete req.session.poolMetadata;
+
+         // Or directly set owner context
+         req.session.poolContext = POOL_CONTEXTS.AUTH_INTERNAL;
+         req.session.poolMetadata = {
+            user_id: req.session.userId,
+            user_role: USER_ROLES.OWNER,
+            owned_clients: 1, // Assuming this is the first client, or adjust as needed
+         };
+      }
 
       return {
          message: "Client server registered successfully",

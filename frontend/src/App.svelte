@@ -20,7 +20,7 @@
 <div class="page">
   <Header />
   <div class="content">
-    <Router {url}>
+    <Router {url} let:location>
         
       <div>
                 
@@ -29,12 +29,13 @@
         <Route path="/register"><Register /></Route>
         <Route path="/login"><Login /></Route>
 
-        <ProtectedRoute path="/home"><Home /></ProtectedRoute>
-        <ProtectedRoute path="/owner"><OwnerPanel /></ProtectedRoute>
+        <ProtectedRoute path="/home" {location}><Home /></ProtectedRoute>
+        <ProtectedRoute path="/owner" {location}><OwnerPanel /></ProtectedRoute>
       </div>
+      
+      <Footer />
     </Router>
   </div>
-  <Footer />
 </div>
 
 <style>

@@ -6,6 +6,7 @@
   let name = '';
   let email = '';
   let password = '';
+  let userType = 'client'; // Default to 'client' or 'auth' based on return_url
   let errorMessages = [];
   let successMessage = '';
   let isLoading = false;
@@ -20,12 +21,17 @@
     if (storedReturnUrl) {
       sessionStorage.setItem('auth_return_url', storedReturnUrl);
       console.log("🔍 Stored return_url in sessionStorage:", storedReturnUrl);
+      userType = 'client';
     }
   } else {
     // Check if we have a stored return_url from a previous page load
     storedReturnUrl = sessionStorage.getItem('auth_return_url');
     if (storedReturnUrl) {
       console.log("🔍 Retrieved return_url from sessionStorage:", storedReturnUrl);
+      userType = 'client';
+    } else {
+      // No return_url, default to 'auth' (direct registration on auth-system)
+      userType = 'auth';
     }
   }
 
@@ -35,7 +41,8 @@
     const credentials = {
       name: name.trim(),
       email: email.trim(),
-      password: password.trim()
+      password: password.trim(),
+      userType: userType // Add user type to registration data
     }
 
     errorMessages = [];
@@ -83,6 +90,27 @@
   <h2> ___ </h2>
 
   <form onsubmit={register}>
+      <!-- User Type Selector -->
+      <div class="user-type-selector">
+        <label>Account Type:</label>
+        <div class="radio-group">
+          <label class="radio-option">
+            <input type="radio" bind:group={userType} value="client" disabled={isLoading}/>
+            <span class="radio-label">
+              <strong>Client App User</strong>
+              <small>For using client applications (Trading Simulator, etc.)</small>
+            </span>
+          </label>
+          <label class="radio-option">
+            <input type="radio" bind:group={userType} value="auth" disabled={isLoading}/>
+            <span class="radio-label">
+              <strong>Auth System Owner</strong>
+              <small>For managing client applications and users</small>
+            </span>
+          </label>
+        </div>
+      </div>
+
       <input id="name" bind:value={name} name="name" placeholder="name" required autocomplete="name" disabled={isLoading}/>
       <input id="email" bind:value={email} name="email" placeholder="email" required autocomplete="email" disabled={isLoading}/>
       <input id="password" bind:value={password} name="password" type="password" placeholder="password (must be strong)" required autocomplete="new-password" disabled={isLoading}/>
@@ -131,5 +159,70 @@
     
     button {
         margin-top: 1rem;
+    }
+
+    .user-type-selector {
+        margin-bottom: 1rem;
+    }
+
+    .user-type-selector label {
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        display: block;
+        color: #333;
+    }
+
+    .radio-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .radio-option {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+        padding: 0.75rem;
+        border: 2px solid #e1e5e9;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-weight: normal;
+    }
+
+    .radio-option:hover {
+        border-color: #3498db;
+        background-color: #f8f9fa;
+    }
+
+    .radio-option input[type="radio"] {
+        margin: 0;
+        margin-top: 0.1rem;
+    }
+
+    .radio-option input[type="radio"]:checked + .radio-label {
+        color: #3498db;
+    }
+
+    .radio-option:has(input[type="radio"]:checked) {
+        border-color: #3498db;
+        background-color: #f0f8ff;
+    }
+
+    .radio-label {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .radio-label strong {
+        font-weight: 600;
+        color: inherit;
+    }
+
+    .radio-label small {
+        color: #666;
+        font-size: 0.875rem;
+        line-height: 1.3;
     }
 </style> 

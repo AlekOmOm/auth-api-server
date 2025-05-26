@@ -3,7 +3,7 @@ import { fetchGet } from "../util/fetch";
 import authApi from "../services/authApi"; // Import authApi
 
 const BACKEND_URL =
-   import.meta.env.VITE_BACKEND_URL || "http://localhost:3003/api";
+   import.meta.env.VITE_BACKEND_URL || "http://localhost:3001/api";
 const BACKEND_URL_AUTH = `${BACKEND_URL}/auth`;
 
 /** AuthStore
@@ -59,20 +59,32 @@ function createAuthStore() {
     * @context utilizes service: authApi.js
     */
    async function checkSession() {
+      console.log("🔍 [AUTH STORE] Starting session check...");
       update((state) => ({ ...state, loading: true }));
       try {
          const sessionData = await fetchGet(`${BACKEND_URL_AUTH}/session`);
-         if (sessionData && sessionData.user) {
+         console.log(
+            "🔍 [AUTH STORE] backend url session check:",
+            `${BACKEND_URL_AUTH}/session`
+         );
+         console.log("🔍 [AUTH STORE] Session check response:", sessionData);
+         if (sessionData && sessionData.data) {
+            console.log(
+               "🔍 [AUTH STORE] ✅ Session valid, setting authenticated state"
+            );
             set({
                isAuthenticated: true,
-               user: sessionData.user,
+               user: sessionData.data,
                loading: false,
             });
          } else {
+            console.log(
+               "🔍 [AUTH STORE] ❌ Session invalid, no data in response"
+            );
             set({ isAuthenticated: false, user: null, loading: false });
          }
       } catch (error) {
-         console.error("Session check failed:", error);
+         console.error("🔍 [AUTH STORE] ❌ Session check failed:", error);
          set({ isAuthenticated: false, user: null, loading: false });
       }
    }
@@ -93,9 +105,24 @@ function createAuthStore() {
           *
           */
          const response = await authApi.login(credentials, returnUrl);
-         if (response.success && response.data && response.data.userId) {
+         if (
+            response.success &&
+            response.data &&
+            (response.data.userId || response.data.id)
+         ) {
+            console.log(
+               "🔍 [AUTH STORE] ✅ Login successful, setting authenticated state"
+            );
             set({ isAuthenticated: true, user: response.data, loading: false });
+            console.log("🔍 [AUTH STORE] ✅ state updated:", {
+               isAuthenticated: get(authStore).isAuthenticated,
+               user: get(authStore).user,
+               loading: get(authStore).loading,
+            });
          } else {
+            console.log(
+               "🔍 [AUTH STORE] ❌ Login failed, setting unauthenticated state"
+            );
             // Even if API login technically succeeded but lacked data, treat as not logged in for store
             set({ isAuthenticated: false, user: null, loading: false });
          }
@@ -153,8 +180,10 @@ function createAuthStore() {
       }
    }
 
-   // Check session when store is initialized
-   checkSession();
+   // Check session when store is initialized (with small delay to avoid race conditions)
+   setTimeout(() => {
+      checkSession();
+   }, 100);
 
    return {
       subscribe,

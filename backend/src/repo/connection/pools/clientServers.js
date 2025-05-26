@@ -1,5 +1,5 @@
 import { Pool } from "pg";
-import config from "../../../utils/config.js";
+// import config from "../../../utils/config.js"; // This was incorrect
 import { ddl } from "../../schemas/client_servers/client_server_template.js";
 
 // Cache
@@ -16,7 +16,13 @@ export const getPoolForSchema = async (schemaName = "client_template") => {
       return schemas[schemaName];
    }
 
-   const localPool = new Pool(config.postgres);
+   const localPool = new Pool({
+      user: process.env.POSTGRES_USER,
+      host: process.env.POSTGRES_HOST,
+      database: process.env.POSTGRES_DB,
+      password: process.env.POSTGRES_PASSWORD,
+      port: parseInt(process.env.POSTGRES_PORT, 10),
+   });
    await localPool.connect();
    await initSchema(localPool, schemaName);
    schemas[schemaName] = localPool;

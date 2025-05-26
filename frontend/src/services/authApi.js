@@ -2,7 +2,7 @@ import { fetchGet, fetchPost } from "../util/fetch";
 import { authStore } from "../stores/authStore";
 
 const BACKEND_URL =
-   import.meta.env.VITE_BACKEND_URL || "http://localhost:3003/api";
+   import.meta.env.VITE_BACKEND_URL || "http://localhost:3001/api";
 
 const BACKEND_URL_AUTH = `${BACKEND_URL}/auth`;
 
@@ -132,10 +132,19 @@ const logout = async () => {
    try {
       const response = await fetchPost(`${BACKEND_URL_AUTH}/logout`, {});
 
-      return {
-         ...response,
-         success: true,
-      };
+      // Return the actual response from backend, don't override success
+      if (response.success) {
+         return {
+            ...response,
+            success: true,
+         };
+      } else {
+         console.error("Backend logout failed:", response);
+         return {
+            ...response,
+            success: false,
+         };
+      }
    } catch (error) {
       console.error("Logout error:", error);
       return {

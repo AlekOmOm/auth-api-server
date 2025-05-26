@@ -44,6 +44,11 @@ const register = [
       .withMessage(rules.ERROR_MESSAGES.PASSWORD.MAX_LENGTH_ERROR)
       .isStrongPassword()
       .withMessage(rules.ERROR_MESSAGES.PASSWORD.WEAK_PASSWORD),
+   // Add validation for userType
+   body("userType")
+      .optional()
+      .isIn(["auth", "client"])
+      .withMessage("User type must be either 'auth' or 'client'"),
 
    (req, res, next) => {
       const errors = validationResult(req);

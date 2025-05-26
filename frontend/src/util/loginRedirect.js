@@ -45,121 +45,74 @@ import { navigate } from "svelte-routing";
  *
  */
 
-export const loginRedirect = (response) => {
-   console.log("🔄 [LOGIN REDIRECT] Starting redirect logic");
+export async function loginRedirect(response, returnUrlFromSession) {
+   console.log("🔄 [LOGIN REDIRECT UTIL] Starting redirect logic");
+   const responseData = response?.data;
+   console.log("🔄 [LOGIN REDIRECT UTIL] Response data:", responseData);
    console.log(
-      "🔄 [LOGIN REDIRECT] Response received:",
-      JSON.stringify(response, null, 2)
+      "🔄 [LOGIN REDIRECT UTIL] returnUrlFromSession:",
+      returnUrlFromSession
    );
 
-   // Check for return URL in sessionStorage first, then current URL
-   let returnUrl = sessionStorage.getItem("auth_return_url");
-   const currentUrl = window.location.href;
+   let finalReturnUrl = null;
 
-   // If no stored return URL, check current URL
-   if (!returnUrl && currentUrl.includes("return_url=")) {
-      returnUrl = currentUrl.split("return_url=")[1]?.split("&")[0];
-      if (returnUrl) {
-         returnUrl = decodeURIComponent(returnUrl);
+   // Priority 1: poolMetadata.target_page from login response (set by backend for specific validated redirects)
+   if (responseData?.poolMetadata?.target_page) {
+      finalReturnUrl = responseData.poolMetadata.target_page;
+      console.log(
+         `🔄 [LOGIN REDIRECT UTIL] Using target_page from poolMetadata: ${finalReturnUrl}`
+      );
+   }
+   // Priority 2: returnUrlFromSession (captured from original URL query param or client interaction)
+   else if (returnUrlFromSession) {
+      finalReturnUrl = returnUrlFromSession;
+      console.log(
+         `🔄 [LOGIN REDIRECT UTIL] Using returnUrlFromSession (priority 2): ${finalReturnUrl}`
+      );
+   }
+   // Priority 3: Fallback based on user role if no specific target or session URL
+   else {
+      if (responseData?.poolMetadata?.user_role === "owner") {
+         finalReturnUrl = "/owner";
+         console.log(
+            `🔄 [LOGIN REDIRECT UTIL] Fallback for owner: ${finalReturnUrl}`
+         );
+      } else {
+         finalReturnUrl = "/home"; // Default fallback for users or if role is unclear
+         console.log(
+            `🔄 [LOGIN REDIRECT UTIL] Fallback for user/default: ${finalReturnUrl}`
+         );
       }
    }
 
    console.log(
-      "🔄 [LOGIN REDIRECT] Return URL from sessionStorage:",
-      sessionStorage.getItem("auth_return_url")
+      "🔄 [LOGIN REDIRECT UTIL] Final determined return URL to use:",
+      finalReturnUrl
    );
-   console.log("🔄 [LOGIN REDIRECT] Current URL:", currentUrl);
-   console.log("🔄 [LOGIN REDIRECT] Final return URL to use:", returnUrl);
 
-   if (returnUrl) {
-      console.log("🔄 [LOGIN REDIRECT] Return URL found, handling redirect");
-      handleRedirectToReturnUrl(response, returnUrl);
+   // Clean up the stored return_url from session storage after it has been used or determined.
+   sessionStorage.removeItem("auth_return_url");
+   console.log(
+      "🔄 [LOGIN REDIRECT UTIL] Cleared auth_return_url from sessionStorage."
+   );
+
+   if (finalReturnUrl) {
+      if (finalReturnUrl.startsWith("http")) {
+         console.log(
+            `🔄 [LOGIN REDIRECT UTIL] External URL detected, redirecting browser to: ${finalReturnUrl}`
+         );
+         window.location.href = finalReturnUrl; // Full page redirect for external URLs
+      } else {
+         console.log(
+            `🔄 [LOGIN REDIRECT UTIL] Internal path detected, Svelte navigating to: ${finalReturnUrl}`
+         );
+         navigate(finalReturnUrl, { replace: true });
+      }
    } else {
-      console.log(
-         "🔄 [LOGIN REDIRECT] No return URL found, redirecting to home"
+      // This case should ideally not be reached if fallbacks are set correctly.
+      console.error(
+         "🔄 [LOGIN REDIRECT UTIL] No valid return URL determined. Defaulting to /home."
       );
       navigate("/home", { replace: true });
    }
-};
-
-function handleRedirectToReturnUrl(response, returnUrl) {
-   console.log("🔄 [LOGIN REDIRECT] Handling redirect to return URL");
-
-   const { data } = response;
-   console.log(
-      "🔄 [LOGIN REDIRECT] Response data:",
-      JSON.stringify(data, null, 2)
-   );
-
-   let allowedUrls = null;
-
-   // Check if poolMetadata and allowed_return_urls exist from backend session
-   if (data && data.poolMetadata && data.poolMetadata.allowed_return_urls) {
-      allowedUrls = data.poolMetadata.allowed_return_urls;
-      console.log(
-         "🔄 [LOGIN REDIRECT] ✅ Found allowed URLs from poolMetadata:",
-         allowedUrls
-      );
-   } else {
-      console.log(
-         "🔄 [LOGIN REDIRECT] ❌ No poolMetadata or allowed_return_urls found in response data"
-      );
-      console.log("🔄 [LOGIN REDIRECT] data exists:", !!data);
-      console.log(
-         "🔄 [LOGIN REDIRECT] poolMetadata exists:",
-         !!(data && data.poolMetadata)
-      );
-      console.log(
-         "🔄 [LOGIN REDIRECT] allowed_return_urls exists:",
-         !!(data && data.poolMetadata && data.poolMetadata.allowed_return_urls)
-      );
-
-      // Fallback: If we have a return URL and it's from localhost:5173 (Trading-Sim), allow it
-      if (returnUrl && returnUrl.startsWith("http://localhost:5173/home")) {
-         console.log(
-            "🔄 [LOGIN REDIRECT] ✅ Using fallback validation for Trading-Sim URL"
-         );
-         allowedUrls = ["http://localhost:5173/", "http://localhost:5173"];
-      }
-   }
-
-   console.log("🔄 [LOGIN REDIRECT] Return URL to use:", returnUrl);
-
-   if (allowedUrls && returnUrl) {
-      const isAllowed = allowedUrls.some((allowedUrl) => {
-         const matches = returnUrl.startsWith(allowedUrl);
-         console.log(
-            "🔄 [LOGIN REDIRECT] Checking if",
-            returnUrl,
-            "starts with",
-            allowedUrl,
-            ":",
-            matches
-         );
-         return matches;
-      });
-
-      if (isAllowed) {
-         console.log(
-            "🔄 [LOGIN REDIRECT] ✅ Return URL is allowed, redirecting to:",
-            returnUrl
-         );
-         // Clear the stored return_url after successful redirect
-         sessionStorage.removeItem("auth_return_url");
-         window.location.href = returnUrl; // Use direct redirect instead of navigate
-         return;
-      } else {
-         console.log(
-            "🔄 [LOGIN REDIRECT] ❌ Return URL not allowed, falling back to home"
-         );
-      }
-   } else {
-      console.log("🔄 [LOGIN REDIRECT] ❌ Missing allowedUrls or returnUrl");
-      console.log("🔄 [LOGIN REDIRECT] allowedUrls:", allowedUrls);
-      console.log("🔄 [LOGIN REDIRECT] returnUrl:", returnUrl);
-   }
-
-   // Fallback to home if no valid return_url or allowedUrls found
-   console.log("🔄 [LOGIN REDIRECT] Falling back to home page");
-   navigate("/home", { replace: true });
 }

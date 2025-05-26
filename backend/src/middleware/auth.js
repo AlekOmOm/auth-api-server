@@ -59,9 +59,27 @@ export function hasRole(role) {
  *  }
  */
 async function checkSession(req, res, next) {
+   console.log("🔍 [AUTH MIDDLEWARE] Session check:", {
+      path: req.path,
+      method: req.method,
+      sessionExists: !!req.session,
+      sessionId: req.session?.id,
+      userId: req.session?.userId,
+      role: req.session?.role,
+      schema: req.session?.schema,
+      poolContext: req.session?.poolContext,
+      cookies: req.headers.cookie
+         ? req.headers.cookie.substring(0, 100) + "..."
+         : "none",
+   });
+
    if (!req.session || !req.session.userId) {
+      console.log(
+         "🔍 [AUTH MIDDLEWARE] ❌ Authentication failed - no session or userId"
+      );
       return res.status(401).json({ message: "Authentication required" });
    }
 
+   console.log("🔍 [AUTH MIDDLEWARE] ✅ Authentication successful");
    next();
 }

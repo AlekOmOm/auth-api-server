@@ -49,9 +49,7 @@ router.post("/register", async (req, res, next) => {
  */
 router.post("/handshake", async (req, res, next) => {
    try {
-      const result = await clientServerService.authenticateClientServer(
-         req
-      );
+      const result = await clientServerService.authenticateClientServer(req);
       res.json(result);
    } catch (error) {
       next(error);
@@ -112,6 +110,8 @@ router.post("/user/register", isAuthenticated, async (req, res, next) => {
  * GET /api/clientServer/user/clients
  */
 router.get("/user/clients", isAuthenticated, async (req, res, next) => {
+   console.log("GET /api/clientServer/user/clients");
+   console.log(req.user);
    try {
       const result = await clientServerService.getUserClientServers(req);
       res.json(result);

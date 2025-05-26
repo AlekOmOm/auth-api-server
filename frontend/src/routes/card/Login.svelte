@@ -38,40 +38,26 @@
     }
     
     // Always get the most current return URL from sessionStorage
-    let returnUrl = sessionStorage.getItem('auth_return_url');
+    // This ensures we use the one stored when Login.svelte first loaded with query params
+    // or the one from a previous attempt if the user re-submits the form.
+    let currentReturnUrl = sessionStorage.getItem('auth_return_url');
     
-    // If no stored return_url, check current URL as fallback
-    if (!returnUrl && window.location.search.includes('return_url')) {
-      returnUrl = new URL(window.location.href).searchParams.get('return_url');
-      if (returnUrl) {
-        returnUrl = decodeURIComponent(returnUrl);
-        // Store it for future use
-        sessionStorage.setItem('auth_return_url', returnUrl);
-      }
-    }
-    
-    console.log("🔍 [LOGIN] Before login - sessionStorage return_url:", sessionStorage.getItem('auth_return_url'));
-    console.log("🔍 [LOGIN] Before login - storedReturnUrl:", storedReturnUrl);
-    console.log("🔍 [LOGIN] Before login - final returnUrl:", returnUrl);
+    console.log("🔍 [LOGIN] Before authStore.login - sessionStorage auth_return_url:", currentReturnUrl);
 
     errorMessage = '';
     isLoading = true;
 
     try {
-      /**
-       * authStore login
-       * - response.success = true if login is successful
-       * - response.message = error message if login fails
-      */
-      const response = await authStore.login(credentials, returnUrl);
+      const response = await authStore.login(credentials, currentReturnUrl); // Pass currentReturnUrl to authStore.login
       
-      console.log("🔍 [LOGIN] After authStore.login - sessionStorage return_url:", sessionStorage.getItem('auth_return_url'));
-      console.log("🔍 [LOGIN] Login response:", response);
+      console.log("🔍 [LOGIN] After authStore.login - sessionStorage auth_return_url remains:", sessionStorage.getItem('auth_return_url'));
+      console.log("🔍 [LOGIN] Login API response:", response);
       
       if (response.success) { 
-        console.log("🔍 [LOGIN] Login successful, calling loginRedirect");
-        loginRedirect(response);
-        // Note: sessionStorage.removeItem is called inside loginRedirect after successful redirect
+        console.log("🔍 [LOGIN] Login successful, calling loginRedirect utility");
+        // Pass the API response and the returnUrl that was active for this login attempt
+        loginRedirect(response, currentReturnUrl); 
+        // sessionStorage.removeItem('auth_return_url'); // Moved to loginRedirect or handled if redirect is external
       } else {
         errorMessage = response.message || 'Login failed.';
       }

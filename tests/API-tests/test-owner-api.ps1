@@ -197,7 +197,7 @@ if ($clientId) {
     }
 }
 
-Write-Host "`n🗑️ Test 10: Delete the created user" -ForegroundColor Yellow
+Write-Host "`n Test 10: Delete the created user" -ForegroundColor Yellow
 
 if ($clientId -and $userId) {
     try {

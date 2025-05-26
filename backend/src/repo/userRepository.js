@@ -178,10 +178,16 @@ const createSession = async (schema = DEFAULT_SCHEMA, paramsArray) => {
    const pool = await check(schema);
    const id = uuidv4();
    const session_id = uuidv4();
+
+   // Set session expiration to 24 hours from now
+   const expires_at = new Date();
+   expires_at.setHours(expires_at.getHours() + 24);
+
    return sessionRepo.createSession(pool, {
       id,
       user_id,
       session_id,
+      expires_at,
    });
 };
 
