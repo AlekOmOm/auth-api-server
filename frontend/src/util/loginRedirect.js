@@ -115,7 +115,7 @@ function handleRedirectToReturnUrl(response, returnUrl) {
       );
 
       // Fallback: If we have a return URL and it's from localhost:5173 (Trading-Sim), allow it
-      if (returnUrl && returnUrl.startsWith("http://localhost:5173")) {
+      if (returnUrl && returnUrl.startsWith("http://localhost:5173/home")) {
          console.log(
             "🔄 [LOGIN REDIRECT] ✅ Using fallback validation for Trading-Sim URL"
          );

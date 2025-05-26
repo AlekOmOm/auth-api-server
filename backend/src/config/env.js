@@ -1,3 +1,13 @@
+// auth-system_NodeJS\backend\src\config\env.js
+
+/**
+ * loads and provisions env variables from '../.env' (auth-system_NodeJS/.env)
+ *
+ * @description
+ * - config for backend
+ * - postgres
+ * - schemas
+ */
 import dotenv from "dotenv";
 import paths from "./paths.js";
 
