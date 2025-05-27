@@ -9,7 +9,7 @@ POSTGRES_PORT = process.env.POSTGRES_PORT || 5432
 # ==============================================================================
 
 # Start all services in detached mode
-run:
+run: setup-env
 	@echo "Starting all services with Docker Compose..."
 	@docker compose up -d
 	@echo "Services are running in the background"
