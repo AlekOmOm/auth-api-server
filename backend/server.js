@@ -1,15 +1,17 @@
 import express from "express";
 const app = express();
-import config from "./src/utils/config.js";
+import config from "./src/config/env.js";
 
 // --- environment variables ---
-const PORT = process.env.BACKEND_PORT || 3001;
-const FRONTEND_PORT = process.env.FRONTEND_PORT || 3000;
-const SESSION_SECRET = process.env.SESSION_SECRET;
-const RATE_LIMIT_WINDOW = process.env.RATE_LIMIT_WINDOW || 15;
-const RATE_LIMIT_LIMIT = process.env.RATE_LIMIT_LIMIT || 300;
+const BACKEND = config.BACKEND;
+
+const PORT = BACKEND.PORT || 3001;
+const FRONTEND_PORT = BACKEND.FRONTEND_PORT || 3000;
+const SESSION_SECRET = BACKEND.SESSION_SECRET;
+const RATE_LIMIT_WINDOW = BACKEND.RATE_LIMIT_WINDOW || 15;
+const RATE_LIMIT_LIMIT = BACKEND.RATE_LIMIT_LIMIT || 300;
 const ALLOWED_CLIENT_ORIGINS =
-   process.env.ALLOWED_CLIENT_ORIGINS ||
+   config.ALLOWED_CLIENT_ORIGINS ||
    "http://localhost:5173,http://localhost:5174,http://localhost:4173";
 
 // --- middleware ---
@@ -68,8 +70,8 @@ app.use(
       resave: false,
       saveUninitialized: false,
       cookie: {
-         sameSite: "lax", // allow same origin different subdomains (fx. trade.devalek.dev and devalek.dev)
-         secure: false, // https only (true in production)
+         sameSite: "lax",
+         secure: false, // http only (true in production)
          maxAge: 1000 * 60 * 60 * 24, // 1 day
       },
    })

@@ -30,18 +30,22 @@ export const ROUTES_DIR = path.resolve(BACKEND_DIR, "src", "routes");
 // sub src dirs
 export const SCHEMAS_DIR = path.resolve(DB_DIR, "schemas");
 export const POSTGRES_DIR = path.resolve(DB_DIR, "postgres");
+export const ENV_JS = path.resolve(BACKEND_DIR, "src", "config", "env.js");
 
 // files
 
 export const paths = {
    BACKEND_DIR: BACKEND_DIR,
    ENV_PATH: ENV_PATH,
+   // src dirs
    CONTROLLERS_DIR,
-   DB_DIR,
-   POSTGRES_DIR,
-   SCHEMAS_DIR,
    MIDDLEWARE_DIR,
    ROUTES_DIR,
+   DB_DIR,
+   // sub src dirs
+   SCHEMAS_DIR,
+   POSTGRES_DIR,
+   ENV_JS,
 };
 
 export default paths;

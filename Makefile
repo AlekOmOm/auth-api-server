@@ -1,8 +1,16 @@
 # .env file
+-include .env
+export
 
-FRONTEND_PORT = process.env.FRONTEND_PORT || 3000
-BACKEND_PORT = process.env.BACKEND_PORT || 5000
-POSTGRES_PORT = process.env.POSTGRES_PORT || 5432
+# Set default values if not defined in .env (matching docker-compose.yml)
+DEV_FRONTEND_PORT ?= 3000
+DEV_BACKEND_PORT ?= 3001
+POSTGRES_PORT ?= 5432
+
+# Legacy aliases for backward compatibility
+FRONTEND_PORT ?= $(DEV_FRONTEND_PORT)
+BACKEND_PORT ?= $(DEV_BACKEND_PORT)
+POSTGRES_PORT ?= $(POSTGRES_PORT)
 
 # ==============================================================================
 # DOCKER COMPOSE COMMANDS
@@ -16,6 +24,10 @@ run: setup-env
 	@echo " Frontend: http://localhost:$(FRONTEND_PORT)"
 	@echo " Backend: http://localhost:$(BACKEND_PORT)"
 	@echo " Database: localhost:$(POSTGRES_PORT)"
+
+run-clean: clean-full run
+	@echo " -- "
+	@docker compose ps
 
 # Stop all services
 stop:
@@ -105,10 +117,6 @@ dev-fullstack:
 setup-env:
 	@node .\scripts\setup-env.js
 
-gen-ses-secret: setup-env
-	@node .\scripts\gen-ses-secret.js
-	@echo  .. updated .env with session secret
-
 # ==============================================================================
 # HELP
 # ==============================================================================
@@ -140,7 +148,6 @@ help:
 	@echo ""
 	@echo " ENVIRONMENT SETUP:"
 	@echo "  setup-env        - Setup environment files"
-	@echo "  gen-ses-secret   - Generate session secret"
 	@echo ""
 	@echo "===================================================================="
 	@echo "Quick Start: make setup-env && make gen-ses-secret && make run"
@@ -149,7 +156,7 @@ help:
 .DEFAULT_GOAL := help
 
 # Declare phony targets
-.PHONY: run stop clean clean-full logs logs-db logs-backend logs-frontend status restart rebuild
+.PHONY: run run-clean stop clean clean-full logs logs-db logs-backend logs-frontend status restart rebuild
 .PHONY: setup-frontend setup-backend dev-frontend dev-backend dev-fullstack
 .PHONY: setup-env gen-ses-secret help
 
