@@ -21,11 +21,17 @@ import {
  * Create a new client server (Admin/Service Layer)
  * @param {Object} req - Express request object with session context
  * @param {Object} clientServerData - Client server data
+ * @param {Object} pool - Pool object
  * @returns {Object} Created client server with generated IDs
  */
-export const createClientServer = async (req, clientServerData) => {
+export const createClientServer = async (req, clientServerData, pool) => {
+   console.log(
+      "🚀 [ADMIN-REPO] Entered createClientServer. App name:",
+      clientServerData?.app_name
+   );
    try {
       const {
+         client_id,
          app_name,
          assigned_schema_name,
          allowed_return_urls,
@@ -33,15 +39,19 @@ export const createClientServer = async (req, clientServerData) => {
          client_mode = "frontend-login-proxy",
       } = clientServerData;
 
-      // UUID generation
-      const client_id = `client_${uuidv4().replace(/-/g, "")}`;
+      // Generate only client_secret and its hash
       const client_secret = uuidv4();
       const client_secret_hash = await bcrypt.hash(client_secret, 12);
 
       // validation
-      if (!app_name || !assigned_schema_name || !allowed_return_urls) {
+      if (
+         !client_id ||
+         !app_name ||
+         !assigned_schema_name ||
+         !allowed_return_urls
+      ) {
          throw new Error(
-            "app_name, assigned_schema_name, and allowed_return_urls are required"
+            "client_id, app_name, assigned_schema_name, and allowed_return_urls are required"
          );
       }
 
@@ -55,9 +65,17 @@ export const createClientServer = async (req, clientServerData) => {
          client_mode,
       };
 
-      const result = await clientServersRepo.createClientServer(
-         req,
+      console.log(
+         "🚀 [ADMIN-REPO] About to call clientServersRepo.createClientServerWithPool with client_id:",
+         completeClientData.client_id
+      );
+      const result = await clientServersRepo.createClientServerWithPool(
+         pool,
          completeClientData
+      );
+      console.log(
+         "🚀 [ADMIN-REPO] Returned from clientServersRepo.createClientServerWithPool. Result client_id:",
+         result?.client_id
       );
 
       return {
@@ -93,6 +111,10 @@ export const getClientServerByClientId = async (req, clientId) => {
  * @returns {Object} Updated client server
  */
 export const updateClientServer = async (req, clientId, updateData) => {
+   console.log(
+      "🚀 [ADMIN-REPO] Entered updateClientServer. Client ID:",
+      clientId
+   );
    try {
       // Get existing client first
       const existingClient = await clientServersRepo.getClientServer(

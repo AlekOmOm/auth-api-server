@@ -61,6 +61,17 @@ const getUser = async (pool, schemaName, id) => {
    }
 };
 
+const getUserByEmail = async (pool, schemaName, email) => {
+   const client = await pool.connect();
+   try {
+      await client.query(`SET search_path TO ${schemaName}, public;`);
+      const { rows } = await client.query(queries.getUserByEmail, [email]);
+      return rows[0];
+   } finally {
+      client.release();
+   }
+};
+
 const updateUser = async (
    pool,
    schemaName,
@@ -92,4 +103,12 @@ const deleteUser = async (pool, schemaName, id) => {
    }
 };
 
-export { createUser, createUsers, getUsers, getUser, updateUser, deleteUser };
+export {
+   createUser,
+   createUsers,
+   getUsers,
+   getUser,
+   getUserByEmail,
+   updateUser,
+   deleteUser,
+};

@@ -4,14 +4,11 @@
 
 testing users:
 - [owner3 user](../tests/owner-login-credentials.md)
-- [playwright_user_1716730000@example.com user](../tests/user-login-credentials.md)
 
 ## approaches
 
 1. GUI testing 
   - use MCP tool: playwright to navigate Browser, click, fill forms, etc.
-2. API testing 
-  - use .ps1 / bash scripts to call API endpoints
 
 ## tools
 
@@ -60,14 +57,6 @@ tool calls:
 - `browser_tab_close`
 - `browser_generate_playwright_test`
 - `browser_wait_for`
-
-### for API testing
-
-- use .ps1 / bash scripts to call API endpoints
-
-clean up: 
-- make sure to place scripts in tests/api-tests/
-- make sure to link the scripts in the task that they are testing (so that it can be cleaned up when appropriate)
 
 ## endpoints:
 

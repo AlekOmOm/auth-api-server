@@ -96,8 +96,18 @@ function createAuthStore() {
     * @returns {Promise<Object>} API response
     */
    async function login(credentials, returnUrl = null) {
+      console.log("🔍 [AUTH STORE] login function called");
+      console.log("🔍 [AUTH STORE] credentials:", {
+         email: credentials.email,
+         passwordLength: credentials.password?.length,
+      });
+      console.log("🔍 [AUTH STORE] returnUrl:", returnUrl);
+
       update((state) => ({ ...state, loading: true }));
+      console.log("🔍 [AUTH STORE] Set loading to true");
+
       try {
+         console.log("🔍 [AUTH STORE] About to call authApi.login");
          /**
           * authApi login
           * - response.success = true if login is successful
@@ -105,6 +115,8 @@ function createAuthStore() {
           *
           */
          const response = await authApi.login(credentials, returnUrl);
+         console.log("🔍 [AUTH STORE] authApi.login response:", response);
+
          if (
             response.success &&
             response.data &&
@@ -113,6 +125,7 @@ function createAuthStore() {
             console.log(
                "🔍 [AUTH STORE] ✅ Login successful, setting authenticated state"
             );
+            console.log("🔍 [AUTH STORE] User data:", response.data);
             set({ isAuthenticated: true, user: response.data, loading: false });
             console.log("🔍 [AUTH STORE] ✅ state updated:", {
                isAuthenticated: get(authStore).isAuthenticated,
@@ -123,12 +136,19 @@ function createAuthStore() {
             console.log(
                "🔍 [AUTH STORE] ❌ Login failed, setting unauthenticated state"
             );
+            console.log("🔍 [AUTH STORE] Response details:", {
+               success: response.success,
+               hasData: !!response.data,
+               userId: response.data?.userId,
+               id: response.data?.id,
+            });
             // Even if API login technically succeeded but lacked data, treat as not logged in for store
             set({ isAuthenticated: false, user: null, loading: false });
          }
+         console.log("🔍 [AUTH STORE] Returning response:", response);
          return response;
       } catch (error) {
-         console.error("authStore login error:", error);
+         console.error("🔍 [AUTH STORE] login error:", error);
          set({ isAuthenticated: false, user: null, loading: false });
          return {
             message: error.message || "Login failed in store",

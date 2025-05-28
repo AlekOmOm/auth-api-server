@@ -6,7 +6,8 @@ import {
    ValidationError,
    NotFoundError,
 } from "../middleware/errorHandler.js";
-import * as repo from "../repo/adminRepository.js";
+import * as adminRepo from "../repo/adminRepository.js";
+import * as userRepo from "../repo/repositories/userRepository.js";
 import config from "../config/env.js";
 import getPool from "../repo/connection/pools/auth.js";
 import getPoolForSchema from "../repo/connection/pools/clientServers.js";
@@ -34,7 +35,11 @@ const getAuthInternalPool = async () => {
  */
 export async function registerClientServer(req) {
    try {
-      const { app_name, allowed_return_urls } = req.body;
+      const {
+         app_name,
+         allowed_return_urls,
+         user_id: user_email_for_id,
+      } = req.body;
 
       if (
          !app_name ||
@@ -57,17 +62,37 @@ export async function registerClientServer(req) {
          .replace(/[^a-z0-9]/g, "_")}_${Date.now()}`;
 
       const pool = await getAuthInternalPool();
+      let actual_user_id = null;
 
-      // Create client server record (no user_id for public API)
-      const clientServer = await repo.createClientServer(pool, {
-         client_id,
-         client_secret_hash,
-         app_name,
-         assigned_schema_name,
-         allowed_return_urls,
-         user_id: null, // Public registration has no user
-         client_mode: "api-auth-server", // Default for public API
-      });
+      if (user_email_for_id) {
+         const user = await userRepo.getUserByEmail(
+            pool,
+            "auth_internal",
+            user_email_for_id
+         );
+         if (user && user.id) {
+            actual_user_id = user.id;
+         } else {
+            console.warn(
+               `User not found for email: ${user_email_for_id}. Proceeding with null user_id for client server.`
+            );
+         }
+      }
+
+      // Create client server record
+      const clientServer = await adminRepo.createClientServer(
+         req,
+         {
+            client_id,
+            client_secret_hash,
+            app_name,
+            assigned_schema_name,
+            allowed_return_urls,
+            user_id: actual_user_id,
+            client_mode: "api-auth-server",
+         },
+         pool
+      );
 
       // Initialize the client's schema
       await getPoolForSchema(assigned_schema_name);
@@ -76,7 +101,7 @@ export async function registerClientServer(req) {
          message: "Client server registered successfully",
          data: {
             client_id,
-            client_secret, // Only returned during registration
+            client_secret,
             app_name,
             assigned_schema_name,
             allowed_return_urls,
@@ -94,25 +119,62 @@ export async function registerClientServer(req) {
  * @returns {Object} Registration response with client_id and client_secret
  */
 export async function registerClientServerForUser(clientData, req) {
+   console.log(
+      "🚀 [SVC] registerClientServerForUser: Raw clientData:",
+      JSON.stringify(clientData, null, 2)
+   );
    try {
       const {
          app_name,
          allowed_return_urls,
          client_mode = "frontend-login-proxy",
+         assigned_schema_name: schema_name_from_input,
       } = clientData;
+
+      console.log(
+         "🚀 [SVC] registerClientServerForUser: Destructured values:",
+         JSON.stringify(
+            {
+               app_name,
+               allowed_return_urls,
+               client_mode,
+               schema_name_from_input,
+            },
+            null,
+            2
+         )
+      );
 
       const userId = req.session?.userId;
       if (!userId) {
          throw new ValidationError("User ID is required");
       }
 
-      if (
-         !app_name ||
-         !allowed_return_urls ||
-         !Array.isArray(allowed_return_urls)
-      ) {
+      // Validate app_name first
+      if (!(typeof app_name === "string" && app_name.trim() !== "")) {
+         throw new ValidationError("app_name (non-empty string) is required");
+      }
+      const trimmed_app_name = app_name.trim();
+
+      // Ensure allowed_return_urls is an array and filter empty strings
+      console.log(
+         "🚀 [SVC] registerClientServerForUser: Pre-processing allowed_return_urls:",
+         JSON.stringify(allowed_return_urls, null, 2)
+      );
+      const allowed_urls_array = Array.isArray(allowed_return_urls)
+         ? allowed_return_urls.filter(
+              (url) => typeof url === "string" && url.trim() !== ""
+           )
+         : [];
+      console.log(
+         "🚀 [SVC] registerClientServerForUser: Post-processing allowed_urls_array:",
+         JSON.stringify(allowed_urls_array, null, 2)
+      );
+
+      // Validate allowed_urls_array
+      if (allowed_urls_array.length === 0) {
          throw new ValidationError(
-            "app_name and allowed_return_urls (array) are required"
+            "At least one valid allowed_return_url is required"
          );
       }
 
@@ -127,26 +189,59 @@ export async function registerClientServerForUser(clientData, req) {
       const client_secret = uuidv4();
       const client_secret_hash = await bcrypt.hash(client_secret, 12);
 
-      // Generate unique schema name
-      const assigned_schema_name = `client_${app_name
-         .toLowerCase()
-         .replace(/[^a-z0-9]/g, "_")}_${Date.now()}`;
+      // Basic validation for schema name from input to prevent issues
+      const SinputSchemaName =
+         typeof schema_name_from_input === "string"
+            ? schema_name_from_input.trim()
+            : "";
+      const isValidInputSchemaName =
+         SinputSchemaName !== "" &&
+         /^[a-z0-9_]+$/.test(SinputSchemaName.toLowerCase());
+
+      const SappName = trimmed_app_name;
+
+      const final_assigned_schema_name = isValidInputSchemaName
+         ? SinputSchemaName.toLowerCase()
+         : `client_${SappName.toLowerCase().replace(
+              /[^a-z0-9]/g,
+              "_"
+           )}_${Date.now()}`;
+      console.log(
+         "🚀 [SVC] registerClientServerForUser: final_assigned_schema_name:",
+         final_assigned_schema_name
+      );
 
       const pool = await getAuthInternalPool();
 
-      // Create client server record with user ownership
-      const clientServer = await repo.createClientServer(pool, {
+      const dataForRepo = {
          client_id,
          client_secret_hash,
-         app_name,
-         assigned_schema_name,
-         allowed_return_urls,
+         app_name: trimmed_app_name,
+         assigned_schema_name: final_assigned_schema_name,
+         allowed_return_urls: allowed_urls_array,
          user_id: userId,
          client_mode,
-      });
+      };
+      console.log(
+         "🚀 [SVC] registerClientServerForUser: Data for adminRepo.createClientServer:",
+         JSON.stringify(dataForRepo, null, 2)
+      );
 
-      // Initialize the client's schema
-      await getPoolForSchema(assigned_schema_name);
+      const clientServer = await adminRepo.createClientServer(
+         req,
+         dataForRepo,
+         pool
+      );
+      console.log(
+         "🚀 [SVC] registerClientServerForUser: Result from adminRepo:",
+         JSON.stringify(clientServer, null, 2)
+      );
+
+      await getPoolForSchema(final_assigned_schema_name);
+      console.log(
+         "🚀 [SVC] registerClientServerForUser: Successfully initialized schema:",
+         final_assigned_schema_name
+      );
 
       // REQUIRED ADDITION: Update session context after client creation
       if (req.session) {
@@ -163,18 +258,22 @@ export async function registerClientServerForUser(clientData, req) {
          };
       }
 
+      console.log(
+         "🚀 [SVC] registerClientServerForUser: Successfully created client server and updated session."
+      );
       return {
          message: "Client server registered successfully",
          data: {
             client_id,
-            client_secret, // Only returned during registration
-            app_name,
-            assigned_schema_name,
-            allowed_return_urls,
+            client_secret,
+            app_name: trimmed_app_name,
+            assigned_schema_name: final_assigned_schema_name,
+            allowed_return_urls: allowed_urls_array,
             client_mode,
          },
       };
    } catch (error) {
+      console.error("❌ [SVC-ERR] registerClientServerForUser:", error);
       throw error;
    }
 }
@@ -346,7 +445,7 @@ export async function authenticateClientServer(req) {
       }
 
       const pool = await getAuthInternalPool();
-      const clientServer = await repo.getClientServer(pool, client_id);
+      const clientServer = await adminRepo.getClientServer(pool, client_id);
 
       if (!clientServer) {
          throw new AuthError("Invalid client credentials");
@@ -406,7 +505,10 @@ export async function verifyApiToken(token) {
       }
 
       const pool = await getAuthInternalPool();
-      const clientServer = await repo.getClientServer(pool, decoded.client_id);
+      const clientServer = await adminRepo.getClientServer(
+         pool,
+         decoded.client_id
+      );
 
       if (!clientServer) {
          throw new AuthError("Client server not found");
@@ -441,7 +543,7 @@ export async function getClientServerInfo(client_id) {
       }
 
       const pool = await getAuthInternalPool();
-      const clientServer = await repo.getClientServer(pool, client_id);
+      const clientServer = await adminRepo.getClientServer(pool, client_id);
 
       if (!clientServer) {
          throw new NotFoundError("Client server not found");
@@ -472,7 +574,7 @@ export async function updateClientServer(client_id, updateData) {
       }
 
       const pool = await getAuthInternalPool();
-      const existingClient = await repo.getClientServer(pool, client_id);
+      const existingClient = await adminRepo.getClientServer(pool, client_id);
 
       if (!existingClient) {
          throw new NotFoundError("Client server not found");
@@ -490,7 +592,7 @@ export async function updateClientServer(client_id, updateData) {
          client_mode: updateData.client_mode || existingClient.client_mode,
       };
 
-      const result = await repo.updateClientServer(pool, updatedClient);
+      const result = await adminRepo.updateClientServer(pool, updatedClient);
 
       // Remove sensitive data
       const { client_secret_hash, ...clientInfo } = result;
@@ -516,13 +618,13 @@ export async function deleteClientServer(client_id) {
       }
 
       const pool = await getAuthInternalPool();
-      const existingClient = await repo.getClientServer(pool, client_id);
+      const existingClient = await adminRepo.getClientServer(pool, client_id);
 
       if (!existingClient) {
          throw new NotFoundError("Client server not found");
       }
 
-      await repo.deleteClientServer(pool, client_id);
+      await adminRepo.deleteClientServer(pool, client_id);
 
       return {
          message: "Client server deleted successfully",

@@ -1,5 +1,5 @@
 <script>
-  export let stats;
+  let { stats } = $props();
   
   function formatNumber(num) {
     if (num >= 1000000) {

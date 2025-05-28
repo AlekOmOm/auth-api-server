@@ -2,37 +2,27 @@
   import { navigate, Route, Link } from 'svelte-routing';
   import { authStore } from '../../stores/authStore.js'; // Import authStore
   import ErrorMessage from '../../components/ErrorMessage.svelte';
+  import { extractAndStoreReturnUrl, getStoredReturnUrl, buildUrlWithReturnUrl } from '../../util/returnUrlHandler.js';
 
-  let name = '';
-  let email = '';
-  let password = '';
-  let userType = 'client'; // Default to 'client' or 'auth' based on return_url
-  let errorMessages = [];
-  let successMessage = '';
-  let isLoading = false;
+  let name = $state('');
+  let email = $state('');
+  let password = $state('');
+  let userType = $state('client'); // Default to 'client' or 'auth' based on return_url
+  let errorMessages = $state([]);
+  let successMessage = $state('');
+  let isLoading = $state(false);
 
   // Debug: Check URL on component load
   console.log("🔍 Register component loaded - URL:", window.location.href, "Search:", window.location.search);
   
   // Store return_url in sessionStorage if present in URL
-  let storedReturnUrl = null;
-  if (window.location.search.includes('return_url')) {
-    storedReturnUrl = new URL(window.location.href).searchParams.get('return_url');
-    if (storedReturnUrl) {
-      sessionStorage.setItem('auth_return_url', storedReturnUrl);
-      console.log("🔍 Stored return_url in sessionStorage:", storedReturnUrl);
-      userType = 'client';
-    }
+  let storedReturnUrl = extractAndStoreReturnUrl();
+  
+  // Set userType based on whether we have a return URL (client app redirect) or not (direct auth system registration)
+  if (storedReturnUrl) {
+    userType = 'client';
   } else {
-    // Check if we have a stored return_url from a previous page load
-    storedReturnUrl = sessionStorage.getItem('auth_return_url');
-    if (storedReturnUrl) {
-      console.log("🔍 Retrieved return_url from sessionStorage:", storedReturnUrl);
-      userType = 'client';
-    } else {
-      // No return_url, default to 'auth' (direct registration on auth-system)
-      userType = 'auth';
-    }
+    userType = 'auth';
   }
 
   async function register(event) {
@@ -62,8 +52,7 @@
         
         // redirect after 2 seconds, preserving return_url
         setTimeout(() => {
-          const returnUrl = storedReturnUrl || sessionStorage.getItem('auth_return_url');
-          const loginUrl = returnUrl ? `/login?return_url=${encodeURIComponent(returnUrl)}` : '/login';
+          const loginUrl = buildUrlWithReturnUrl('/login');
           navigate(loginUrl);
         }, 2000);
       } else {
@@ -92,23 +81,25 @@
   <form onsubmit={register}>
       <!-- User Type Selector -->
       <div class="user-type-selector">
-        <label>Account Type:</label>
-        <div class="radio-group">
-          <label class="radio-option">
-            <input type="radio" bind:group={userType} value="client" disabled={isLoading}/>
-            <span class="radio-label">
-              <strong>Client App User</strong>
-              <small>For using client applications (Trading Simulator, etc.)</small>
-            </span>
-          </label>
-          <label class="radio-option">
-            <input type="radio" bind:group={userType} value="auth" disabled={isLoading}/>
-            <span class="radio-label">
-              <strong>Auth System Owner</strong>
-              <small>For managing client applications and users</small>
-            </span>
-          </label>
-        </div>
+        <fieldset>
+          <legend>Account Type:</legend>
+          <div class="radio-group">
+            <label class="radio-option">
+              <input type="radio" bind:group={userType} value="client" disabled={isLoading}/>
+              <span class="radio-label">
+                <strong>Client App User</strong>
+                <small>For using client applications (Trading Simulator, etc.)</small>
+              </span>
+            </label>
+            <label class="radio-option">
+              <input type="radio" bind:group={userType} value="auth" disabled={isLoading}/>
+              <span class="radio-label">
+                <strong>Auth System Owner</strong>
+                <small>For managing client applications and users</small>
+              </span>
+            </label>
+          </div>
+        </fieldset>
       </div>
 
       <input id="name" bind:value={name} name="name" placeholder="name" required autocomplete="name" disabled={isLoading}/>
@@ -133,8 +124,7 @@
     <a href="/login" onclick={(event) => { 
       event.preventDefault(); 
       // Preserve return_url when navigating to login
-      const returnUrl = storedReturnUrl || sessionStorage.getItem('auth_return_url');
-      const loginUrl = returnUrl ? `/login?return_url=${encodeURIComponent(returnUrl)}` : '/login';
+      const loginUrl = buildUrlWithReturnUrl('/login');
       navigate(loginUrl); 
     }}>
       login
@@ -165,11 +155,17 @@
         margin-bottom: 1rem;
     }
 
-    .user-type-selector label {
+    .user-type-selector fieldset {
+        border: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .user-type-selector legend {
         font-weight: 600;
         margin-bottom: 0.5rem;
-        display: block;
-        color: #333;
+        padding: 0;
+        color: inherit;
     }
 
     .radio-group {
@@ -183,16 +179,17 @@
         align-items: flex-start;
         gap: 0.5rem;
         padding: 0.75rem;
-        border: 2px solid #e1e5e9;
+        border: 2px solid rgba(255, 255, 255, 0.2);
         border-radius: 8px;
         cursor: pointer;
         transition: all 0.2s ease;
         font-weight: normal;
+        background-color: rgba(255, 255, 255, 0.05);
     }
 
     .radio-option:hover {
-        border-color: #3498db;
-        background-color: #f8f9fa;
+        border-color: #646cff;
+        background-color: rgba(255, 255, 255, 0.1);
     }
 
     .radio-option input[type="radio"] {
@@ -201,12 +198,12 @@
     }
 
     .radio-option input[type="radio"]:checked + .radio-label {
-        color: #3498db;
+        color: #646cff;
     }
 
     .radio-option:has(input[type="radio"]:checked) {
-        border-color: #3498db;
-        background-color: #f0f8ff;
+        border-color: #646cff;
+        background-color: rgba(100, 108, 255, 0.1);
     }
 
     .radio-label {
@@ -221,8 +218,27 @@
     }
 
     .radio-label small {
-        color: #666;
+        color: rgba(255, 255, 255, 0.6);
         font-size: 0.875rem;
         line-height: 1.3;
+    }
+
+    @media (prefers-color-scheme: light) {
+        .radio-option {
+            border-color: rgba(0, 0, 0, 0.2);
+            background-color: rgba(0, 0, 0, 0.02);
+        }
+
+        .radio-option:hover {
+            background-color: rgba(0, 0, 0, 0.05);
+        }
+
+        .radio-option:has(input[type="radio"]:checked) {
+            background-color: rgba(100, 108, 255, 0.1);
+        }
+
+        .radio-label small {
+            color: rgba(0, 0, 0, 0.6);
+        }
     }
 </style> 

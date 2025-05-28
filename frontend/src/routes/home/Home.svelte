@@ -5,10 +5,10 @@
   import { navigate } from "svelte-routing";
   import osho from "../../assets/osho-4o.png";
 
-  let currentUser = null;
-  let userRole = '';
-  let clientReturnUrl = '';
-  let ownerClientServers = [];
+  let currentUser = $state(null);
+  let userRole = $state('');
+  let clientReturnUrl = $state('');
+  let ownerClientServers = $state([]);
 
   onMount(async () => {
     const storeState = $authStore;
@@ -84,43 +84,7 @@
     margin-bottom: 1rem;
   }
 
-  button {
-   font-size: 0.5rem;
-   padding: 0.5rem;
-   border-radius: 1rem;
-   border: 1px solid #ccc;
-   background-color: #ccc;
-   color: #000;
-   cursor: pointer;
-  }
-
-  .logout-btn {
-    background-color: #ff6b6b;
-    color: white;
-    border: 1px solid #ff5252;
-    font-size: 0.7rem;
-    padding: 0.5rem 1rem;
-  }
-
-  .logout-btn:hover {
-    background-color: #ff5252;
-  }
-
   .osho-pic {
       padding: 2rem;
-  }
-
-  .users-header {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .users-list {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: space-between;
   }
 </style>

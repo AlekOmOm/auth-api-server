@@ -25,7 +25,7 @@ export default defineConfig(({ command, mode }) => {
 
    const BACKEND_HOST = isProd
       ? env.PROD_BACKEND_HOST || "localhost"
-      : env.DEV_BACKEND_HOST || "localhost";
+      : env.VITE_PROXY_TARGET_HOST || env.DEV_BACKEND_HOST || "localhost";
 
    // --- urls ---
    const BACKEND_URL = isProd

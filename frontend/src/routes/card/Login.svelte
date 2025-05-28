@@ -3,33 +3,28 @@
   // import authApi from '../../services/authApi.js' // No longer directly used
   import { authStore } from '../../stores/authStore.js'; // Import and use authStore
   import { loginRedirect } from '../../util/loginRedirect.js';
+  import { extractAndStoreReturnUrl, getStoredReturnUrl, buildUrlWithReturnUrl } from '../../util/returnUrlHandler.js';
 
-  let name = '';
-  let email = '';
-  let password = '';
-  let errorMessage = '';
-  let isLoading = false; // Added for consistency
+  let name = $state('');
+  let email = $state('');
+  let password = $state('');
+  let errorMessage = $state('');
+  let isLoading = $state(false); // Added for consistency
+
+  console.log("🔍 [LOGIN COMPONENT] Component initialized with Svelte 5");
+  console.log("🔍 [LOGIN COMPONENT] authStore imported:", typeof authStore);
 
   // Debug: Check URL on component load
   console.log("🔍 Component loaded - URL:", window.location.href, "Search:", window.location.search);
   
   // Store return_url in sessionStorage if present in URL
-  let storedReturnUrl = null;
-  if (window.location.search.includes('return_url')) {
-    storedReturnUrl = new URL(window.location.href).searchParams.get('return_url');
-    if (storedReturnUrl) {
-      sessionStorage.setItem('auth_return_url', storedReturnUrl);
-      console.log("🔍 Stored return_url in sessionStorage:", storedReturnUrl);
-    }
-  } else {
-    // Check if we have a stored return_url from a previous page load
-    storedReturnUrl = sessionStorage.getItem('auth_return_url');
-    if (storedReturnUrl) {
-      console.log("🔍 Retrieved return_url from sessionStorage:", storedReturnUrl);
-    }
-  }
+  let storedReturnUrl = extractAndStoreReturnUrl();
 
   async function handleLogin(event) {
+    console.log("🔍 [LOGIN COMPONENT] handleLogin called");
+    console.log("🔍 [LOGIN COMPONENT] Event:", event);
+    console.log("🔍 [LOGIN COMPONENT] Form data - email:", email, "password length:", password.length);
+    
     event.preventDefault();
 
     const credentials = {
@@ -37,34 +32,42 @@
       password: password.trim()
     }
     
+    console.log("🔍 [LOGIN COMPONENT] Credentials prepared:", { email: credentials.email, passwordLength: credentials.password.length });
+    
     // Always get the most current return URL from sessionStorage
     // This ensures we use the one stored when Login.svelte first loaded with query params
     // or the one from a previous attempt if the user re-submits the form.
-    let currentReturnUrl = sessionStorage.getItem('auth_return_url');
+    let currentReturnUrl = getStoredReturnUrl();
     
     console.log("🔍 [LOGIN] Before authStore.login - sessionStorage auth_return_url:", currentReturnUrl);
+    console.log("🔍 [LOGIN COMPONENT] About to call authStore.login");
 
     errorMessage = '';
     isLoading = true;
 
     try {
+      console.log("🔍 [LOGIN COMPONENT] Calling authStore.login...");
       const response = await authStore.login(credentials, currentReturnUrl); // Pass currentReturnUrl to authStore.login
       
       console.log("🔍 [LOGIN] After authStore.login - sessionStorage auth_return_url remains:", sessionStorage.getItem('auth_return_url'));
       console.log("🔍 [LOGIN] Login API response:", response);
+      console.log("🔍 [LOGIN COMPONENT] Response received:", response);
       
       if (response.success) { 
         console.log("🔍 [LOGIN] Login successful, calling loginRedirect utility");
+        console.log("🔍 [LOGIN COMPONENT] Login successful, calling loginRedirect");
         // Pass the API response and the returnUrl that was active for this login attempt
         loginRedirect(response, currentReturnUrl); 
         // sessionStorage.removeItem('auth_return_url'); // Moved to loginRedirect or handled if redirect is external
       } else {
+        console.log("🔍 [LOGIN COMPONENT] Login failed with response:", response);
         errorMessage = response.message || 'Login failed.';
       }
     } catch (error) {
-      console.error('Login failed:', error);
+      console.error('🔍 [LOGIN COMPONENT] Login error caught:', error);
       errorMessage = 'Login failed. Please check your credentials and try again.';
     } finally {
+      console.log("🔍 [LOGIN COMPONENT] Setting isLoading to false");
       isLoading = false;
     }
   }
@@ -92,8 +95,7 @@
     <a href="/register" onclick={(event) => { 
       event.preventDefault(); 
       // Preserve return_url when navigating to register
-      const returnUrl = storedReturnUrl || sessionStorage.getItem('auth_return_url');
-      const registerUrl = returnUrl ? `/register?return_url=${encodeURIComponent(returnUrl)}` : '/register';
+      const registerUrl = buildUrlWithReturnUrl('/register');
       navigate(registerUrl); 
     }}>
       register

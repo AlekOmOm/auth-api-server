@@ -3,12 +3,11 @@
   import { navigate } from 'svelte-routing';
   import { onMount } from 'svelte';
 
-  export let path = ""; // The path this route protects
-  export let location; // Passed from Router
+  let { path = "", location, children } = $props(); // The path this route protects and location from Router
 
-  let isAuthenticated = false;
-  let loading = true;
-  let hasAttemptedRedirect = false;
+  let isAuthenticated = $state(false);
+  let loading = $state(true);
+  let hasAttemptedRedirect = $state(false);
 
   const unsubscribe = authStore.subscribe(value => {
     isAuthenticated = value.isAuthenticated;
@@ -60,7 +59,7 @@
 {#if !isAuthenticated && loading && location && location.pathname === path}
   <p>Loading...</p>
 {:else if isAuthenticated && location && location.pathname === path}
-  <slot></slot>
+  {@render children()}
 {:else if !location || location.pathname !== path}
   <!-- This ProtectedRoute instance is not for the current path, render nothing -->
   {@html ""}

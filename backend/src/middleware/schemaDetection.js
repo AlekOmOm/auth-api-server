@@ -375,8 +375,6 @@ export const detectSchema = async (req, res, next) => {
             : "none",
       });
 
-      // CRITICAL FIX: Preserve existing session schema for authenticated users
-      // This prevents session check endpoints from overwriting login schema
       if (req.session?.userId && req.session?.role) {
          console.log(
             "📊 detectSchema: Found authenticated user, checking session preservation...",

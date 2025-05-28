@@ -1,0 +1,232 @@
+/**
+ * Auth-System Schema Registration Script
+ *
+ * REQUIREMENTS:
+ * - Only run via `make init-auth`
+ * - Registers client schema with Auth-System following Frontend-Login-Proxy mode
+ * - Reads configuration from .env file
+ * - Silent operation (no output unless errors)
+ * - Only runs if .env.schema doesn't exist
+ * - Creates .env.schema with registration results
+ *
+ * DEPENDENCIES:
+ * - Auth-System must be running and accessible
+ * - .env file must contain AUTH_SYSTEM_URL, APP_NAME, DEV_FRONTEND_PORT, DEV_BACKEND_PORT
+ *
+ * FOLLOWS: docs/auth-server/Frontend-Login-Proxy_Mode.md
+ */
+
+import dotenv from "dotenv";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import http from "http"; // Using native http module
+import https from "https"; // Using native https module
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const projectRoot = path.resolve(__dirname, "..");
+
+// Load environment variables
+dotenv.config({ path: path.join(projectRoot, ".env") });
+
+const CONFIG = {
+   // Use AUTH_API_URL for registration endpoint, fallback to AUTH_SYSTEM_URL if not defined
+   AUTH_API_URL: process.env.AUTH_API_URL || "http://localhost:3001/api",
+   AUTH_SYSTEM_URL: process.env.AUTH_SYSTEM_URL || "http://localhost:3000",
+   APP_NAME: process.env.APP_NAME || "TradingSimulator",
+   FRONTEND_PORT: process.env.DEV_FRONTEND_PORT || "5173",
+   BACKEND_PORT: process.env.DEV_BACKEND_PORT || "4000",
+};
+
+const ENV_SCHEMA_PATH = path.join(projectRoot, ".env.schema");
+
+// Check if .env.schema already exists
+function schemaFileExists() {
+   return fs.existsSync(ENV_SCHEMA_PATH);
+}
+
+// Generate allowed return URLs as per Frontend-Login-Proxy documentation
+function generateAllowedReturnUrls() {
+   const frontendPort = CONFIG.FRONTEND_PORT;
+   const backendPort = CONFIG.BACKEND_PORT;
+
+   return [
+      // Frontend URLs (Vite dev server)
+      `http://localhost:${frontendPort}`,
+      `http://localhost:${frontendPort}/`,
+      `http://localhost:${frontendPort}/dashboard`,
+      `http://localhost:${frontendPort}/profile`,
+      `http://localhost:${frontendPort}/portfolio`,
+      `http://localhost:${frontendPort}/trading`,
+      `http://localhost:${frontendPort}/auth/callback`,
+
+      // Backend URLs (Express server)
+      `http://localhost:${backendPort}`,
+      `http://localhost:${backendPort}/`,
+      `http://localhost:${backendPort}/dashboard`,
+      `http://localhost:${backendPort}/profile`,
+      `http://localhost:${backendPort}/portfolio`,
+      `http://localhost:${backendPort}/trading`,
+      `http://localhost:${backendPort}/auth/callback`,
+   ];
+}
+
+// Register client with Auth-System using native http/https modules
+async function registerClient() {
+   const registrationData = {
+      app_name: CONFIG.APP_NAME,
+      allowed_return_urls: generateAllowedReturnUrls(),
+      user_id: "owner3@mail.com",
+   };
+
+   const postData = JSON.stringify(registrationData);
+   // Ensure the path doesn't duplicate /api
+   const baseApiUrl = CONFIG.AUTH_API_URL.endsWith("/api")
+      ? CONFIG.AUTH_API_URL
+      : `${CONFIG.AUTH_API_URL}/api`;
+   const registrationEndpoint = `${baseApiUrl}/clientServer/register`;
+   const apiUrl = new URL(registrationEndpoint);
+   const protocol = apiUrl.protocol === "https:" ? https : http;
+
+   const options = {
+      hostname: apiUrl.hostname,
+      port: apiUrl.port,
+      path: apiUrl.pathname,
+      method: "POST",
+      headers: {
+         "Content-Type": "application/json",
+         "Content-Length": Buffer.byteLength(postData),
+      },
+   };
+
+   return new Promise((resolve, reject) => {
+      const req = protocol.request(options, (res) => {
+         let responseBody = "";
+         res.setEncoding("utf8");
+         res.on("data", (chunk) => {
+            responseBody += chunk;
+         });
+         res.on("end", () => {
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+               try {
+                  const result = JSON.parse(responseBody);
+                  resolve(result.data);
+               } catch (error) {
+                  reject(
+                     new Error(
+                        `Failed to parse registration response: ${error.message}`
+                     )
+                  );
+               }
+            } else {
+               reject(
+                  new Error(
+                     `Registration failed: ${res.statusCode} ${res.statusMessage}\n${responseBody}`
+                  )
+               );
+            }
+         });
+      });
+
+      req.on("error", (error) => {
+         reject(new Error(`Registration request error: ${error.message}`));
+      });
+
+      req.write(postData);
+      req.end();
+   });
+}
+
+// Create .env.schema file with registration results
+function createEnvSchemaFile(registrationData) {
+   const envContent = `# === AUTH-SYSTEM SCHEMA CONFIGURATION ===
+# Generated by init-auth-schema.js on ${new Date().toISOString()}
+# 
+# These credentials connect your app to its dedicated database schema
+# in the Auth-System. Keep these values secure and persistent.
+
+# === CLIENT CREDENTIALS ===
+CLIENT_ID=${registrationData.client_id}
+CLIENT_SECRET=${registrationData.client_secret}
+
+# === DATABASE SCHEMA ===
+ASSIGNED_SCHEMA_NAME=${registrationData.assigned_schema_name}
+
+# === APPLICATION CONFIGURATION ===
+APP_NAME=${registrationData.app_name}
+
+# === ALLOWED RETURN URLS ===
+# URLs that Auth-System can redirect back to after authentication
+${registrationData.allowed_return_urls
+   .map((url, index) => `ALLOWED_RETURN_URL_${index + 1}=${url}`)
+   .join("\n")}
+
+# === AUTH-SYSTEM CONNECTION ===
+AUTH_API_URL=${CONFIG.AUTH_API_URL} # API URL used for registration
+
+# === FRONTEND-LOGIN-PROXY MODE CONFIG ===
+# For Frontend-Login-Proxy mode, you typically only need:
+# - AUTH_SYSTEM_URL (for redirects)
+# - ALLOWED_RETURN_URLS (for schema detection)
+# 
+# CLIENT_SECRET is only needed for:
+# - API-Auth-Server mode
+# - Administrative operations
+# - Backend integrations
+
+# === USAGE INSTRUCTIONS ===
+# 1. Copy relevant values to your main .env file
+# 2. For Frontend-Login-Proxy mode, you need:
+#    - AUTH_SYSTEM_URL (from your .env, usually http://localhost:3000 for frontend)
+#    - The return URLs should match your actual app URLs
+# 
+# 3. For API mode, you additionally need:
+#    - CLIENT_ID
+#    - CLIENT_SECRET
+#    - AUTH_API_URL (from this file or your .env)
+
+# === IMPORTANT SECURITY NOTES ===
+# - Never commit CLIENT_SECRET to version control
+# - Store CLIENT_SECRET securely in production
+# - Use environment variables or secure config management
+# - CLIENT_SECRET is only used for server-to-server communication
+`;
+
+   fs.writeFileSync(ENV_SCHEMA_PATH, envContent, "utf8");
+}
+
+// Main registration function
+async function main() {
+   try {
+      // Skip if schema already exists
+      if (schemaFileExists()) {
+         return; // Silent exit - already configured
+      }
+
+      // Perform registration
+      const registrationData = await registerClient();
+
+      // Save configuration
+      createEnvSchemaFile(registrationData);
+   } catch (error) {
+      // Keep error output minimal and clear
+      console.error(`Error: ${error.message}`);
+      // Provide a hint to check the API URL if ECONNREFUSED
+      if (error.message && error.message.includes("ECONNREFUSED")) {
+         console.error(
+            `Hint: Ensure Auth-System API is running at ${CONFIG.AUTH_API_URL} and accessible.`
+         );
+      }
+      process.exit(1);
+   }
+}
+
+// Only run when executed directly (not imported)
+// Fix for Windows paths - use fileURLToPath for proper path comparison
+const scriptPath = fileURLToPath(import.meta.url);
+const isMainModule = process.argv[1] === scriptPath;
+
+if (isMainModule) {
+   main();
+}

@@ -25,7 +25,12 @@ export async function fetchGet(url) {
 }
 
 export async function fetchPost(url, body) {
+   console.log("🔍 [FETCH] fetchPost called");
+   console.log("🔍 [FETCH] URL:", url);
+   console.log("🔍 [FETCH] Request body:", body);
+
    try {
+      console.log("🔍 [FETCH] Making fetch request...");
       const response = await fetch(url, {
          method: "POST",
          credentials: "include",
@@ -35,78 +40,62 @@ export async function fetchPost(url, body) {
          body: JSON.stringify(body),
       });
 
-      let responseData = await parseResponse(response);
+      console.log("🔍 [FETCH] Fetch response received");
+      console.log("🔍 [FETCH] Response status:", response.status);
+      console.log("🔍 [FETCH] Response ok:", response.ok);
+      console.log(
+         "🔍 [FETCH] Response headers:",
+         Object.fromEntries(response.headers.entries())
+      );
 
-      // Check response.ok *after* parsing
-      if (!response.ok) {
-         if (
-            typeof responseData === "object" &&
-            responseData !== null &&
-            responseData.success === undefined
-         ) {
-            responseData.success = false;
-         }
-         // If it's not an object (rare case), wrap it
-         else if (typeof responseData !== "object" || responseData === null) {
-            responseData = { success: false, data: responseData };
-         }
-         return responseData; // Return the error details
+      // Parse response regardless of status
+      const contentType = response.headers.get("content-type");
+      console.log("🔍 [FETCH] Content type:", contentType);
+      let responseData;
+
+      if (contentType && contentType.includes("application/json")) {
+         console.log("🔍 [FETCH] Parsing as JSON...");
+         responseData = await response.json();
+         console.log("🔍 [FETCH] Parsed JSON data:", responseData);
+      } else {
+         console.log("🔍 [FETCH] Parsing as text...");
+         const text = await response.text();
+         console.log("🔍 [FETCH] Parsed text:", text);
+         responseData = { message: text };
       }
 
-      // If response is ok and was JSON, ensure success: true is set if not present
-      const contentType = response.headers.get("content-type");
-      if (
-         response.ok &&
-         contentType &&
-         contentType.includes("application/json")
-      ) {
-         if (
-            typeof responseData === "object" &&
-            responseData !== null &&
-            responseData.success === undefined
-         ) {
+      // Handle non-ok responses
+      if (!response.ok) {
+         console.log("🔍 [FETCH] Response not ok, handling error");
+         if (typeof responseData === "object" && responseData !== null) {
+            responseData.success = false;
+         } else {
+            responseData = { success: false, message: responseData };
+         }
+         console.log("🔍 [FETCH] Returning error response:", responseData);
+         return responseData;
+      }
+
+      // Handle successful responses
+      console.log("🔍 [FETCH] Response ok, handling success");
+      if (typeof responseData === "object" && responseData !== null) {
+         if (responseData.success === undefined) {
             responseData.success = true;
          }
-         // If it's not an object (e.g., just a success message string from API), wrap it
-         else if (typeof responseData !== "object" || responseData === null) {
-            responseData = { success: true, data: responseData };
-         }
+      } else {
+         responseData = { success: true, data: responseData };
       }
 
-      return responseData; // Return successful data
+      console.log("🔍 [FETCH] Returning success response:", responseData);
+      return responseData;
    } catch (error) {
-      console.error("fetchPost error:", error);
+      console.error("🔍 [FETCH] fetchPost error:", error);
+      console.error("🔍 [FETCH] Error type:", error.constructor.name);
+      console.error("🔍 [FETCH] Error message:", error.message);
       // For network errors or JSON parsing errors, return a standard error object
       return {
          success: false,
          message: error.message || "Network error or failed to parse response.",
       };
    }
-}
-
-/**
- *
- * @param {*} response
- * @returns
- *
- * - if JSON, return JSON
- * - if not JSON, return text
- * - if error, throw error
- */
-async function parseResponse(response) {
-   const contentType = response.headers.get("content-type");
-
-   if (!response.ok) {
-      throw new Error("API error: " + response.status);
-   }
-
-   // if JSON
-   if (contentType && contentType.includes("application/json")) {
-      return await response.json();
-   }
-
-   // else convert
-   const json = JSON.parse(await response.text());
-
-   return { success: true, data: json, isJson: true };
 }

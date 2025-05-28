@@ -1,17 +1,26 @@
 import { fetchGet, fetchPost } from "../util/fetch";
 import { authStore } from "../stores/authStore";
 
-const BACKEND_URL = "http://localhost:3001/api";
+const BACKEND_URL =
+   import.meta.env.VITE_BACKEND_URL || "http://localhost:3001/api";
 
-const BACKEND_URL_AUTH = `${BACKEND_URL}/auth`;
+const BACKEND_URL_AUTH = `${BACKEND_URL}/clientServer`;
 
 /**
  * Register a new user
  * @param {Object} credentials - User credentials with username and password
  * @returns {Promise<Object>} Registration result with success status
  */
+
+/**
+ * 
+ * {
+ * 
+ * }
+ */
 const register = async (credentials) => {
    try {
+
       // Input validation
       if (!credentials.name || !credentials.email || !credentials.password) {
          return {
@@ -78,39 +87,14 @@ const register = async (credentials) => {
  *    }
  */
 const login = async (credentials, returnUrl = null) => {
-   console.log("🔍 [AUTH API] login function called");
-   console.log("🔍 [AUTH API] credentials:", {
-      email: credentials.email,
-      passwordLength: credentials.password?.length,
-   });
-   console.log("🔍 [AUTH API] returnUrl:", returnUrl);
-   console.log("🔍 [AUTH API] BACKEND_URL_AUTH:", BACKEND_URL_AUTH);
-
    try {
       // validation
       if (!credentials.email || !credentials.password) {
-         console.log(
-            "🔍 [AUTH API] Validation failed - missing email or password"
-         );
          return {
             message: "Email and password are required",
             success: false,
          };
       }
-
-      console.log("🔍 [AUTH API] Validation passed, preparing request body");
-
-      const requestBody = {
-         credentials,
-         returnUrl,
-      };
-
-      console.log("🔍 [AUTH API] Request body:", requestBody);
-      console.log(
-         "🔍 [AUTH API] About to call fetchPost to:",
-         `${BACKEND_URL_AUTH}/login`
-      );
-
       /**
        * sends Post request to /login
        *
@@ -122,15 +106,12 @@ const login = async (credentials, returnUrl = null) => {
        *     }
        *   }
        */
-      const response = await fetchPost(
-         `${BACKEND_URL_AUTH}/login`,
-         requestBody
-      );
-
-      console.log("🔍 [AUTH API] fetchPost response:", response);
+      const response = await fetchPost(`${BACKEND_URL_AUTH}/login`, {
+         credentials,
+         returnUrl,
+      });
 
       if (!response.success) {
-         console.log("🔍 [AUTH API] Login failed, returning error response");
          return {
             ...response,
             success: false,
@@ -138,13 +119,12 @@ const login = async (credentials, returnUrl = null) => {
       }
 
       // success
-      console.log("🔍 [AUTH API] Login successful, returning success response");
       return {
          ...response,
          success: true,
       };
    } catch (error) {
-      console.error("🔍 [AUTH API] Login error:", error);
+      console.error("Login error:", error);
       return {
          message: error.message || "Login failed",
          success: false,

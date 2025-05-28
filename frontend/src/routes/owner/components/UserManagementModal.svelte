@@ -1,23 +1,21 @@
 <script>
-  import { createEventDispatcher, onMount } from 'svelte';
+  import { onMount } from 'svelte';
   
-  export let clientServer;
+  let { clientServer, onClose } = $props();
   
-  const dispatch = createEventDispatcher();
-  
-  let users = [];
-  let loading = true;
-  let error = '';
-  let showCreateUser = false;
-  let editingUser = null;
+  let users = $state([]);
+  let loading = $state(true);
+  let error = $state('');
+  let showCreateUser = $state(false);
+  let editingUser = $state(null);
   
   // Create/Edit user form
-  let userName = '';
-  let userEmail = '';
-  let userPassword = '';
-  let userRole = 'user';
-  let formLoading = false;
-  let formError = '';
+  let userName = $state('');
+  let userEmail = $state('');
+  let userPassword = $state('');
+  let userRole = $state('user');
+  let formLoading = $state(false);
+  let formError = $state('');
   
   const userRoles = [
     { value: 'user', label: 'User', description: 'Standard user access' },
@@ -184,11 +182,18 @@
   }
 </script>
 
-<div class="modal-overlay" on:click={() => dispatch('close')}>
-  <div class="modal" on:click|stopPropagation>
+<div class="modal-overlay" 
+     onclick={() => onClose?.()}
+     onkeydown={(e) => { if (e.key === 'Escape') onClose?.(); }}
+     role="dialog"
+     tabindex="-1">
+  <div class="modal" 
+       onclick={(e) => e.stopPropagation()}
+       onkeydown={(e) => { if (e.key === 'Escape') onClose?.(); }}
+       role="document">
     <div class="modal-header">
       <h2>👥 Manage Users - {clientServer.app_name}</h2>
-      <button class="close-btn" on:click={() => dispatch('close')}>✕</button>
+      <button class="close-btn" onclick={() => onClose?.()}>✕</button>
     </div>
     
     <div class="modal-content">
@@ -197,7 +202,7 @@
         <div class="user-form">
           <h3>{editingUser ? '✏️ Edit User' : '➕ Create New User'}</h3>
           
-          <form on:submit|preventDefault={handleSubmitUser}>
+          <form onsubmit={(e) => { e.preventDefault(); handleSubmitUser(); }}>
             <div class="form-row">
               <div class="form-group">
                 <label for="userName">Name *</label>
@@ -257,7 +262,7 @@
             {/if}
             
             <div class="form-actions">
-              <button type="button" class="btn btn-secondary" on:click={cancelForm} disabled={formLoading}>
+              <button type="button" class="btn btn-secondary" onclick={cancelForm} disabled={formLoading}>
                 Cancel
               </button>
               <button type="submit" class="btn btn-primary" disabled={formLoading}>
@@ -276,7 +281,7 @@
         <div class="users-section">
           <div class="section-header">
             <h3>Users in {clientServer.assigned_schema_name}</h3>
-            <button class="btn btn-primary" on:click={handleCreateUser}>
+            <button class="btn btn-primary" onclick={handleCreateUser}>
               ➕ Add User
             </button>
           </div>
@@ -289,13 +294,13 @@
           {:else if error}
             <div class="error">
               <p>{error}</p>
-              <button class="btn btn-primary" on:click={loadUsers}>Retry</button>
+              <button class="btn btn-primary" onclick={loadUsers}>Retry</button>
             </div>
           {:else if users.length === 0}
             <div class="empty-state">
               <h4>No Users Found</h4>
               <p>This client server doesn't have any users yet.</p>
-              <button class="btn btn-primary" on:click={handleCreateUser}>
+              <button class="btn btn-primary" onclick={handleCreateUser}>
                 Create First User
               </button>
             </div>
@@ -328,14 +333,14 @@
                   <div class="col-actions">
                     <button 
                       class="btn-icon btn-edit"
-                      on:click={() => handleEditUser(user)}
+                      onclick={() => handleEditUser(user)}
                       title="Edit user"
                     >
                       ✏️
                     </button>
                     <button 
                       class="btn-icon btn-delete"
-                      on:click={() => handleDeleteUser(user)}
+                      onclick={() => handleDeleteUser(user)}
                       title="Delete user"
                     >
                       🗑️

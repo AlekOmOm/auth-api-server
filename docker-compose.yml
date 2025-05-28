@@ -57,6 +57,7 @@ services:
       NODE_ENV: development
       DEV_FRONTEND_PORT: ${DEV_FRONTEND_PORT:-3000}
       DEV_BACKEND_PORT: ${DEV_BACKEND_PORT:-3001}
+      VITE_PROXY_TARGET_HOST: backend
     depends_on:
       - backend
     volumes:

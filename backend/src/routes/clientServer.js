@@ -93,17 +93,29 @@ router.put("/me", authenticateClientServer, async (req, res, next) => {
  * Register client server for logged-in user
  * POST /api/clientServer/user/register
  */
-router.post("/user/register", isAuthenticated, async (req, res, next) => {
-   try {
-      const result = await clientServerService.registerClientServerForUser(
-         req.body,
-         req // Pass entire request object
+router.post(
+   "/user/register",
+   isAuthenticated,
+   async (req, res, next) => {
+      console.log(
+         "🚀 [ROUTE] /api/clientServer/user/register: Entered route handler. Body:",
+         JSON.stringify(req.body, null, 2),
+         "Session UserID:",
+         req.session?.userId
       );
-      res.status(201).json(result);
-   } catch (error) {
-      next(error);
+      try {
+         const result = await clientServerService.registerClientServerForUser(
+            req.body,
+            req // Pass entire request object
+         );
+         console.log("POST /api/clientServer/user/register");
+         console.log(req.body);
+         res.status(201).json(result);
+      } catch (error) {
+         next(error);
+      }
    }
-});
+);
 
 /**
  * Get all client servers for authenticated user

@@ -10,14 +10,14 @@
   // Backend URL configuration
   const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:3001/api";
 
-  let clientServers = [];
-  let loading = true;
-  let error = '';
-  let showCreateModal = false;
-  let showUserModal = false;
-  let selectedClientServer = null;
-  let userRole = '';
-  let ownerStats = null;
+  let clientServers = $state([]);
+  let loading = $state(true);
+  let error = $state('');
+  let showCreateModal = $state(false);
+  let showUserModal = $state(false);
+  let selectedClientServer = $state(null);
+  let userRole = $state('');
+  let ownerStats = $state(null);
 
   onMount(async () => {
     await loadOwnerData();
@@ -96,7 +96,6 @@
       }
     } catch (err) {
       console.error('Error loading owner stats:', err);
-      // Non-critical, continue without stats
     }
   }
 
@@ -178,7 +177,7 @@
     <div class="error">
       <h3>⚠️ Loading Issue</h3>
       <p>{error}</p>
-      <button class="btn btn-primary" on:click={loadOwnerData}>
+      <button class="btn btn-primary" onclick={loadOwnerData}>
         🔄 Retry Loading
       </button>
     </div>
@@ -192,7 +191,7 @@
     <section class="client-servers-section">
       <div class="section-header">
         <h2>📱 Your Client Servers</h2>
-        <button class="btn btn-primary" on:click={handleCreateClient}>
+        <button class="btn btn-primary" onclick={handleCreateClient}>
           ➕ Create New Client Server
         </button>
       </div>
@@ -201,7 +200,7 @@
         <div class="empty-state">
           <h3>🚀 Get Started</h3>
           <p>You don't have any client servers yet. Create your first one to start managing users and authentication.</p>
-          <button class="btn btn-primary" on:click={handleCreateClient}>
+          <button class="btn btn-primary" onclick={handleCreateClient}>
             Create Your First Client Server
           </button>
         </div>
@@ -210,9 +209,9 @@
           {#each clientServers as clientServer (clientServer.client_id)}
             <ClientServerCard 
               {clientServer}
-              on:manageUsers={() => handleManageUsers(clientServer)}
-              on:editClient={() => handleEditClient(clientServer)}
-              on:deleteClient={() => handleDeleteClient(clientServer)}
+              onManageUsers={() => handleManageUsers(clientServer)}
+              onEditClient={() => handleEditClient(clientServer)}
+              onDeleteClient={() => handleDeleteClient(clientServer)}
             />
           {/each}
         </div>
@@ -225,15 +224,15 @@
 {#if showCreateModal}
   <CreateClientModal 
     clientServer={selectedClientServer}
-    on:clientCreated={handleClientCreated}
-    on:close={handleModalClose}
+    onClientCreated={handleClientCreated}
+    onClose={handleModalClose}
   />
 {/if}
 
 {#if showUserModal && selectedClientServer}
   <UserManagementModal 
     clientServer={selectedClientServer}
-    on:close={handleModalClose}
+    onClose={handleModalClose}
   />
 {/if}
 
@@ -256,7 +255,6 @@
     font-size: 3.2em;
     line-height: 1.1;
     margin-bottom: 0.5rem;
-    /* Uses CSS custom properties from :root */
   }
 
   .subtitle {

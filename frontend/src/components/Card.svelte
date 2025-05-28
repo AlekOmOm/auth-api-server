@@ -1,44 +1,73 @@
 <script>
-    // Removed Router, Route, Link imports
-    import { useLocation, navigate } from 'svelte-routing' 
+    import { useLocation } from 'svelte-routing' 
     import Login from '../routes/card/Login.svelte'
     import Register from '../routes/card/Register.svelte'
 
-    const loc = useLocation(); 
-    // @ts-ignore
-     $: flipped = loc.pathname === '/register';
-
-    // Function to navigate (example if buttons are needed inside)
-    function goToRegister() {
-        navigate('/register');
+    const location = useLocation(); 
+    $: isRegister = $location.pathname === '/register';
+    $: isLogin = $location.pathname === '/login' || $location.pathname === '/';
+    
+    let showTransition = false;
+    $: {
+        if (isRegister || isLogin) {
+            showTransition = true;
+            setTimeout(() => showTransition = false, 100);
+        }
     }
-    function goToLogin() {
-        navigate('/'); // Assuming / is login now
-    }
-
 </script>
 
-
-<div class="scene">
-    <div class="card {flipped ? 'is-flipped' : ''}">
-        <div class="face front">
-            <Login />
-            <!-- Removed Route and button here - Login component handles its own form/link -->
-        </div>
-
-        <div class="face back">
-            <Register />
-             <!-- Register component handles its own form/link -->
-        </div>
-        <!-- Optional: Keep for debugging -->
-        <!-- <p>flipped: {flipped}</p> -->
+<div class="card-container">
+    <div class="card {showTransition ? 'transitioning' : ''}">
+        {#if isLogin}
+            <div class="card-face">
+                <Login />
+            </div>
+        {:else if isRegister}
+            <div class="card-face">
+                <Register />
+            </div>
+        {/if}
     </div>
 </div>
         
 <style>
-  .scene { perspective: 1000px; }
-  .card  { transition: transform .6s; transform-style: preserve-3d; position: relative; }
-  .card.is-flipped { transform: rotateY(180deg); }
-  .face  { position: absolute; width: 100%; backface-visibility: hidden; }
-  .back  { transform: rotateY(180deg); }
+  .card-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: row;
+    margin-top: 10vh;
+    width: 100%;
+    max-width: 400px;
+    margin-left: auto;
+    margin-right: auto;
+    min-height: 500px;
+  }
+
+  .card {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transition: opacity 0.3s ease;
+  }
+  
+  .card.transitioning {
+    opacity: 0.8;
+  }
+  
+  .card-face {
+    width: 100%;
+    height: 100%;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 500px;
+  }
+  
+  /* Ensure forms fit within the card */
+  .card-face :global(form) {
+    max-height: 100%;
+    overflow-y: auto;
+  }
 </style>

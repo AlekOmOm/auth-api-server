@@ -21,7 +21,7 @@
            {#if $authStore.isAuthenticated}
              <!-- Authenticated user links -->
              <Link class="link" id="home" to="/home">home</Link>
-             <button class="link logout-btn" id="logout" on:click={handleLogout}>logout</button>
+             <button class="link logout-btn" id="logout" onclick={handleLogout}>logout</button>
            {:else}
              <!-- Unauthenticated user links -->
              <Link class="link" id="login" to="/login">login</Link>

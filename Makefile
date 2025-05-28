@@ -113,6 +113,10 @@ dev-fullstack:
 # ENVIRONMENT SETUP
 # ==============================================================================
 
+init-auth:
+	@echo "Initializing Auth System schema..."
+	@node ./scripts/init-auth-schema.js
+
 # setup environment
 setup-env:
 	@node .\scripts\setup-env.js
@@ -158,7 +162,4 @@ help:
 # Declare phony targets
 .PHONY: run run-clean stop clean clean-full logs logs-db logs-backend logs-frontend status restart rebuild
 .PHONY: setup-frontend setup-backend dev-frontend dev-backend dev-fullstack
-.PHONY: setup-env gen-ses-secret help
-
-
-
+.PHONY: setup-env gen-ses-secret help init-auth
