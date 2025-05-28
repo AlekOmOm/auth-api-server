@@ -1,5 +1,7 @@
 import { verifyApiToken } from "../services/clientServerService.js";
 import * as clientServersRepo from "../repo/repositories/clientServersRepository.js";
+import paths from "../config/paths.js";
+import config from "../config/env.js";
 import getPool from "../repo/connection/pools/auth.js";
 import getPoolForSchema from "../repo/connection/pools/clientServers.js";
 
@@ -254,7 +256,7 @@ export const detectSchemaFromApiToken = async (req, res, next) => {
                app_name: clientInfo.app_name,
                allowed_return_urls: clientInfo.allowed_return_urls,
                token_type: "api_token",
-               user_role: "api_client",
+               user_role: USER_ROLES.API_CLIENT,
             });
 
             req.clientContext = clientInfo; // Backward compatibility

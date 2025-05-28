@@ -7,6 +7,7 @@ import {
    NotFoundError,
 } from "../middleware/errorHandler.js";
 import * as repo from "../repo/adminRepository.js";
+import config from "../config/env.js";
 import getPool from "../repo/connection/pools/auth.js";
 import getPoolForSchema from "../repo/connection/pools/clientServers.js";
 import { POOL_CONTEXTS, USER_ROLES } from "../middleware/schemaDetection.js";

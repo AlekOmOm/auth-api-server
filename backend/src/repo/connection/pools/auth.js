@@ -6,7 +6,7 @@
  * - client_servers table
  */
 import { Pool } from "pg";
-// import config from "../../../utils/config.js"; // This was incorrect
+import config from "../../../config/env.js";
 import { ddl } from "../../schemas/auth_internal/client_servers.js";
 
 // cache
@@ -14,13 +14,16 @@ let pool;
 
 const getPool = async () => {
    if (!pool) {
-      pool = new Pool({
-         user: process.env.POSTGRES_USER,
-         host: process.env.POSTGRES_HOST,
-         database: process.env.POSTGRES_DB, // Use the main POSTGRES_DB
-         password: process.env.POSTGRES_PASSWORD,
-         port: parseInt(process.env.POSTGRES_PORT, 10),
-      });
+      // Transform config.POSTGRES to match pg Pool constructor expectations
+      const pgConfig = {
+         host: config.POSTGRES.HOST,
+         port: config.POSTGRES.PORT,
+         user: config.POSTGRES.USER,
+         password: config.POSTGRES.PASSWORD,
+         database: config.POSTGRES.DATABASE,
+      };
+
+      pool = new Pool(pgConfig);
       await pool.connect();
       await initSchema();
    }

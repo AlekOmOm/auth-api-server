@@ -12,6 +12,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
       POSTGRES_DB: ${POSTGRES_DB:-auth_system}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -25,13 +26,15 @@ services:
     ports:
       - "${DEV_BACKEND_PORT:-3001}:${DEV_BACKEND_PORT:-3001}"
     environment:
-      NODE_ENV: development
+      NODE_ENV: ${NODE_ENV:-development}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
       POSTGRES_DB: ${POSTGRES_DB:-auth_system}
       POSTGRES_HOST: db
       DEV_BACKEND_PORT: ${DEV_BACKEND_PORT:-3001}
+      DEV_BACKEND_HOST: backend
       DEV_FRONTEND_PORT: ${DEV_FRONTEND_PORT:-3000}
+      DEV_FRONTEND_HOST: frontend
       SEED_SCHEMA: ${SEED_SCHEMA:-client_template}
       JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key}
       SESSION_SECRET: ${SESSION_SECRET:-your-session-secret}

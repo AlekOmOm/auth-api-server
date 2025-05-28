@@ -1,5 +1,5 @@
 import { Pool } from "pg";
-// import config from "../../../utils/config.js"; // This was incorrect
+import config from "../../../config/env.js";
 import { ddl } from "../../schemas/client_servers/client_server_template.js";
 
 // Cache
@@ -16,13 +16,16 @@ export const getPoolForSchema = async (schemaName = "client_template") => {
       return schemas[schemaName];
    }
 
-   const localPool = new Pool({
-      user: process.env.POSTGRES_USER,
-      host: process.env.POSTGRES_HOST,
-      database: process.env.POSTGRES_DB,
-      password: process.env.POSTGRES_PASSWORD,
-      port: parseInt(process.env.POSTGRES_PORT, 10),
-   });
+   // Transform config.POSTGRES to match pg Pool constructor expectations
+   const pgConfig = {
+      host: config.POSTGRES.HOST,
+      port: config.POSTGRES.PORT,
+      user: config.POSTGRES.USER,
+      password: config.POSTGRES.PASSWORD,
+      database: config.POSTGRES.DATABASE,
+   };
+
+   const localPool = new Pool(pgConfig);
    await localPool.connect();
    await initSchema(localPool, schemaName);
    schemas[schemaName] = localPool;
