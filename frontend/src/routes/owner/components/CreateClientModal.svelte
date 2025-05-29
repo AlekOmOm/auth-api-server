@@ -154,12 +154,14 @@
 <div class="modal-overlay" 
      onclick={handleClose}
      onkeydown={(e) => { if (e.key === 'Escape') handleClose(); }}
-     role="dialog"
+     role="button"
      tabindex="-1">
   <div class="modal" 
+       role="dialog"
+       aria-modal="true"
+       tabindex="-1"
        onclick={(e) => e.stopPropagation()}
-       onkeydown={(e) => { if (e.key === 'Escape') handleClose(); }}
-       role="document">
+       onkeydown={(e) => { if (e.key === 'Escape') handleClose(); }}>
     <div class="modal-header">
       <h2>{isEditing ? '✏️ Edit Client Server' : '➕ Create New Client Server'}</h2>
       <button class="close-btn" onclick={handleClose}>✕</button>

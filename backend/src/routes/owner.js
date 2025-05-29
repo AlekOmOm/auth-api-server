@@ -1,9 +1,5 @@
 import express from "express";
 import { isAuthenticated } from "../middleware/auth.js";
-import {
-   requireClientOwner,
-   requireSystemAdmin,
-} from "../services/poolService.js";
 import * as ownerService from "../services/ownerService.js";
 
 const router = express.Router();

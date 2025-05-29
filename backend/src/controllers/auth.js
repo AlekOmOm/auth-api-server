@@ -1,5 +1,6 @@
 // --- services ---
 import * as authService from "../services/auth.js";
+import * as authInternalService from "../services/clientServerservice.js";
 
 // --- utils ---
 
@@ -142,5 +143,27 @@ const getCurrentUser = async (req, res, next) => {
    }
 };
 
+// --- referer ---
+/**
+ * @description Check if referer URL is a registered URL
+ * Calls authInternalService.checkReferer with schema from request
+ */
+const checkReferer = async (req, res, next) => {
+   try {
+      const result = await authInternalService.checkReferer(req);
+      res.status(200).json(result);
+   } catch (error) {
+      next(error);
+   }
+};
+
 // --- export ---
-export { register, login, logout, getCurrentUser, getSessions, getSession };
+export {
+   register,
+   login,
+   logout,
+   getCurrentUser,
+   getSessions,
+   getSession,
+   checkReferer,
+};

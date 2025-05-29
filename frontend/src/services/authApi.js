@@ -1,9 +1,6 @@
 import { fetchGet, fetchPost } from "../util/fetch";
-import { authStore } from "../stores/authStore";
 
-const BACKEND_URL = "http://localhost:3001/api";
-
-const BACKEND_URL_AUTH = `${BACKEND_URL}/auth`;
+const BACKEND_URL_AUTH = "/api/auth"; // vite proxy
 
 /**
  * Register a new user
@@ -20,30 +17,20 @@ const register = async (credentials) => {
          };
       }
 
-      // fetchPost now returns an object like { success: boolean, data: ..., errors: ..., message: ... }
       const response = await fetchPost(
          `${BACKEND_URL_AUTH}/register`,
          credentials
       );
 
-      if (!response.success) {
-         return response;
+      if (!response.data) {
+         return {
+            message: "Registration failed",
+            success: false,
+         };
       }
 
-      // --- Added: Update authStore on successful registration ---
-      if (response.data && response.data.userId) {
-         // Registration successful, but don't auto-login - let user login manually
-         // console.log("Registration successful for user:", response.data.userId);
-      } else {
-         console.warn(
-            "Registration successful, but user data missing in response."
-         );
-      }
-      // Return the successful response object
       return response;
    } catch (error) {
-      // This catch block should now ideally only handle unexpected errors *within this function's logic*,
-      // as fetchPost catches its own errors.
       console.error("Unexpected error in authApi.register:", error);
       return {
          message:
@@ -160,7 +147,6 @@ const logout = async () => {
    try {
       const response = await fetchPost(`${BACKEND_URL_AUTH}/logout`, {});
 
-      // Return the actual response from backend, don't override success
       if (response.success) {
          return {
             ...response,
@@ -182,11 +168,30 @@ const logout = async () => {
    }
 };
 
+/**
+ * Check the referer header for identification of Schema
+ * @param {string} referer - Referer header
+ * @returns {Promise<Object>} API response
+ */
+const checkReferer = async (referer) => {
+   const response = await fetchPost(`${BACKEND_URL_AUTH}/check-referer`, {
+      referer,
+   });
+   if (!response.success) {
+      return {
+         message: "Referer URL is not a registered URL",
+         success: false,
+      };
+   }
+   return response;
+};
+
 // --- export ---
 const authApi = {
    register,
    login,
    logout,
+   checkReferer,
 };
 
 export default authApi;

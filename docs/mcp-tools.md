@@ -1,6 +1,0 @@
-
-
-playwright mcp 
-
-postgres mcp 
-

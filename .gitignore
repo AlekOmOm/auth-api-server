@@ -1,4 +1,6 @@
 .env.backup
+.env.schema
+
 # Logs
 logs
 *.log

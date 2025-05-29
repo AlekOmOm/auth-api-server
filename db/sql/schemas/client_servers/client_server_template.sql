@@ -40,3 +40,4 @@ CREATE TABLE IF NOT EXISTS sessions (
 -- Indexes for faster lookups
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_sessions_session_id ON sessions(session_id); 
+

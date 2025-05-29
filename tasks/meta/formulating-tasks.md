@@ -1,2 +1,0 @@
-- [scope of done - acceptance criteria](./acceptance-criteria.md)
-- [test cases](./test-cases.md)

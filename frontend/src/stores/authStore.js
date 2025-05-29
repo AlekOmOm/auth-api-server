@@ -1,6 +1,7 @@
 import { get, writable } from "svelte/store";
 import { fetchGet } from "../util/fetch";
 import authApi from "../services/authApi"; // Import authApi
+import { extractRefererHeader } from "../util/refererHeader";
 
 const BACKEND_URL =
    import.meta.env.VITE_BACKEND_URL || "http://localhost:3001/api";
@@ -10,7 +11,9 @@ const BACKEND_URL_AUTH = `${BACKEND_URL}/auth`;
  * - client-side authentication state
  * - utilizes service: authApi.js
  *
- * exports operations:
+ * @docs [authorization](https://github.com/AlekOmOm/auth-api-server/tree/main/docs/core-components/client-app-authorization.md)
+ *
+ * @exports:
  * - checkAuth
  * - checkSession
  * - login
@@ -18,74 +21,55 @@ const BACKEND_URL_AUTH = `${BACKEND_URL}/auth`;
  * - logout
  */
 function createAuthStore() {
-   // create store
-   /*
-    * @param {Object} state - The state of the store
-    * @param {Function} subscribe - The subscribe function
-    * @param {Function} set - The set function
-    * @param {Function} update - The update function
-    */
    const { subscribe, set, update } = writable({
       isAuthenticated: false,
-      user: null,
+      session: null,
       loading: true,
    });
 
    /**
     * checkAuth
-    * @description check if user is authenticated
-    * @context within authStore check state
-    * @state
+    * @returns {Promise<Object>} API response
     * - {
-    *      isAuthenticated: boolean,
-    *      user: {
-    *         userId: string,
-    *         email: string,
-    *         name: string,
-    *      },
-    *      loading: boolean,
-    *   }
+    *    isAuthenticated: boolean,
+    *    session: {Object}
+    *    loading: boolean
+    * }
     */
    async function checkAuth() {
-      const { isAuthenticated, user, loading } = get(authStore);
+      const { isAuthenticated, session, loading } = get(authStore);
       if (!isAuthenticated) {
          checkSession();
       }
-      return { isAuthenticated, user, loading };
+      return { isAuthenticated, session, loading };
    }
 
    /** checkSession
     * @description check if user is authenticated
     * @context utilizes service: authApi.js
+    * @docs [authorization](https://github.com/auth-system/auth-system-docs/blob/main/docs/core-components/client-app-authorization.md)
+    * @returns {Promise<Object>} API response
     */
    async function checkSession() {
-      console.log("🔍 [AUTH STORE] Starting session check...");
       update((state) => ({ ...state, loading: true }));
       try {
-         const sessionData = await fetchGet(`${BACKEND_URL_AUTH}/session`);
-         console.log(
-            "🔍 [AUTH STORE] backend url session check:",
-            `${BACKEND_URL_AUTH}/session`
-         );
-         console.log("🔍 [AUTH STORE] Session check response:", sessionData);
-         if (sessionData && sessionData.data) {
-            console.log(
-               "🔍 [AUTH STORE] ✅ Session valid, setting authenticated state"
-            );
+         const dataRaw = await fetchGet(`${BACKEND_URL_AUTH}/session`);
+         const { message, data } = dataRaw;
+         if (data.id) {
             set({
                isAuthenticated: true,
-               user: sessionData.data,
+               session: data,
                loading: false,
             });
          } else {
-            console.log(
-               "🔍 [AUTH STORE] ❌ Session invalid, no data in response"
-            );
-            set({ isAuthenticated: false, user: null, loading: false });
+            set({
+               isAuthenticated: false,
+               session: null,
+               loading: false,
+            });
          }
       } catch (error) {
-         console.error("🔍 [AUTH STORE] ❌ Session check failed:", error);
-         set({ isAuthenticated: false, user: null, loading: false });
+         set({ isAuthenticated: false, session: null, loading: false });
       }
    }
 
@@ -93,63 +77,31 @@ function createAuthStore() {
     * login
     * @description Authenticates user via API and updates store state
     * @param {Object} credentials - User credentials
+    * @param {string} url - url for identification of Schema
     * @returns {Promise<Object>} API response
     */
-   async function login(credentials, returnUrl = null) {
-      console.log("🔍 [AUTH STORE] login function called");
-      console.log("🔍 [AUTH STORE] credentials:", {
-         email: credentials.email,
-         passwordLength: credentials.password?.length,
-      });
-      console.log("🔍 [AUTH STORE] returnUrl:", returnUrl);
-
+   async function login(credentials, url = null) {
       update((state) => ({ ...state, loading: true }));
-      console.log("🔍 [AUTH STORE] Set loading to true");
 
       try {
-         console.log("🔍 [AUTH STORE] About to call authApi.login");
-         /**
-          * authApi login
-          * - response.success = true if login is successful
-          * - response.message = error message if login fails
-          *
-          */
-         const response = await authApi.login(credentials, returnUrl);
-         console.log("🔍 [AUTH STORE] authApi.login response:", response);
+         const response = await authApi.login(credentials, url);
 
          if (
             response.success &&
             response.data &&
             (response.data.userId || response.data.id)
          ) {
-            console.log(
-               "🔍 [AUTH STORE] ✅ Login successful, setting authenticated state"
-            );
-            console.log("🔍 [AUTH STORE] User data:", response.data);
-            set({ isAuthenticated: true, user: response.data, loading: false });
-            console.log("🔍 [AUTH STORE] ✅ state updated:", {
-               isAuthenticated: get(authStore).isAuthenticated,
-               user: get(authStore).user,
-               loading: get(authStore).loading,
+            set({
+               isAuthenticated: true,
+               session: response.data,
+               loading: false,
             });
          } else {
-            console.log(
-               "🔍 [AUTH STORE] ❌ Login failed, setting unauthenticated state"
-            );
-            console.log("🔍 [AUTH STORE] Response details:", {
-               success: response.success,
-               hasData: !!response.data,
-               userId: response.data?.userId,
-               id: response.data?.id,
-            });
-            // Even if API login technically succeeded but lacked data, treat as not logged in for store
-            set({ isAuthenticated: false, user: null, loading: false });
+            set({ isAuthenticated: false, session: null, loading: false });
          }
-         console.log("🔍 [AUTH STORE] Returning response:", response);
          return response;
       } catch (error) {
-         console.error("🔍 [AUTH STORE] login error:", error);
-         set({ isAuthenticated: false, user: null, loading: false });
+         set({ isAuthenticated: false, session: null, loading: false });
          return {
             message: error.message || "Login failed in store",
             success: false,
@@ -188,15 +140,28 @@ function createAuthStore() {
       update((state) => ({ ...state, loading: true }));
       try {
          const response = await authApi.logout();
-         set({ isAuthenticated: false, user: null, loading: false });
+         set({ isAuthenticated: false, session: null, loading: false });
          return response;
       } catch (error) {
          console.error("authStore logout error:", error);
-         set({ isAuthenticated: false, user: null, loading: false });
+         set({ isAuthenticated: false, session: null, loading: false });
          return {
             message: error.message || "Logout failed in store",
             success: false,
          };
+      }
+   }
+
+   /**
+    * checkReferer
+    * @description Checks the referer header for identification of Schema
+    * @returns {Promise<Object>} API response
+    */
+   async function checkReferer() {
+      const referer = extractRefererHeader();
+      if (referer) {
+         const response = await authApi.checkReferer(referer);
+         return response;
       }
    }
 
@@ -209,6 +174,7 @@ function createAuthStore() {
       subscribe,
       checkAuth,
       checkSession,
+      checkReferer,
       login,
       register,
       logout,

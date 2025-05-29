@@ -1,24 +1,19 @@
 // CRUD operations for users table (Postgres multi-tenant)
 
-import * as queries from "../connection/queries.js";
+import { User } from "../../models/models.js";
+import * as queries from "../connection/queries/queries.js";
+import getPool from "../connection/pools/auth.js";
 
-// Note: Every function receives a `schema` arg so the caller decides which
-// tenant DB it wants to operate on. This keeps the repo thin & generic.
 
-const createUser = async (
-   pool,
-   schemaName,
-   { id, name, role, email, password_hash }
-) => {
-   const client = await pool.connect();
+const createUser = async (user) => {
+   const pool = await getPool();
    try {
-      await client.query(`SET search_path TO ${schemaName}, public;`);
-      const { rows } = await client.query(queries.createUser, [
-         id,
-         name,
-         role,
-         email,
-         password_hash,
+      const { rows } = await pool.query(queries.createUser, [
+         user.id,
+         user.name,
+         user.role,
+         user.email,
+         user.password_hash,
       ]);
       return rows[0];
    } finally {
@@ -27,60 +22,61 @@ const createUser = async (
 };
 
 // Batch insert helper
-const createUsers = async (pool, schemaName, users) => {
+const createUsers = async (users) => {
    const created = [];
-   // It's more efficient to do this on a single client if possible,
-   // but for simplicity and to ensure search_path is set for each createUser call in this structure:
    for (const u of users) {
-      // Pass schemaName to createUser
-      const res = await createUser(pool, schemaName, u);
+      const res = await createUser(u);
       created.push(res);
    }
    return created;
 };
 
-const getUsers = async (pool, schemaName) => {
-   const client = await pool.connect();
+const getUsers = async () => {
+   const pool = await getPool();
    try {
-      await client.query(`SET search_path TO ${schemaName}, public;`);
-      const { rows } = await client.query(queries.getUsers);
+      const { rows } = await pool.query(queries.getUsers);
       return rows;
    } finally {
       client.release();
    }
 };
 
-const getUser = async (pool, schemaName, id) => {
-   const client = await pool.connect();
+const getUser = async (id) => {
+   const pool = await getPool();
    try {
-      await client.query(`SET search_path TO ${schemaName}, public;`);
-      const { rows } = await client.query(queries.getUserById, [id]);
+      const { rows } = await pool.query(queries.getUserById, [id]);
       return rows[0];
    } finally {
       client.release();
    }
 };
 
-const getUserByEmail = async (pool, schemaName, email) => {
-   const client = await pool.connect();
+const getUserByEmail = async (email) => {
+   const pool = await getPool();
    try {
-      await client.query(`SET search_path TO ${schemaName}, public;`);
-      const { rows } = await client.query(queries.getUserByEmail, [email]);
+      const { rows } = await pool.query(queries.getUserByEmail, [email]);
       return rows[0];
    } finally {
       client.release();
    }
 };
 
-const updateUser = async (
-   pool,
-   schemaName,
-   { id, name, role, email, password_hash }
-) => {
-   const client = await pool.connect();
+const getUserByEmailAndPassword = async (email, password) => {
+   const pool = await getPool();
    try {
-      await client.query(`SET search_path TO ${schemaName}, public;`);
-      const { rows } = await client.query(queries.updateUser, [
+      const { rows } = await pool.query(queries.getUserByEmailAndPassword, [
+         email,
+         password,
+      ]);
+      return rows[0];
+   } finally {
+      client.release();
+   }
+};
+const updateUser = async ({ id, name, role, email, password_hash }) => {
+   const pool = await getPool();
+   try {
+      const { rows } = await pool.query(queries.updateUser, [
          name,
          role,
          email,
@@ -93,11 +89,10 @@ const updateUser = async (
    }
 };
 
-const deleteUser = async (pool, schemaName, id) => {
-   const client = await pool.connect();
+const deleteUser = async (id) => {
+   const pool = await getPool();
    try {
-      await client.query(`SET search_path TO ${schemaName}, public;`);
-      await client.query(queries.deleteUser, [id]);
+      await pool.query(queries.deleteUser, [id]);
    } finally {
       client.release();
    }

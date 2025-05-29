@@ -1,6 +1,9 @@
 /**
- * Utility for handling return URL storage and retrieval
- * Used by Login and Register components to avoid code duplication
+ * Utility for handling URL storage and retrieval
+ * 
+ * used by Backend to detect schema
+ * 
+ * 
  */
 
 /**

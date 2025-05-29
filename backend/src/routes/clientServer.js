@@ -1,5 +1,5 @@
 import express from "express";
-import clientServerService from "../services/clientServerService.js";
+import * as service from "../services/clientServerservice.js";
 import { authenticateClientServer } from "../middleware/clientServerAuth.js";
 import { isAuthenticated, hasRole } from "../middleware/auth.js";
 
@@ -36,7 +36,7 @@ const router = express.Router();
  */
 router.post("/register", async (req, res, next) => {
    try {
-      const result = await clientServerService.registerClientServer(req);
+      const result = await service.registerClientServer(req);
       res.status(201).json(result);
    } catch (error) {
       next(error);
@@ -49,7 +49,7 @@ router.post("/register", async (req, res, next) => {
  */
 router.post("/handshake", async (req, res, next) => {
    try {
-      const result = await clientServerService.authenticateClientServer(req);
+      const result = await service.authenticateClientServer(req);
       res.json(result);
    } catch (error) {
       next(error);
@@ -64,7 +64,7 @@ router.post("/handshake", async (req, res, next) => {
  */
 router.get("/me", authenticateClientServer, async (req, res, next) => {
    try {
-      const result = await clientServerService.getClientServerInfo(req);
+      const result = await service.getClientServerInfo(req);
       res.json(result);
    } catch (error) {
       next(error);
@@ -77,7 +77,7 @@ router.get("/me", authenticateClientServer, async (req, res, next) => {
  */
 router.put("/me", authenticateClientServer, async (req, res, next) => {
    try {
-      const result = await clientServerService.updateClientServer(
+      const result = await service.updateClientServer(
          req.clientContext.client_id,
          req.body
       );
@@ -93,29 +93,25 @@ router.put("/me", authenticateClientServer, async (req, res, next) => {
  * Register client server for logged-in user
  * POST /api/clientServer/user/register
  */
-router.post(
-   "/user/register",
-   isAuthenticated,
-   async (req, res, next) => {
-      console.log(
-         "🚀 [ROUTE] /api/clientServer/user/register: Entered route handler. Body:",
-         JSON.stringify(req.body, null, 2),
-         "Session UserID:",
-         req.session?.userId
+router.post("/user/register", isAuthenticated, async (req, res, next) => {
+   console.log(
+      "🚀 [ROUTE] /api/clientServer/user/register: Entered route handler. Body:",
+      JSON.stringify(req.body, null, 2),
+      "Session UserID:",
+      req.session?.userId
+   );
+   try {
+      const result = await service.registerClientServerForUser(
+         req.body,
+         req // Pass entire request object
       );
-      try {
-         const result = await clientServerService.registerClientServerForUser(
-            req.body,
-            req // Pass entire request object
-         );
-         console.log("POST /api/clientServer/user/register");
-         console.log(req.body);
-         res.status(201).json(result);
-      } catch (error) {
-         next(error);
-      }
+      console.log("POST /api/clientServer/user/register");
+      console.log(req.body);
+      res.status(201).json(result);
+   } catch (error) {
+      next(error);
    }
-);
+});
 
 /**
  * Get all client servers for authenticated user
@@ -125,7 +121,7 @@ router.get("/user/clients", isAuthenticated, async (req, res, next) => {
    console.log("GET /api/clientServer/user/clients");
    console.log(req.user);
    try {
-      const result = await clientServerService.getUserClientServers(req);
+      const result = await service.getUserClientServers(req);
       res.json(result);
    } catch (error) {
       next(error);
@@ -141,7 +137,7 @@ router.get(
    isAuthenticated,
    async (req, res, next) => {
       try {
-         const result = await clientServerService.getUserClientServer(
+         const result = await service.getUserClientServer(
             req,
             req.params.client_id
          );
@@ -161,7 +157,7 @@ router.put(
    isAuthenticated,
    async (req, res, next) => {
       try {
-         const result = await clientServerService.updateUserClientServer(
+         const result = await service.updateUserClientServer(
             req,
             req.params.client_id,
             req.body
@@ -182,7 +178,7 @@ router.delete(
    isAuthenticated,
    async (req, res, next) => {
       try {
-         const result = await clientServerService.deleteUserClientServer(
+         const result = await service.deleteUserClientServer(
             req,
             req.params.client_id
          );
@@ -205,9 +201,7 @@ router.get(
    hasRole("admin"),
    async (req, res, next) => {
       try {
-         const result = await clientServerService.getClientServerInfo(
-            req.params.client_id
-         );
+         const result = await service.getClientServerInfo(req.params.client_id);
          res.json(result);
       } catch (error) {
          next(error);
@@ -225,9 +219,7 @@ router.delete(
    hasRole("admin"),
    async (req, res, next) => {
       try {
-         const result = await clientServerService.deleteClientServer(
-            req.params.client_id
-         );
+         const result = await service.deleteClientServer(req.params.client_id);
          res.json(result);
       } catch (error) {
          next(error);

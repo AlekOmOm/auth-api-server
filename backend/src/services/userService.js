@@ -1,23 +1,36 @@
-import repo from "../repo/userRepository.js";
+import { userRepo as userAuthInternalRepo } from "../repo/repositories/userRepository.js";
+import { userRepo as userClientAppRepo } from "../repo/clientAppRepository.js"; // For client app tenant operations
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.js";
+import hashing from "../utils/hashing.js";
 
 // ---- utils ----
 import { removePasswordFromUser } from "../utils/authUtils.js";
 
+// ---- Helper to get the correct repository based on schema ----
+function getRepo(schema) {
+   if (schema === "auth_internal") {
+      return userAuthInternalRepo;
+   } else {
+      return userClientAppRepo;
+   }
+}
+
 // ---- service ----
 
-// Read all users
+/**
+ * Read all users
+ * @param {string} schema - The database schema
+ * @returns {Promise<Object>} Formatted response with users or error
+ */
 export async function getUsers(schema) {
    try {
+      const repo = getRepo(schema);
       const users = await repo.getUsers(schema);
-
-      // Filter sensitive data
-      const filteredUsers = users.map((user) => removePasswordFromUser(user));
 
       return {
          message: "Users retrieved successfully",
          data: {
-            users: filteredUsers,
+            users: users.map((user) => removePasswordFromUser(user)),
          },
       };
    } catch (error) {
@@ -25,13 +38,52 @@ export async function getUsers(schema) {
    }
 }
 
-// Read user by id
+/**
+ * get user
+ * - byId
+ * - byNameAndEmail
+ *
+ * @returns {Object} {
+ *    message: string,
+ *    data: User
+ * }
+ */
+export async function getUser(req, unhashedPassword = false) {
+   try {
+      if (req.body.id) {
+         const res = await getUserById(req.body.id, req.session.schema);
+         if (res.data) {
+            return res;
+         }
+      }
+
+      if (req.body.name && req.body.email) {
+         return await getUserByNameAndEmail(
+            req.body.name,
+            req.body.email,
+            req.session.schema,
+            unhashedPassword
+         );
+      }
+
+      throw new ValidationError("User ID or name and email are required");
+   } catch (error) {
+      throw error;
+   }
+}
+
+/**
+ * Read user by id
+ * @param {string} id - User ID
+ * @param {string} schema - The database schema
+ * @returns {Promise<Object>} Formatted response with user data or error
+ */
 export async function getUserById(id, schema) {
    try {
       if (!id) {
          throw new ValidationError("User ID is required");
       }
-
+      const repo = getRepo(schema);
       const user = await repo.getUser(schema, id);
 
       if (!user) {
@@ -50,39 +102,56 @@ export async function getUserById(id, schema) {
    }
 }
 
-// Read user by email
-export async function getUserByNameAndEmail(name, email, schema) {
+/**
+ * Read user by email
+ * @param {string} name - User's name
+ * @param {string} email - User's email
+ * @param {string} schema - The database schema
+ * @returns {Promise<Object>} Formatted response with user data or error
+ */
+export async function getUserByNameAndEmail(
+   name,
+   email,
+   schema,
+   forLogin = false,
+   password = null
+) {
    try {
       if (!name || !email) {
          throw new ValidationError("Name and email are required");
       }
-
-      const user = await repo.getUserByNameAndEmail(schema, name, email);
+      const repo = getRepo(schema);
+      let user = await repo.getUserByNameAndEmail(schema, name, email);
 
       if (!user) {
          throw new NotFoundError("User not found");
       }
 
-      // Filter sensitive data
-      const filteredUser = removePasswordFromUser(user);
-
+      if (forLogin && !hashing.same(password, user.password)) {
+         throw new ValidationError("Invalid password");
+      }
       return {
          message: "User retrieved successfully",
-         data: filteredUser,
+         data: removePasswordFromUser(user),
       };
    } catch (error) {
       throw error;
    }
 }
 
-// Create user
+/**
+ * Create user
+ * @param {Object} user - User data (name, email, password, role?)
+ * @param {string} schema - The database schema
+ * @returns {Promise<Object>} Formatted response with created user data or error
+ */
 export async function createUser(user, schema) {
    try {
       if (!user || !user.name || !user.email || !user.password) {
          throw new ValidationError("Name, email, and password are required");
       }
+      const repo = getRepo(schema);
 
-      // Set default role if not provided
       const userWithRole = {
          ...user,
          role: user.role || "user",
@@ -112,12 +181,19 @@ export async function createUser(user, schema) {
    }
 }
 
-// Update user
+/**
+ * Update user
+ * @param {string} id - User ID
+ * @param {Object} userData - Fields to update
+ * @param {string} schema - The database schema
+ * @returns {Promise<Object>} Formatted response with updated user data or error
+ */
 export async function updateUser(id, userData, schema) {
    try {
       if (!id) {
          throw new ValidationError("User ID is required");
       }
+      const repo = getRepo(schema);
 
       // Get existing user
       const existingUser = await repo.getUser(schema, id);
@@ -157,13 +233,18 @@ export async function updateUser(id, userData, schema) {
    }
 }
 
-// Delete user
+/**
+ * Delete user
+ * @param {string} id - User ID
+ * @param {string} schema - The database schema
+ * @returns {Promise<Object>} Formatted success response or error
+ */
 export async function deleteUser(id, schema) {
    try {
       if (!id) {
          throw new ValidationError("User ID is required");
       }
-
+      const repo = getRepo(schema);
       const user = await repo.getUser(schema, id);
 
       if (!user) {
@@ -181,6 +262,7 @@ export async function deleteUser(id, schema) {
 }
 
 const userService = {
+   getUser,
    getUsers,
    getUserById,
    getUserByNameAndEmail,

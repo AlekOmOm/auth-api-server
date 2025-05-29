@@ -17,20 +17,19 @@ export default defineConfig(({ command, mode }) => {
 
    const FRONTEND_HOST = isProd
       ? env.PROD_FRONTEND_HOST || "localhost"
-      : env.DEV_FRONTEND_HOST || "localhost";
+      : "frontend";
 
    const BACKEND_PORT = isProd
       ? env.PROD_BACKEND_PORT || 3001
       : env.DEV_BACKEND_PORT || 3001;
 
    const BACKEND_HOST = isProd
-      ? env.PROD_BACKEND_HOST || "localhost"
-      : env.VITE_PROXY_TARGET_HOST || env.DEV_BACKEND_HOST || "localhost";
+      ? process.env.PROD_BACKEND_HOST || "localhost"
+      : "backend";
 
-   // --- urls ---
    const BACKEND_URL = isProd
       ? `http://${BACKEND_HOST}:${BACKEND_PORT}`
-      : `http://${BACKEND_HOST}:${BACKEND_PORT}`;
+      : `http://backend:3001`;
 
    const apiUrl = isProd
       ? `http://${BACKEND_HOST}:${BACKEND_PORT}/api`
@@ -42,7 +41,8 @@ export default defineConfig(({ command, mode }) => {
       server: {
          port: FRONTEND_PORT,
          host: FRONTEND_HOST,
-         // proxy calls to backend on /api
+
+         // proxy object
          proxy: {
             "/api": {
                target: BACKEND_URL,

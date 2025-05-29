@@ -1,172 +1,129 @@
-import { fetchGet, fetchPost } from "../util/fetch";
-import { authStore } from "../stores/authStore";
+import { fetchGet, fetchPost, fetchPut, fetchDelete } from "../util/fetch";
 
-const BACKEND_URL =
-   import.meta.env.VITE_BACKEND_URL || "http://localhost:3001/api";
-
-const BACKEND_URL_AUTH = `${BACKEND_URL}/clientServer`;
+const BACKEND_URL_CLIENT_SERVER = "/api/clientServer";
+const BACKEND_URL_OWNER = "/api/owner";
 
 /**
- * Register a new user
- * @param {Object} credentials - User credentials with username and password
- * @returns {Promise<Object>} Registration result with success status
+ * Fetches all client servers for the authenticated user.
+ * @returns {Promise<Object>} The result of the fetch operation.
  */
-
-/**
- * 
- * {
- * 
- * }
- */
-const register = async (credentials) => {
+const getClientServers = async () => {
    try {
-
-      // Input validation
-      if (!credentials.name || !credentials.email || !credentials.password) {
-         return {
-            message: "Name, email and password are required",
-            success: false,
-         };
-      }
-
-      // fetchPost now returns an object like { success: boolean, data: ..., errors: ..., message: ... }
-      const response = await fetchPost(
-         `${BACKEND_URL_AUTH}/register`,
-         credentials
+      const response = await fetchGet(
+         `${BACKEND_URL_CLIENT_SERVER}/user/clients`
       );
-
-      if (!response.success) {
-         return response;
-      }
-
-      // --- Added: Update authStore on successful registration ---
-      if (response.data && response.data.userId) {
-         // Registration successful, but don't auto-login - let user login manually
-         // console.log("Registration successful for user:", response.data.userId);
-      } else {
-         console.warn(
-            "Registration successful, but user data missing in response."
-         );
-      }
-      // Return the successful response object
       return response;
    } catch (error) {
-      // This catch block should now ideally only handle unexpected errors *within this function's logic*,
-      // as fetchPost catches its own errors.
-      console.error("Unexpected error in authApi.register:", error);
+      console.error("Error in getClientServers:", error);
+      // Return a consistent error object structure as expected by fetch.js error handling
       return {
-         message:
-            error.message || "An unexpected error occurred during registration",
          success: false,
+         message: error.message || "Failed to fetch client servers.",
+         data: [],
       };
    }
 };
 
 /**
- * Login a user with credentials
- * @param {Object} credentials - User credentials with email and password (name removed)
- * @returns {Promise<Object>} Login result with success status
- * - invalid input (credentials):
- *    {
- *       message: ...,
- *       success: false,
- *    }
- * - sucess:
- *    {
- *       data: {
- *          ... // user data
- *          allowedUrls: [...],
- *       },
- *       message: ...,
- *       errors: ...,
- *    }
- * - failure:
- *    {
- *       message: ...,
- *       success: false,
- *    }
+ * Fetches owner statistics.
+ * @returns {Promise<Object>} The result of the fetch operation.
  */
-const login = async (credentials, returnUrl = null) => {
+const getOwnerStats = async () => {
    try {
-      // validation
-      if (!credentials.email || !credentials.password) {
-         return {
-            message: "Email and password are required",
-            success: false,
-         };
-      }
-      /**
-       * sends Post request to /login
-       *
-       * req:
-       *   {
-       *     body: {
-       *       credentials: { email, password },
-       *       returnUrl: ...
-       *     }
-       *   }
-       */
-      const response = await fetchPost(`${BACKEND_URL_AUTH}/login`, {
-         credentials,
-         returnUrl,
-      });
-
-      if (!response.success) {
-         return {
-            ...response,
-            success: false,
-         };
-      }
-
-      // success
-      return {
-         ...response,
-         success: true,
-      };
+      const response = await fetchGet(`${BACKEND_URL_OWNER}/stats`);
+      return response;
    } catch (error) {
-      console.error("Login error:", error);
+      console.error("Error in getOwnerStats:", error);
       return {
-         message: error.message || "Login failed",
          success: false,
+         message: error.message || "Failed to fetch owner stats.",
+         data: null,
       };
    }
 };
 
 /**
- * Logout the current user
- * @returns {Promise<Object>} Logout result with success status
+ * Deletes a specific client server.
+ * @param {string} clientId - The ID of the client server to delete.
+ * @returns {Promise<Object>} The result of the delete operation.
  */
-const logout = async () => {
+const deleteClientServer = async (clientId) => {
    try {
-      const response = await fetchPost(`${BACKEND_URL_AUTH}/logout`, {});
-
-      // Return the actual response from backend, don't override success
-      if (response.success) {
+      if (!clientId) {
          return {
-            ...response,
-            success: true,
-         };
-      } else {
-         console.error("Backend logout failed:", response);
-         return {
-            ...response,
             success: false,
+            message: "Client ID is required for deletion.",
          };
       }
+      const response = await fetchDelete(
+         `${BACKEND_URL_CLIENT_SERVER}/user/clients/${clientId}`
+      );
+      return response;
    } catch (error) {
-      console.error("Logout error:", error);
+      console.error("Error in deleteClientServer:", error);
       return {
-         message: error.message || "Logout failed",
          success: false,
+         message: error.message || "Failed to delete client server.",
       };
    }
 };
 
-// --- export ---
-const authApi = {
-   register,
-   login,
-   logout,
+/**
+ * Creates a new client server for the logged-in user.
+ * @param {Object} clientData - The data for the new client server (e.g., { app_name, allowed_return_urls }).
+ * @returns {Promise<Object>} The result of the create operation.
+ */
+const createClientServer = async (clientData) => {
+   try {
+      // Endpoint corrected based on backend/src/routes/clientServer.js
+      const response = await fetchPost(
+         `${BACKEND_URL_CLIENT_SERVER}/user/register`,
+         clientData
+      );
+      return response;
+   } catch (error) {
+      console.error("Error in createClientServer:", error);
+      return {
+         success: false,
+         message: error.message || "Failed to create client server.",
+      };
+   }
 };
 
-export default authApi;
+/**
+ * Updates an existing client server.
+ * @param {string} clientId - The ID of the client server to update.
+ * @param {Object} clientData - The data to update the client server with.
+ * @returns {Promise<Object>} The result of the update operation.
+ */
+const updateClientServer = async (clientId, clientData) => {
+   try {
+      if (!clientId) {
+         return {
+            success: false,
+            message: "Client ID is required for update.",
+         };
+      }
+      const response = await fetchPut(
+         `${BACKEND_URL_CLIENT_SERVER}/user/clients/${clientId}`,
+         clientData
+      );
+      return response;
+   } catch (error) {
+      console.error("Error in updateClientServer:", error);
+      return {
+         success: false,
+         message: error.message || "Failed to update client server.",
+      };
+   }
+};
+
+const clientServerApi = {
+   getClientServers,
+   getOwnerStats,
+   deleteClientServer,
+   createClientServer,
+   updateClientServer,
+};
+
+export default clientServerApi;

@@ -23,6 +23,7 @@ make setup-backend; make dev-backend
 ```
 
 ## docs
+[multi-tenant](./docs/multi-tenant.md)
 [frontend](./frontend/README.md)
 
 

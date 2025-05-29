@@ -2,13 +2,14 @@
   import { onMount } from 'svelte';
   import { authStore } from '../../stores/authStore.js';
   import { get } from 'svelte/store';
+  import clientServerApi from '../../services/clientServerApi.js';
   import ClientServerCard from './components/ClientServerCard.svelte';
   import CreateClientModal from './components/CreateClientModal.svelte';
   import UserManagementModal from './components/UserManagementModal.svelte';
   import OwnerStats from './components/OwnerStats.svelte';
 
-  // Backend URL configuration
-  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:3001/api";
+  // Backend URL configuration - No longer directly needed here for these calls
+  // const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:3001/api";
 
   let clientServers = $state([]);
   let loading = $state(true);
@@ -25,8 +26,6 @@
 
   async function loadOwnerData() {
     let localError = '';
-    let localLoadingDone = false;
-
     loading = true;
     error = '';
 
@@ -49,12 +48,10 @@
 
       await loadClientServers();
       
-      // Load owner stats (non-critical, don't fail if it errors)
       try {
         await loadOwnerStats();
       } catch (statsError) {
         console.warn('Owner stats failed to load, continuing without stats:', statsError);
-        // Don't throw - continue with the panel even if stats fail
       }
 
     } catch (err) {
@@ -68,16 +65,12 @@
 
   async function loadClientServers() {
     try {
-      const response = await fetch(`${BACKEND_URL}/clientServer/user/clients`, {
-        credentials: 'include'
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      const response = await clientServerApi.getClientServers();
+      if (response.success) {
+        clientServers = response.data || [];
+      } else {
+        throw new Error(response.message || 'Failed to load client servers from API.');
       }
-
-      const result = await response.json();
-      clientServers = result.data || [];
     } catch (err) {
       console.error('Error loading client servers:', err);
       throw err;
@@ -86,16 +79,16 @@
 
   async function loadOwnerStats() {
     try {
-      const response = await fetch(`${BACKEND_URL}/owner/stats`, {
-        credentials: 'include'
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        ownerStats = result.data;
+      const response = await clientServerApi.getOwnerStats();
+      if (response.success) {
+        ownerStats = response.data;
+      } else {
+        console.warn('Failed to load owner stats from API:', response.message);
+        ownerStats = null;
       }
     } catch (err) {
-      console.error('Error loading owner stats:', err);
+      console.error('Error loading owner stats via API:', err);
+      ownerStats = null;
     }
   }
 
@@ -110,7 +103,7 @@
 
   function handleEditClient(clientServer) {
     selectedClientServer = clientServer;
-    showCreateModal = true; // Reuse create modal for editing
+    showCreateModal = true;
   }
 
   async function handleDeleteClient(clientServer) {
@@ -119,22 +112,18 @@
     }
 
     try {
-      const response = await fetch(`${BACKEND_URL}/clientServer/user/clients/${clientServer.client_id}`, {
-        method: 'DELETE',
-        credentials: 'include'
-      });
+      const response = await clientServerApi.deleteClientServer(clientServer.client_id);
 
-      if (!response.ok) {
-        throw new Error(`Failed to delete client server: ${response.statusText}`);
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to delete client server via API.');
       }
 
-      // Reload client servers
       await loadClientServers();
       await loadOwnerStats();
       
     } catch (err) {
       console.error('Error deleting client server:', err);
-      alert('Failed to delete client server: ' + err.message);
+      alert('Failed to delete client server: ' + (err.message || 'Unknown error'));
     }
   }
 
