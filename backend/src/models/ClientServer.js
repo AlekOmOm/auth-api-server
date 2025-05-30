@@ -320,6 +320,31 @@ class ClientServer extends BaseModel {
    }
 
    /**
+    * Static factory method to create a ClientServer instance
+    * @param {Object} requestBody -
+    * @param {string} [userId=null] - Optional user ID.
+    * @returns {ClientServer} A new ClientServer instance.
+    */
+   static forLogin(requestBody, userId = null) {
+      const {
+         app_name: appName,
+         identifier_url: identifierUrl,
+         entry_point_url: entryPointUrl,
+         authorized_urls: authorizedUrls,
+         client_mode: clientMode,
+      } = requestBody || {};
+
+      return new ClientServer(
+         appName,
+         identifierUrl,
+         entryPointUrl,
+         authorizedUrls,
+         userId,
+         clientMode
+      );
+   }
+
+   /**
     * Convert to database-ready object (without plain secret)
     * @returns {Object} Object ready for database insertion
     */
@@ -398,6 +423,33 @@ class ClientServer extends BaseModel {
          delete response.client_secret;
       }
       return response;
+   }
+
+   /**
+    * Checks if the client server record is considered expired.
+    * Placeholder implementation, as expiry logic is not currently defined for ClientServer.
+    * @returns {boolean} True if expired, false otherwise.
+    */
+   isExpired() {
+      // Implementation depends on your expiry logic
+      // This is a placeholder that always returns false
+      return false;
+   }
+
+   /**
+    * Checks if the client server has an associated user ID.
+    * @returns {boolean} True if a user_id is present, false otherwise.
+    */
+   hasUser() {
+      return this.user_id != null;
+   }
+
+   /**
+    * Checks if the client server has an assigned schema name.
+    * @returns {boolean} True if an assigned_schema_name is present, false otherwise.
+    */
+   hasSchema() {
+      return this.assigned_schema_name != null;
    }
 }
 

@@ -61,9 +61,15 @@ export const reduceWith = curry((reducer, initial, arr) =>
 
 // --- OBJECT FUNCTIONS ---
 
-export const pick = curry((keys, obj) =>
-   keys.reduce((acc, key) => ({ ...acc, [key]: obj[key] }), {})
-);
+export const pick = curry((keys, obj) => {
+   const result = {};
+   for (const key of keys) {
+      if (key in obj) {
+         result[key] = obj[key];
+      }
+   }
+   return result;
+});
 
 export const omit = curry((keys, obj) => {
    const omitSet = new Set(keys);
