@@ -1,4 +1,5 @@
 /**
+ * ClientServer Model
  * 
  * schema files: 
  * - db/schemas/auth_internal/client_servers.sql
@@ -49,8 +50,9 @@ CREATE INDEX IF NOT EXISTS idx_sessions_session_id ON sessions(session_id);
 import { v4 as uuidv4 } from "uuid";
 import bcrypt from "bcrypt";
 import { ValidationError, NotFoundError } from "../middleware/errorHandler.js";
+import BaseModel from "./base/BaseModel.js";
 
-class ClientServer {
+class ClientServer extends BaseModel {
    constructor(
       appName,
       identifierUrl,
@@ -59,6 +61,8 @@ class ClientServer {
       userId = null,
       clientMode = "frontend-login-proxy"
    ) {
+      super(); // Initialize BaseModel
+
       this.app_name = appName;
       this.identifier_url = identifierUrl;
       this.entry_point_url = entryPointUrl;
@@ -68,13 +72,89 @@ class ClientServer {
 
       // Generate unique identifiers
       this.client_id = `client_${uuidv4().replace(/-/g, "")}`;
-      this.assigned_schema_name = `client_${appName
-         .toLowerCase()
-         .replace(/[^a-z0-9]/g, "_")}_${Date.now()}`;
+      this.assigned_schema_name = ClientServer.sanitizeSchemaName(
+         `client_${appName}_${Date.now()}`
+      );
 
       // Will store the plain secret (for returning to user) and hashed version
       this.client_secret = null;
       this.client_secret_hash = null;
+
+      // Run validation
+      this.validate();
+   }
+
+   /**
+    * Validate ClientServer instance
+    * Uses ValidationMixin methods available through BaseModel
+    */
+   validate() {
+      this.clearErrors();
+
+      // Required fields
+      this.validateRequired([
+         "app_name",
+         "identifier_url",
+         "entry_point_url",
+         "authorized_urls",
+      ]);
+
+      // URL validations
+      if (
+         this.identifier_url &&
+         !ClientServer.isValidUrl(this.identifier_url)
+      ) {
+         this.addError("Invalid identifier URL format", "identifier_url");
+      }
+
+      if (
+         this.entry_point_url &&
+         !ClientServer.isValidUrl(this.entry_point_url)
+      ) {
+         this.addError("Invalid entry point URL format", "entry_point_url");
+      }
+
+      // Authorized URLs validation
+      if (this.authorized_urls) {
+         if (!ClientServer.isNonEmptyArray(this.authorized_urls)) {
+            this.addError(
+               "Authorized URLs must be a non-empty array",
+               "authorized_urls"
+            );
+         } else {
+            const urlValidation = ClientServer.validateUrlArray(
+               this.authorized_urls,
+               true
+            ); // Allow insecure in dev
+            if (!urlValidation.valid) {
+               this.addError(urlValidation.error, "authorized_urls");
+            }
+         }
+      }
+
+      // Client mode validation
+      if (
+         this.client_mode &&
+         !ClientServer.isValidClientMode(this.client_mode)
+      ) {
+         this.addError(
+            "Invalid client mode. Must be: frontend-login-proxy or api-auth-server",
+            "client_mode"
+         );
+      }
+
+      // App name validation
+      if (
+         this.app_name &&
+         !ClientServer.validateStringLength(this.app_name, 1, 255)
+      ) {
+         this.addError(
+            "App name must be between 1 and 255 characters",
+            "app_name"
+         );
+      }
+
+      return this;
    }
 
    /**
@@ -93,28 +173,6 @@ class ClientServer {
          client_mode: clientMode = "frontend-login-proxy",
       } = requestBody;
 
-      // Validate required fields
-      if (
-         !appName ||
-         !identifierUrl ||
-         !entryPointUrl ||
-         !authorizedUrls ||
-         !Array.isArray(authorizedUrls)
-      ) {
-         throw new ValidationError(
-            "app_name, identifier_url, entry_point_url, and authorized_urls (array) are required"
-         );
-      }
-
-      // Validate URLs
-      try {
-         new URL(identifierUrl);
-         new URL(entryPointUrl);
-         authorizedUrls.forEach((url) => new URL(url));
-      } catch (error) {
-         throw new ValidationError("Invalid URL format provided");
-      }
-
       // Create and initialize the ClientServer
       const clientServer = new ClientServer(
          appName,
@@ -124,6 +182,14 @@ class ClientServer {
          userId,
          clientMode
       );
+
+      // Check if valid
+      if (!clientServer.isValid()) {
+         throw new ValidationError(
+            "Invalid client server data",
+            clientServer.getErrors()
+         );
+      }
 
       await clientServer.generateClientSecret();
       return clientServer;
@@ -155,32 +221,21 @@ class ClientServer {
          }
       });
 
-      // Validate URLs if provided
-      if (updateData.identifier_url) {
-         try {
-            new URL(updateData.identifier_url);
-         } catch (error) {
-            throw new ValidationError("Invalid identifier_url format");
-         }
-      }
+      // Create a temporary instance for validation
+      const tempClient = new ClientServer(
+         updateData.app_name || existingClient.app_name,
+         updateData.identifier_url || existingClient.identifier_url,
+         updateData.entry_point_url || existingClient.entry_point_url,
+         updateData.authorized_urls || existingClient.authorized_urls,
+         existingClient.user_id,
+         updateData.client_mode || existingClient.client_mode
+      );
 
-      if (updateData.entry_point_url) {
-         try {
-            new URL(updateData.entry_point_url);
-         } catch (error) {
-            throw new ValidationError("Invalid entry_point_url format");
-         }
-      }
-
-      if (updateData.authorized_urls) {
-         if (!Array.isArray(updateData.authorized_urls)) {
-            throw new ValidationError("authorized_urls must be an array");
-         }
-         try {
-            updateData.authorized_urls.forEach((url) => new URL(url));
-         } catch (error) {
-            throw new ValidationError("Invalid URL format in authorized_urls");
-         }
+      if (!tempClient.isValid()) {
+         throw new ValidationError(
+            "Invalid update data",
+            tempClient.getErrors()
+         );
       }
 
       // Merge with existing data (keep existing values for fields not being updated)
@@ -235,6 +290,14 @@ class ClientServer {
          userId,
          clientMode
       );
+
+      if (!clientServer.isValid()) {
+         throw new ValidationError(
+            "Invalid client server data",
+            clientServer.getErrors()
+         );
+      }
+
       await clientServer.generateClientSecret();
       return clientServer;
    }
@@ -276,10 +339,6 @@ class ClientServer {
       ];
    }
 
-   static fromDbRows(dbRows) {
-      return dbRows.map((dbRow) => ClientServer.fromDb(dbRow));
-   }
-
    /**
     * Static factory method to create ClientServer from a database row
     * @param {Object} dbRow - The row object from the database
@@ -303,28 +362,94 @@ class ClientServer {
       clientServer.assigned_schema_name = dbRow.assigned_schema_name;
       clientServer.client_secret_hash = dbRow.client_secret_hash;
 
+      // Clear any validation errors since we're loading from DB
+      clientServer.clearErrors();
+
       return clientServer;
    }
-}
 
-class Session {
-   constructor(
-      id = null, // db generated
-      userId,
-      sessionId = null, // db generated
-      ipAddress = null,
-      userAgent = null,
-      createdAt = null, // db generated
-      expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 1)
-   ) {
-      this.id = id;
-      this.userId = userId;
-      this.sessionId = sessionId;
-      this.ipAddress = ipAddress;
-      this.userAgent = userAgent;
-      this.createdAt = createdAt;
-      this.expiresAt = expiresAt;
+   /**
+    * Convert to safe API response
+    * @returns {Object} ClientServer without sensitive data
+    */
+   toApiResponse() {
+      const response = super.toApiResponse();
+      // Never include the secret hash in API responses
+      delete response.client_secret_hash;
+      // Include plain secret only when it's just been generated
+      if (!this.client_secret) {
+         delete response.client_secret;
+      }
+      return response;
    }
 }
 
-export { ClientServer, Session };
+// --- FUNCTIONAL OPERATIONS FOR CLIENT SERVER ---
+
+/**
+ * Functional operations that work with ClientServer instances
+ */
+export const ClientServerOperations = {
+   // for repo pipelines
+   toDB: (clientServer) => clientServer.toDatabaseObject(),
+   fromDB: (dbRow) => ClientServer.fromDb(dbRow),
+
+   // Curried enrichment functions
+   enrichWithUser: curry((user, clientServer) => clientServer.withUser(user)),
+   enrichWithSchema: curry((schema, clientServer) =>
+      clientServer.withSchema(schema)
+   ),
+   extendExpiry: curry((hours, clientServer) =>
+      clientServer.withExtendedExpiry(hours)
+   ),
+
+   // Transformation pipelines
+   prepareForDatabase: (clientServer) => clientServer.toDatabaseObject(),
+   prepareForApi: (clientServer) => clientServer.toApiResponse(),
+
+   // Predicates
+   isValid: (clientServer) => clientServer.isValid(),
+   isExpired: (clientServer) => clientServer.isExpired(),
+   hasRequiredData: (clientServer) =>
+      clientServer.hasUser() && clientServer.hasSchema(),
+
+   // Composite operations
+   createAndEnrich: pipe(ClientServer.forLogin, (clientServer) =>
+      clientServer.isValid() ? clientServer : null
+   ),
+
+   // Filter operations
+   // - based on: referer, hash, assigned_schema_name
+   filterReferer: (clientServers, referer) =>
+      clientServers.filter(
+         (clientServer) =>
+            clientServer.identifier_url === referer ||
+            clientServer.entry_point_url === referer ||
+            clientServer.authorized_urls.includes(referer)
+      ),
+   filterHash: (clientServers, hash) =>
+      clientServers.filter(
+         (clientServer) => clientServer.client_secret_hash === hash
+      ),
+   filterSchema: (clientServers, schema) =>
+      clientServers.filter(
+         (clientServer) => clientServer.assigned_schema_name === schema
+      ),
+   filterValid: (clientServers) =>
+      clientServers.filter((clientServer) =>
+         ClientServerOperations.isValid(clientServer)
+      ),
+
+   // Sorting operations
+   // - created_at
+   // - updated_at
+   sortByCreatedAt: (clientServers) =>
+      [...clientServers].sort(
+         (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+      ),
+
+   sortByUpdatedAt: (clientServers) =>
+      [...clientServers].sort(
+         (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)
+      ),
+};

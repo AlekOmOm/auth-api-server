@@ -1,5 +1,5 @@
 import { userRepo as userAuthInternalRepo } from "../repo/repositories/userRepository.js";
-import { userRepo as userClientAppRepo } from "../repo/clientAppRepository.js"; // For client app tenant operations
+import { userRepo as userClientAppRepo } from "../repo/repositories/clientAppRepository.js"; // For client app tenant operations
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.js";
 import hashing from "../utils/hashing.js";
 

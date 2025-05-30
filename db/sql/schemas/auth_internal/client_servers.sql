@@ -18,5 +18,7 @@ CREATE TABLE client_servers (
 
 -- indexes: client_id, identifier_url, entry_point_url
 CREATE INDEX IF NOT EXISTS idx_client_servers_client_id ON client_servers(client_id);
+CREATE INDEX IF NOT EXISTS idx_client_servers_user_id ON client_servers(user_id);
 CREATE INDEX IF NOT EXISTS idx_client_servers_identifier_url ON client_servers(identifier_url);
 CREATE INDEX IF NOT EXISTS idx_client_servers_entry_point_url ON client_servers(entry_point_url);
+CREATE INDEX IF NOT EXISTS idx_client_servers_authorized_urls ON client_servers(authorized_urls);

@@ -7,7 +7,7 @@ import {
    removePasswordFromUser,
 } from "../utils/authUtils.js";
 import { userRepo as userAuthInternalRepo } from "../repo/repositories/userRepository.js";
-import { userRepo as userClientAppRepo } from "../repo/clientAppRepository.js";
+import { userRepo as userClientAppRepo } from "../repo/repositories/clientAppRepository.js";
 import { getAuthPool } from "../repo/connection/pools/auth.js";
 import * as clientServerService from "./clientServer.js";
 
@@ -197,13 +197,7 @@ export async function logout({ userId, schema, destroySession }) {
  * @param {string} params.refererUrl - Referer URL from registration
  * @returns {Object} Registration success response
  */
-export async function register({
-   userData,
-   schema,
-   poolContext,
-   poolMetadata,
-   refererUrl,
-}) {
+export async function register({ userData, schema, refererUrl }) {
    try {
       const userType = userData.userType || "client";
       let targetSchema;

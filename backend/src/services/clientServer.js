@@ -1,5 +1,5 @@
 import * as clientServerRepo from "../repo/repositories/authInternal/repository.js";
-import { ClientServer } from "../models/models.js";
+import { ClientServer } from "../models/ClientServer.js";
 
 /**
  * Service layer for Client Server CRUD operations
