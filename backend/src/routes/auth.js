@@ -22,7 +22,6 @@ import {
    getCurrentUser,
    getSessions,
    getSession,
-   checkReferer,
 } from "../controllers/auth.js";
 
 // --- middleware ---
@@ -45,9 +44,6 @@ router.get("/admin", isAuthenticated, hasRole("admin"), getCurrentUser);
 // --- session ---
 router.get("/session", isAuthenticated, getSession);
 router.post("/sessions", isAuthenticated, getSessions);
-
-// --- referer ---
-router.post("/check-referer", validation.checkReferer, checkReferer);
 
 // --- export ---
 export default router;

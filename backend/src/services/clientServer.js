@@ -1,6 +1,5 @@
 import * as clientServerRepo from "../repo/repositories/authInternal/repository.js";
 import { ClientServer } from "../models/models.js";
-import { getUserId, getClientId } from "../utils/session.js";
 
 /**
  * Service layer for Client Server CRUD operations
@@ -18,21 +17,22 @@ import { getUserId, getClientId } from "../utils/session.js";
 
 /**
  * Register a new client server (CREATE)
- * @param {Object} req - Express request object
+ * @param {Object} params - Parameters object
+ * @param {Object} params.clientServerData - Client server data from request body
+ * @param {string} params.userId - User ID from session
  * @returns {Object} {
  *    message: string,
  *    data: ClientServer
  * }
  */
-export async function registerClientServer(req) {
+export async function registerClientServer({ clientServerData, userId }) {
    try {
       const clientServer = await ClientServer.fromRequestBody(
-         req.body,
-         req.session.userId
+         clientServerData,
+         userId
       );
 
       const createdClientServer = await clientServerRepo.createClientServer(
-         req,
          clientServer
       );
 
@@ -47,18 +47,18 @@ export async function registerClientServer(req) {
 
 /**
  * Get all client servers for a user (READ - list)
- * @param {Object} req - Express request object with session
+ * @param {Object} params - Parameters object
+ * @param {string} params.userId - User ID from session
  * @returns {Object} {
  *    message: string,
  *    data: ClientServer[]
  * }
  */
-export async function getUserClientServers(req) {
+export async function getUserClientServers({ userId }) {
    try {
       // Repository now returns ClientServer instances
       const clientServers = await clientServerRepo.getClientServersByUserId(
-         req,
-         getUserId(req.session)
+         userId
       );
 
       return {
@@ -72,17 +72,18 @@ export async function getUserClientServers(req) {
 
 /**
  * Get specific client server for a user (READ - single)
- * @param {Object} req - Express request object with session
+ * @param {Object} params - Parameters object
+ * @param {string} params.userId - User ID from session
+ * @param {string} params.clientId - Client ID from session
  * @returns {Object} Client server details
  */
-export async function getUserClientServer(req) {
+export async function getUserClientServer({ userId, clientId }) {
    try {
       // Repository now returns ClientServer instance
       const clientServer =
          await clientServerRepo.getClientServerByUserIdAndClientId(
-            req,
-            getUserId(req.session),
-            getClientId(req.session)
+            userId,
+            clientId
          );
 
       return {
@@ -96,18 +97,19 @@ export async function getUserClientServer(req) {
 
 /**
  * Update client server for a user (UPDATE)
- * @param {Object} req - Express request object with session
- * @param {Object} updateData - Data to update
+ * @param {Object} params - Parameters object
+ * @param {string} params.userId - User ID from session
+ * @param {string} params.clientId - Client ID from session
+ * @param {Object} params.updateData - Data to update
  * @returns {Object} Updated client server
  */
-export async function updateUserClientServer(req, updateData) {
+export async function updateUserClientServer({ userId, clientId, updateData }) {
    try {
       // Repository now returns ClientServer instance
       const existingClient =
          await clientServerRepo.getClientServerByUserIdAndClientId(
-            req,
-            getUserId(req.session),
-            getClientId(req.session)
+            userId,
+            clientId
          );
 
       // Create ClientServer instance from validated update data
@@ -119,7 +121,6 @@ export async function updateUserClientServer(req, updateData) {
 
       // Repository now returns ClientServer instance
       const updatedClient = await clientServerRepo.updateClientServer(
-         req,
          clientServerToUpdate
       );
 
@@ -134,18 +135,18 @@ export async function updateUserClientServer(req, updateData) {
 
 /**
  * Delete client server for a user (owner only) (DELETE)
- * @param {Object} req - Express request object with session
- * @param {string} clientId - Client ID
+ * @param {Object} params - Parameters object
+ * @param {string} params.userId - User ID from session
+ * @param {string} params.clientId - Client ID from session
  * @returns {Object} Deletion response
  */
-export async function deleteUserClientServer(req) {
+export async function deleteUserClientServer({ userId, clientId }) {
    try {
       // Repository now returns ClientServer instance
       const deletedClient =
          await clientServerRepo.deleteClientServerByUserIdAndClientId(
-            req,
-            getUserId(req.session),
-            getClientId(req.session)
+            userId,
+            clientId
          );
 
       return {
@@ -159,16 +160,17 @@ export async function deleteUserClientServer(req) {
 
 /**
  * Verify API token and return client information
- * @param {string} token - API token to verify
+ * @param {Object} params - Parameters object
+ * @param {string} params.secretHash - Secret hash to verify
  * @returns {Object} {
  *    message: string,
  *    data: ClientServer
  * }
  */
-export async function verifySecretHash(req) {
+export async function verifySecretHash({ secretHash }) {
    try {
       const clientServer = await clientServerRepo.getClientServerBySecretHash(
-         req.body.secretHash
+         secretHash
       );
 
       if (!clientServer) {
@@ -186,30 +188,84 @@ export async function verifySecretHash(req) {
 
 /**
  * Check if referer URL is a registered URL
- * @param {Object} req - Express request object
+ * @param {Object} params - Parameters object
+ * @param {string} params.refererUrl - Referer URL to check
  * @returns {Object} {
  *    message: string,
  *    data: ClientServer
  * }
  */
-export async function checkReferer(req) {
+export async function checkReferer({ refererUrl }) {
    try {
-      const url = req.body.referer;
-      const clientServer = await clientServerRepo.getClientServerByReferer(url);
+      const clientServer = await clientServerRepo.getClientServerByReferer(
+         refererUrl
+      );
 
       if (!clientServer) {
          return {
+            success: false,
             message: "Referer URL is not a registered URL",
             data: null,
          };
       }
 
       return {
+         success: true,
          message: "Referer URL is a registered URL",
          data: clientServer,
       };
    } catch (error) {
-      throw error;
+      console.error(
+         `[ClientServerService] Error in checkReferer for ${refererUrl}:`,
+         error
+      );
+      return {
+         success: false,
+         message:
+            error.message ||
+            "An unexpected error occurred while checking the referer.",
+         data: null,
+      };
+   }
+}
+
+/**
+ * Get client server details by one of its URLs (identifier_url or an authorized_url)
+ * This is used by auth service during registration to find the schema from referer.
+ * @param {string} url - The URL to look up
+ * @returns {Promise<Object|null>} Client server data or null if not found. Structure: { success: boolean, data?: ClientServer, message?: string }
+ */
+export async function getClientServerByUrl(url) {
+   try {
+      console.log(
+         `[ClientServerService] Attempting to find client server by URL: ${url}`
+      );
+      const clientServer = await clientServerRepo.findClientServerByUrl(url);
+
+      if (clientServer) {
+         console.log(
+            `[ClientServerService] Found client server for URL ${url}:`,
+            clientServer.name
+         );
+         return { success: true, data: clientServer };
+      } else {
+         console.log(
+            `[ClientServerService] No client server found for URL ${url}`
+         );
+         return {
+            success: false,
+            message: "Client server not found for the given URL.",
+         };
+      }
+   } catch (error) {
+      console.error(
+         `[ClientServerService] Error in getClientServerByUrl for ${url}:`,
+         error
+      );
+      return {
+         success: false,
+         message: error.message || "Error finding client server by URL.",
+      };
    }
 }
 
@@ -220,6 +276,8 @@ export const clientServerService = {
    updateUserClientServer,
    deleteUserClientServer,
    verifySecretHash,
+   checkReferer,
+   getClientServerByUrl,
 };
 
 export default clientServerService;

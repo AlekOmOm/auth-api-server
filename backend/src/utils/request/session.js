@@ -1,4 +1,5 @@
-import { POOL_CONTEXTS } from "./pool";
+import { POOL_CONTEXTS } from "./pool.js";
+import { ValidationError } from "../middleware/errorHandler.js";
 
 /**
  * retrieve userId from session
@@ -50,3 +51,21 @@ export function getSchema(session) {
 export function getClientMode(session) {
    return session?.clientMode;
 }
+
+/**
+ * retrieve session data
+ */
+export function getSession(session) {
+   return session;
+}
+
+// --- export ---
+const sessionUtils = {
+   getSchema,
+   getUserId,
+   getClientId,
+   getClientSecretHash,
+   getClientMode,
+   getSession,
+};
+export default sessionUtils;

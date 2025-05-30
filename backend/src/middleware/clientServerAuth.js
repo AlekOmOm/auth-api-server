@@ -1,5 +1,5 @@
 import { AuthError } from "./errorHandler.js";
-import { verifyApiToken } from "../services/clientServerService.js";
+import { verifyApiToken } from "../services/clientServer.js";
 
 /**
  * Middleware to authenticate client server API requests
@@ -29,8 +29,11 @@ export const authenticateClientServer = async (req, res, next) => {
 
 /**
  * Middleware to check if return URL is allowed for client
+ * 
+ * @context frontend sends url data 
+ * 
  */
-export const validateReturnUrl = (req, res, next) => {
+export const validateUrl = (req, res, next) => {
    try {
       const { return_url } = req.query;
       const { allowed_return_urls } = req.clientContext;
@@ -61,6 +64,6 @@ export const setClientSchema = (req, res, next) => {
 
 export default {
    authenticateClientServer,
-   validateReturnUrl,
+   validateReturnUrl: validateUrl,
    setClientSchema,
 };

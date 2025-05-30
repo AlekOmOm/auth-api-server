@@ -2,6 +2,14 @@ import { AuthError, ValidationError } from "../middleware/errorHandler.js";
 import { v4 as uuidv4 } from "uuid";
 import * as sessionUtils from "../utils/session.js";
 import userService from "./userService.js";
+import {
+   createSuccessResponse,
+   removePasswordFromUser,
+} from "../utils/authUtils.js";
+import { userRepo as userAuthInternalRepo } from "../repo/repositories/userRepository.js";
+import { userRepo as userClientAppRepo } from "../repo/clientAppRepository.js";
+import { getAuthPool } from "../repo/connection/pools/auth.js";
+import * as clientServerService from "./clientServer.js";
 
 /** ------- auth service ------- */
 
@@ -15,233 +23,164 @@ import userService from "./userService.js";
  * - repository to interact with the database
  * - errorHandler to handle errors
  * - uuid to generate unique identifiers
- * - schema from request context (session or API token)
- */
-
-/**
- * structure for login/register/logout
- *
- * @param {Object} req
- * - req.body: {
- *    credentials: { email, password },
- *    url: "https://client.com/dashboard"
- * }
- * - req.session: {
- *    poolContext: "client_tenant",
- *    schema: "client_schema_name",
- *    poolMetadata: { client_id, user_role: "user", ... }
- * }
- * @returns {Object} return
- * - sucess response (createSuccessResponse)
- *   - res {
- *     message: ...,
- *     data: {
- *       userId: ...,
- *       role: ...,
- *       email: ...,
- *       name: ...,
- *     }
- *   }
- * - error response (throw error)
+ * - schema from session context
  */
 
 /**
  * Login a user and create a session
+ * @param {Object} params - Parameters object
+ * @param {Object} params.credentials - User credentials (email, password)
+ * @param {string} params.refererUrl - Return URL after login
+ * @param {string} params.schema - Database schema
+ * @param {string} params.poolContext - Pool context from session
+ * @param {Object} params.poolMetadata - Pool metadata from session
+ * @param {Object} params.session - Current session object (for reading/updating)
+ * @param {string} params.ipAddress - Client IP address
+ * @param {string} params.userAgent - Client user agent
+ * @returns {Object} Login response with user data and session updates
  */
-export async function login(req) {
+export async function login({
+   credentials,
+   refererUrl,
+   schema,
+   poolContext,
+   poolMetadata,
+   session,
+   ipAddress,
+   userAgent,
+}) {
    try {
-      const { credentials } = req.body;
-      const schema = req.session.schema; // Schema from session (set by detectSchema middleware)
-
       if (!credentials.email || !credentials.password) {
          throw new ValidationError("Email and password are required");
       }
 
-      // Determine the correct repository for user authentication based on schema
       const authRepo =
          schema === "auth_internal" ? userAuthInternalRepo : userClientAppRepo;
-
-      // Fetch user with password hash for verification from the correct repository
       const userForPasswordCheck = await authRepo.getUserByEmail(
          schema,
          credentials.email
       );
-
       if (!userForPasswordCheck) {
-         console.log(
-            `🔐 [AUTH SERVICE] ❌ User not found for email: ${credentials.email} in schema: ${schema}`
-         );
          throw new AuthError("Invalid credentials");
       }
-
-      // Verify password (actual hash comparison should be done securely)
       if (userForPasswordCheck.password_hash !== credentials.password) {
-         console.log(
-            `🔐 [AUTH SERVICE] ❌ Password mismatch for user: ${userForPasswordCheck.email}`
-         );
          throw new AuthError("Invalid credentials");
       }
 
-      // --- At this point, credentials are valid ---
-      const authenticatedUser = userForPasswordCheck; // Use the full user object
+      const authenticatedUser = userForPasswordCheck;
+      const sessionUpdate = {
+         userId: authenticatedUser.id,
+         role: authenticatedUser.role,
+      };
 
-      // Set essential session data
-      req.session.userId = authenticatedUser.id;
-      req.session.role = authenticatedUser.role;
-      // req.session.schema is already set by detectSchema middleware
-
-      // ---- BEGIN ADDED OWNER CHECK (Specific to auth_internal context potentially) ----
       let effectiveRole = authenticatedUser.role;
-      if (
-         schema === "auth_internal" ||
-         req.session.poolContext === "auth_internal"
-      ) {
-         const authDbPool = await getAuthPool(); // auth_internal pool for client_servers table
+      if (schema === "auth_internal" || poolContext === "auth_internal") {
+         const authDbPool = await getAuthPool();
          const { rows: userClients } = await authDbPool.query(
-            "SELECT COUNT(*) as client_count FROM client_servers WHERE user_id = $1",
+            "SELECT COUNT(*) as client_count FROM client_servers WHERE owner_id = $1",
             [authenticatedUser.id]
          );
          if (userClients[0]?.client_count > 0) {
             effectiveRole = "owner";
-            req.session.role = "owner"; // Update session role
-            // Ensure poolContext and schema in session are also auth_internal if user is owner
-            req.session.poolContext = "auth_internal";
-            req.session.schema = "auth_internal";
-            req.session.poolMetadata = {
+            sessionUpdate.role = "owner";
+            sessionUpdate.poolContext = "auth_internal";
+            sessionUpdate.schema = "auth_internal";
+            sessionUpdate.poolMetadata = {
                user_role: "owner",
                owned_clients: userClients[0].client_count,
                reason: "login_is_actual_owner",
-               target_page: req.body?.returnUrl,
+               target_page: entryPointUrl,
             };
          } else {
-            // User is in auth_internal (or context became so), but not an owner of any clients
-            req.session.poolMetadata = {
-               ...(req.session.poolMetadata || {}),
-               user_role: authenticatedUser.role, // Reflects actual DB role (e.g., 'user' in auth_internal)
+            sessionUpdate.poolMetadata = {
+               ...(poolMetadata || {}),
+               user_role: authenticatedUser.role,
                reason: "login_auth_internal_user_not_yet_owner",
-               target_page: req.body?.returnUrl,
+               target_page: entryPointUrl,
             };
          }
       } else {
-         // For non-auth_internal schemas, set default poolMetadata if any specific logic is needed
-         // Or ensure req.session.poolMetadata is appropriately handled by detectSchema
-         req.session.poolMetadata = {
-            ...(req.session.poolMetadata || {}),
+         sessionUpdate.poolMetadata = {
+            ...(poolMetadata || {}),
             user_role: authenticatedUser.role,
-            target_page: req.body?.returnUrl,
+            target_page: entryPointUrl,
          };
       }
-      // ---- END OWNER CHECK ----
 
-      // Session creation in the correct database/schema
       const sessionRepo =
-         req.session.schema === "auth_internal"
-            ? userAuthInternalRepo
-            : userClientAppRepo;
+         schema === "auth_internal" ? userAuthInternalRepo : userClientAppRepo;
       const sessionId = uuidv4();
-      // Assuming createSession method exists on both repos with compatible signature
-      await sessionRepo.createSession(req.session.schema, [
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 24);
+      await sessionRepo.createSession(schema, [
+         uuidv4(),
          authenticatedUser.id,
          sessionId,
+         ipAddress || null,
+         userAgent || null,
+         expiresAt.toISOString(),
       ]);
 
-      // Prepare user data for the response (password already stripped by this utility)
       const userResponseData = removePasswordFromUser(authenticatedUser);
-
       const finalUserResponseData = {
-         ...userResponseData, // Contains id, name, email, role (without password_hash)
-         role: effectiveRole, // Ensure the effectiveRole (potentially 'owner') is in the response
+         ...userResponseData,
+         role: effectiveRole,
       };
 
-      const response = {
+      return {
          message: "Login successful",
-         success: true,
          data: {
             ...finalUserResponseData,
-            // Include schema and poolMetadata from the session for the client
-            schema: req.session.schema,
-            poolMetadata: req.session.poolMetadata || null,
+            schema: schema,
+            poolMetadata: sessionUpdate.poolMetadata || null,
          },
+         sessionUpdate,
       };
-
-      console.log("🔐 [AUTH SERVICE] ✅ Login successful for user:", {
-         userId: authenticatedUser.id,
-         email: authenticatedUser.email,
-         schema: req.session.schema,
-         role: effectiveRole, // Log effective role
-         poolMetadata: req.session.poolMetadata,
-      });
-
-      return response;
    } catch (error) {
       console.error(
          "🔐 [AUTH SERVICE] ❌ Login failed:",
          error.message,
          error.stack
       );
-      // Make sure the error object conforms to expected structure if it's a custom error
-      // Or rethrow a new error with success: false if necessary.
       if (!(error instanceof AuthError || error instanceof ValidationError)) {
-         // For unexpected errors, wrap them or ensure they have a 'success' flag
          throw new AuthError(
-            error.message || "Login failed due to an unexpected error",
-            false
+            error.message || "Login failed due to an unexpected error"
          );
       }
-      throw error; // Rethrow AuthError or ValidationError which should have success: false
+      throw error;
    }
 }
 
 /**
  * Logout a user and destroy their session
- *
- * @returns {Object} return
- * - sucess response
- *   - req.session.destroy()
- *   - req.message = "Logout successful"
- * - error response (throw error)
+ * @param {Object} params - Parameters object
+ * @param {string} params.userId - User ID from session
+ * @param {string} params.schema - Database schema
+ * @param {Function} params.destroySession - Function to destroy the session
+ * @returns {Object} Logout response
  */
-export async function logout(req) {
+export async function logout({ userId, schema, destroySession }) {
    try {
-      if (!req.session || !req.session.userId) {
+      if (!userId) {
          throw new AuthError("No active session");
       }
 
-      const session = sessionUtils.getSession(req.session);
-
+      const repo =
+         schema === "auth_internal" ? userAuthInternalRepo : userClientAppRepo;
       try {
-         console.log(
-            "🚪 [AUTH SERVICE] Deleting session from schema:",
-            logoutSchema
-         );
-         await repo.deleteSessionByUserId(logoutSchema, req.session.userId);
-         console.log("🚪 [AUTH SERVICE] ✅ Session deleted successfully");
+         await repo.deleteSessionByUserId(schema, userId);
       } catch (dbError) {
          console.error(
             "🚪 [AUTH SERVICE] ❌ Database session deletion failed:",
             dbError.message
          );
-         // Don't fail the entire logout - session will expire naturally
-         // But log the error for debugging
-         console.log(
-            "🚪 [AUTH SERVICE] Continuing with session destruction despite DB error"
-         );
       }
-
-      // Always destroy the session object regardless of DB deletion success
-      const userId = req.session.userId; // Save for logging
-      req.session.destroy((err) => {
-         if (err) {
-            console.error("🚪 [AUTH SERVICE] Session destruction error:", err);
-         } else {
-            console.log(
-               "🚪 [AUTH SERVICE] ✅ Session destroyed for user:",
-               userId
-            );
-         }
-      });
-
-      return createSuccessResponse("Logout successful");
+      try {
+         await destroySession();
+      } catch (err) {
+         console.error("🚪 [AUTH SERVICE] Session destruction error:", err);
+      }
+      return { message: "Logout successful" };
    } catch (error) {
       console.error("🚪 [AUTH SERVICE] ❌ Logout error:", error);
       throw error;
@@ -250,135 +189,88 @@ export async function logout(req) {
 
 /**
  * Register a new user
- * @param {Object} req - Express request object
+ * @param {Object} params - Parameters object
+ * @param {Object} params.userData - User registration data
+ * @param {string} params.schema - Database schema from session
+ * @param {string} params.poolContext - Pool context from session
+ * @param {Object} params.poolMetadata - Pool metadata from session
+ * @param {string} params.refererUrl - Referer URL from registration
  * @returns {Object} Registration success response
  */
-export async function register(req) {
+export async function register({
+   userData,
+   schema,
+   poolContext,
+   poolMetadata,
+   refererUrl,
+}) {
    try {
-      console.log("📝 [AUTH SERVICE] Starting registration process");
-      console.log("📝 [AUTH SERVICE] Request session data:", {
-         poolContext: req.session?.poolContext,
-         schema: req.session?.schema,
-         poolMetadata: req.session?.poolMetadata,
-      });
-
-      const userData = req.body;
-
-      // 🎯 NEW: Handle userType to determine correct schema
-      const userType = userData.userType || "client"; // Default to client if not specified
-      console.log("📝 [AUTH SERVICE] User type specified:", userType);
-
+      const userType = userData.userType || "client";
       let targetSchema;
-
       if (userType === "auth") {
-         // Auth-system owner user - always goes to auth_internal
          targetSchema = "auth_internal";
-         console.log(
-            "📝 [AUTH SERVICE] Auth-system owner registration - using auth_internal schema"
-         );
       } else {
-         // Client app user - NEVER use auth_internal, even if session says so
-         // Use Trading Simulator schema or fallback to client_template
-         if (req.session?.schema && req.session.schema !== "auth_internal") {
-            // Use detected client schema (from return_url detection)
-            targetSchema = req.session.schema;
-            console.log(
-               "📝 [AUTH SERVICE] Client app user registration - using detected client schema:",
-               targetSchema
-            );
-         } else {
-            // Fallback to Trading Simulator schema or client_template
-            targetSchema = "client_tradingsimulator_1748187489195"; // Use known Trading Simulator schema
-            console.log(
-               "📝 [AUTH SERVICE] Client app user registration - using Trading Simulator schema:",
-               targetSchema
-            );
+         if (refererUrl) {
+            const clientServerLookup =
+               await clientServerService.getClientServerByUrl(refererUrl);
+            if (
+               clientServerLookup &&
+               clientServerLookup.success &&
+               clientServerLookup.data &&
+               clientServerLookup.data.schema_name
+            ) {
+               targetSchema = clientServerLookup.data.schema_name;
+            } else {
+               console.warn(
+                  "Could not determine schema from refererUrl, falling back."
+               );
+            }
+         }
+         if (!targetSchema) {
+            if (schema && schema !== "auth_internal") {
+               targetSchema = schema;
+            } else {
+               targetSchema =
+                  process.env.DEFAULT_CLIENT_SCHEMA ||
+                  "client_tradingsimulator_1748187489195";
+               console.log(
+                  "Using fallback schema for client registration:",
+                  targetSchema
+               );
+            }
          }
       }
 
-      console.log("📝 [AUTH SERVICE] Registration attempt details:", {
-         targetSchema: targetSchema,
-         userType: userType,
-         email: userData.email,
-         name: userData.name,
-         sessionContext: req.session?.poolContext,
-         poolMetadata: req.session?.poolMetadata,
-      });
-
       if (!userData.name || !userData.email || !userData.password) {
-         console.log("📝 [AUTH SERVICE] ❌ Missing required fields");
          throw new ValidationError("Name, email, and password are required");
       }
-
-      // Check if user already exists in target schema
-      console.log(
-         "📝 [AUTH SERVICE] Checking if user exists in schema:",
-         targetSchema
-      );
+      const repo =
+         targetSchema === "auth_internal"
+            ? userAuthInternalRepo
+            : userClientAppRepo;
       const existingUser = await repo.getUserByEmail(
          targetSchema,
          userData.email
       );
-
       if (existingUser) {
-         console.log(
-            "📝 [AUTH SERVICE] ❌ User already exists in schema:",
-            targetSchema,
-            "email:",
-            userData.email
-         );
          throw new ValidationError("User with this email already exists");
       }
-
-      console.log(
-         "📝 [AUTH SERVICE] ✅ User does not exist, proceeding with creation"
-      );
-
-      // Determine role based on userType
-      let role;
-      if (userType === "auth") {
-         // Auth-system users become owners
-         role = "owner";
-         console.log(
-            "📝 [AUTH SERVICE] Setting role to 'owner' for auth-system user"
-         );
-      } else {
-         // Client app users get default 'user' role
-         role = userData.role || "user";
-         console.log(
-            "📝 [AUTH SERVICE] Setting role to 'user' for client app user"
-         );
-      }
-
-      console.log(
-         "📝 [AUTH SERVICE] Creating user in schema:",
-         targetSchema,
-         "with role:",
-         role
-      );
-
+      let role = userType === "auth" ? "owner" : userData.role || "user";
       const result = await repo.createUser(targetSchema, [
          userData.name,
          role,
          userData.email,
-         userData.password, // In a real app, hash the password
+         userData.password,
       ]);
-
-      console.log("📝 [AUTH SERVICE] ✅ User created successfully:", {
-         userId: result.lastID,
-         email: userData.email,
-         name: userData.name,
-         role: role,
-         schema: targetSchema,
-         userType: userType,
-      });
-
-      return createSuccessResponse("Registration successful", {
-         userId: result.lastID,
-         userType: userType,
-         schema: targetSchema,
-         role: role,
-      });
+      return {
+         message: "Registration successful",
+         data: {
+            userId: result.lastID,
+            userType: userType,
+            schema: targetSchema,
+            role: role,
+         },
+      };
    } catch (error) {
       console.log("📝 [AUTH SERVICE] ❌ Registration failed:", error.message);
       throw error;
@@ -389,42 +281,37 @@ export async function register(req) {
 
 /**
  * Get all sessions for the current user
- * @param {Object} session - Express session object
- * @param {string} schema - Database schema (retrieved from session/request context)
+ * @param {Object} params - Parameters object
+ * @param {string} params.userId - User ID
+ * @param {string} params.schema - Database schema
  * @returns {Object} All sessions
  */
-export async function getSessions(session, schema) {
+export async function getSessions({ userId, schema }) {
    try {
-      if (!session || !session.userId) {
-         throw new AuthError("Authentication required");
-      }
-      const sessions = await repo.getSessions(schema, session.userId);
-      return createSuccessResponse("Sessions retrieved successfully", sessions);
+      if (!userId) throw new AuthError("Authentication required");
+      const repo =
+         schema === "auth_internal" ? userAuthInternalRepo : userClientAppRepo;
+      const sessions = await repo.getSessions(schema, userId);
+      return { message: "Sessions retrieved successfully", data: sessions };
    } catch (error) {
       throw error;
    }
 }
 
 /**
- * Get a specific session by ID
- * @param {Object} session - Express session object
- * @param {string} sessionId - Session ID
- * @param {string} schema - Database schema (retrieved from session/request context)
- * @returns {Object} {
- *    userId: string,
- *    sessionId: string,
+ * Get current session information
+ * @param {Object} params - Parameters object
+ * @param {string} params.userId - User ID
+ * @param {Object} params.sessionData - Session data
+ * @returns {Object} Session information
  */
-export async function getSession() {
+export async function getSession({ userId, sessionData }) {
    try {
       const data = {
-         userId: sessionUtils.getUserId(req.session),
-         session: sessionUtils.getSession(req.session),
+         userId: sessionUtils.getUserId(sessionData),
+         sessionDetails: sessionUtils.getSession(sessionData),
       };
-
-      return {
-         message: "Session retrieved successfully",
-         data: data,
-      };
+      return { message: "Session retrieved successfully", data: data };
    } catch (error) {
       throw error;
    }
@@ -432,43 +319,123 @@ export async function getSession() {
 
 /**
  * Get current user information
- * @param {Object} req - Express request object
+ * @param {Object} params - Parameters object
+ * @param {string} params.userId - User ID
+ * @param {string} params.schema - Database schema
+ * @param {string} params.sessionRole - Role from session
+ * @param {Object} params.poolMetadata - Pool metadata from session
  * @returns {Object} User information with session-based role and metadata
  */
-export async function getCurrentUser(req) {
+export async function getCurrentUser({
+   userId,
+   schema,
+   sessionRole,
+   poolMetadata,
+}) {
    try {
-      if (!req.session || !req.session.userId) {
-         throw new AuthError("Authentication required");
-      }
+      if (!userId) throw new AuthError("Authentication required");
+      const finalSchema =
+         schema || process.env.SEED_SCHEMA || "client_template";
+      const repo =
+         finalSchema === "auth_internal"
+            ? userAuthInternalRepo
+            : userClientAppRepo;
+      const user = await repo.getUser(finalSchema, userId);
+      if (!user) throw new AuthError("User not found");
 
-      const schema =
-         req.session?.schema || process.env.SEED_SCHEMA || "client_template";
-      const user = await repo.getUser(schema, req.session.userId);
-
-      if (!user) {
-         throw new AuthError("User not found");
-      }
-
-      // Use session-based role and metadata instead of raw DB data
       const sessionUser = removePasswordFromUser(user);
+      if (sessionRole) sessionUser.role = sessionRole;
+      if (poolMetadata) sessionUser.poolMetadata = poolMetadata;
 
-      // Override with session-based role if available (important for owner detection)
-      if (req.session.role) {
-         sessionUser.role = req.session.role;
-      }
+      return { message: "User retrieved successfully", data: sessionUser };
+   } catch (error) {
+      throw error;
+   }
+}
 
-      // Include session metadata if available (needed for frontend role checking)
-      if (req.session.poolMetadata) {
-         sessionUser.poolMetadata = req.session.poolMetadata;
-      }
-
+/**
+ * Update session expiry time
+ * @param {Object} params - Parameters object
+ * @param {string} params.sessionId - Session ID to update
+ * @param {string} params.schema - Database schema
+ * @returns {Object} Update response
+ */
+export async function updateSession({ sessionId, schema }) {
+   try {
+      if (!sessionId) throw new ValidationError("Session ID is required");
+      const repo =
+         schema === "auth_internal" ? userAuthInternalRepo : userClientAppRepo;
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 24);
+      await repo.updateSessionExpiry(
+         schema,
+         sessionId,
+         expiresAt.toISOString()
+      );
       return {
-         message: "User retrieved successfully",
-         data: sessionUser,
+         message: "Session updated successfully",
+         data: { expiresAt: expiresAt.toISOString() },
       };
    } catch (error) {
       throw error;
    }
 }
+
+/**
+ * Clean up expired sessions
+ * @param {Object} params - Parameters object
+ * @param {string} params.schema - Database schema (optional, cleans all schemas if not provided)
+ * @returns {Object} Cleanup response with count of deleted sessions
+ */
+export async function cleanupExpiredSessions({ schema }) {
+   try {
+      let totalDeleted = 0;
+      if (schema) {
+         const repo =
+            schema === "auth_internal"
+               ? userAuthInternalRepo
+               : userClientAppRepo;
+         const result = await repo.deleteExpiredSessions(schema);
+         totalDeleted = result.affectedRows || 0;
+      } else {
+         const authResult = await userAuthInternalRepo.deleteExpiredSessions(
+            "auth_internal"
+         );
+         totalDeleted += authResult.affectedRows || 0;
+      }
+      return {
+         message: "Expired sessions cleaned successfully",
+         data: { deletedCount: totalDeleted },
+      };
+   } catch (error) {
+      console.error(
+         "🧹 [AUTH SERVICE] Error cleaning expired sessions:",
+         error
+      );
+      throw error;
+   }
+}
+
+/**
+ * Wrapper for clientServerService.checkReferer to be exposed via authService
+ * @param {Object} params - Parameters object
+ * @param {string} params.refererUrl - Referer URL to check
+ * @returns {Promise<Object>} Response from clientServerService.checkReferer
+ */
+export async function checkRefererService({ refererUrl }) {
+   return clientServerService.checkReferer({ refererUrl });
+}
+
+const authService = {
+   login,
+   logout,
+   register,
+   getCurrentUser,
+   getSessions,
+   getSession,
+   updateSession,
+   cleanupExpiredSessions,
+   checkRefererService,
+};
 
 export default authService;

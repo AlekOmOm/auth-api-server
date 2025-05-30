@@ -1,8 +1,8 @@
 import express from "express";
-import * as service from "../services/clientServerservice.js";
+import * as service from "../services/clientServer.js";
 import { authenticateClientServer } from "../middleware/clientServerAuth.js";
 import { isAuthenticated, hasRole } from "../middleware/auth.js";
-
+import * as controller from "../controllers/clientServer.js";
 const router = express.Router();
 
 /**
@@ -34,100 +34,38 @@ const router = express.Router();
  * Register a new client server
  * POST /api/clientServer/register
  */
-router.post("/register", async (req, res, next) => {
-   try {
-      const result = await service.registerClientServer(req);
-      res.status(201).json(result);
-   } catch (error) {
-      next(error);
-   }
-});
-
+router.post("/register", controller.registerClientServer);
 /**
  * Client server handshake - authenticate and get API token
  * POST /api/clientServer/handshake
  */
-router.post("/handshake", async (req, res, next) => {
-   try {
-      const result = await service.authenticateClientServer(req);
-      res.json(result);
-   } catch (error) {
-      next(error);
-   }
-});
-
+router.post("/handshake", controller.handshake);
 // --- Protected Routes (require API token) ---
 
 /**
  * Get current client server information
  * GET /api/clientServer/me
  */
-router.get("/me", authenticateClientServer, async (req, res, next) => {
-   try {
-      const result = await service.getClientServerInfo(req);
-      res.json(result);
-   } catch (error) {
-      next(error);
-   }
-});
+router.get("/me", authenticateClientServer, controller.getClientServerInfo);
 
 /**
  * Update current client server information
  * PUT /api/clientServer/me
  */
-router.put("/me", authenticateClientServer, async (req, res, next) => {
-   try {
-      const result = await service.updateClientServer(
-         req.clientContext.client_id,
-         req.body
-      );
-      res.json(result);
-   } catch (error) {
-      next(error);
-   }
-});
-
+router.put("/me", authenticateClientServer, controller.updateClientServerInfo);
 // --- User Routes (require session authentication) ---
 
 /**
  * Register client server for logged-in user
  * POST /api/clientServer/user/register
  */
-router.post("/user/register", isAuthenticated, async (req, res, next) => {
-   console.log(
-      "🚀 [ROUTE] /api/clientServer/user/register: Entered route handler. Body:",
-      JSON.stringify(req.body, null, 2),
-      "Session UserID:",
-      req.session?.userId
-   );
-   try {
-      const result = await service.registerClientServerForUser(
-         req.body,
-         req // Pass entire request object
-      );
-      console.log("POST /api/clientServer/user/register");
-      console.log(req.body);
-      res.status(201).json(result);
-   } catch (error) {
-      next(error);
-   }
-});
+router.post("/user/register", isAuthenticated, controller.registerClientServerForUser);
 
 /**
  * Get all client servers for authenticated user
  * GET /api/clientServer/user/clients
  */
-router.get("/user/clients", isAuthenticated, async (req, res, next) => {
-   console.log("GET /api/clientServer/user/clients");
-   console.log(req.user);
-   try {
-      const result = await service.getUserClientServers(req);
-      res.json(result);
-   } catch (error) {
-      next(error);
-   }
-});
-
+router.get("/user/clients", isAuthenticated, controller.getUserClientServers);
 /**
  * Get specific client server for authenticated user
  * GET /api/clientServer/user/clients/:client_id
@@ -135,17 +73,7 @@ router.get("/user/clients", isAuthenticated, async (req, res, next) => {
 router.get(
    "/user/clients/:client_id",
    isAuthenticated,
-   async (req, res, next) => {
-      try {
-         const result = await service.getUserClientServer(
-            req,
-            req.params.client_id
-         );
-         res.json(result);
-      } catch (error) {
-         next(error);
-      }
-   }
+   controller.getUserClientServerById
 );
 
 /**
@@ -155,38 +83,18 @@ router.get(
 router.put(
    "/user/clients/:client_id",
    isAuthenticated,
-   async (req, res, next) => {
-      try {
-         const result = await service.updateUserClientServer(
-            req,
-            req.params.client_id,
-            req.body
-         );
-         res.json(result);
-      } catch (error) {
-         next(error);
-      }
-   }
+   controller.updateUserClientServerById
 );
 
 /**
  * Delete client server for authenticated user
+ * - owner only
  * DELETE /api/clientServer/user/clients/:client_id
  */
 router.delete(
    "/user/clients/:client_id",
    isAuthenticated,
-   async (req, res, next) => {
-      try {
-         const result = await service.deleteUserClientServer(
-            req,
-            req.params.client_id
-         );
-         res.json(result);
-      } catch (error) {
-         next(error);
-      }
-   }
+   controller.deleteUserClientServerById
 );
 
 // --- Admin Routes (require admin role) ---
@@ -199,14 +107,7 @@ router.get(
    "/:client_id",
    isAuthenticated,
    hasRole("admin"),
-   async (req, res, next) => {
-      try {
-         const result = await service.getClientServerInfo(req.params.client_id);
-         res.json(result);
-      } catch (error) {
-         next(error);
-      }
-   }
+   controller.getClientServerById
 );
 
 /**
@@ -217,14 +118,7 @@ router.delete(
    "/:client_id",
    isAuthenticated,
    hasRole("admin"),
-   async (req, res, next) => {
-      try {
-         const result = await service.deleteClientServer(req.params.client_id);
-         res.json(result);
-      } catch (error) {
-         next(error);
-      }
-   }
+   controller.deleteClientServerById
 );
 
 export default router;

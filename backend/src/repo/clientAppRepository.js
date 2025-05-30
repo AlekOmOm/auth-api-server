@@ -170,19 +170,16 @@ const deleteUser = async (schema = DEFAULT_SCHEMA, id) => {
 // --- Session helpers ---
 
 const createSession = async (schema = DEFAULT_SCHEMA, paramsArray) => {
-   const [user_id] = paramsArray;
+   const [id, user_id, session_id, ip_address, user_agent, expires_at] =
+      paramsArray;
    const pool = await getPool(schema);
-   const id = uuidv4();
-   const session_id = uuidv4();
-
-   // Set session expiration to 24 hours from now
-   const expires_at = new Date();
-   expires_at.setHours(expires_at.getHours() + 24);
 
    return sessionRepo.createSession(pool, {
       id,
       user_id,
       session_id,
+      ip_address,
+      user_agent,
       expires_at,
    });
 };
@@ -218,12 +215,36 @@ const deleteSessionBySessionId = async (schema = DEFAULT_SCHEMA, sessionId) => {
    return sessionRepo.deleteSessionBySessionId(pool, sessionId);
 };
 
+const updateSessionExpiry = async (
+   schema = DEFAULT_SCHEMA,
+   sessionId,
+   expiresAt
+) => {
+   const pool = await getPool(schema);
+   return sessionRepo.updateSessionExpiry(pool, sessionId, expiresAt);
+};
+
+const deleteExpiredSessions = async (schema = DEFAULT_SCHEMA) => {
+   const pool = await getPool(schema);
+   return sessionRepo.deleteExpiredSessions(pool);
+};
+
 export const userRepo = {
    createUser,
    getUsers,
    getUser,
    getUserByEmail,
    getUserByNameAndEmail,
+   updateUser,
+   deleteUser,
+   createSession,
+   getSessions,
+   getSession,
+   getSessionByUserId,
+   deleteSessionByUserId,
+   deleteSessionBySessionId,
+   updateSessionExpiry,
+   deleteExpiredSessions,
 };
 
 export const sessionRepo = {

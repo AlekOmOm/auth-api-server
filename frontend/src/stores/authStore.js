@@ -1,7 +1,6 @@
 import { get, writable } from "svelte/store";
 import { fetchGet } from "../util/fetch";
 import authApi from "../services/authApi"; // Import authApi
-import { extractRefererHeader } from "../util/refererHeader";
 
 const BACKEND_URL =
    import.meta.env.VITE_BACKEND_URL || "http://localhost:3001/api";
@@ -14,18 +13,103 @@ const BACKEND_URL_AUTH = `${BACKEND_URL}/auth`;
  * @docs [authorization](https://github.com/AlekOmOm/auth-api-server/tree/main/docs/core-components/client-app-authorization.md)
  *
  * @exports:
- * - checkAuth
- * - checkSession
  * - login
  * - register
  * - logout
+ * - checkAuth
+ * - checkSession
+ * - checkReferer
  */
 function createAuthStore() {
+   /**
+    * - isAuthenticated: boolean
+    * - session: {Object}
+    * - url: string
+    *   - url for identification of Schema ()
+    * - loading: boolean
+    */
    const { subscribe, set, update } = writable({
       isAuthenticated: false,
       session: null,
+      refererUrl: null,
       loading: true,
    });
+
+   // ------------- login, register, logout logic -------------
+   /**
+    * login
+    * @description Authenticates user via API and updates store state
+    * @param {Object} credentials - User credentials
+    * @returns {Promise<Object>} API response
+    */
+   async function login(credentials) {
+      update((state) => ({ ...state, loading: true }));
+      const url = extractRefererHeader();
+
+      try {
+         const response = await authApi.login(credentials, url);
+
+         setStore(response, response.success, url, set);
+         return response;
+      } catch (error) {
+         set({
+            isAuthenticated: false,
+            session: null,
+            refererUrl: null,
+            loading: false,
+         });
+         return {
+            message: error.message || "Login failed in store",
+            success: false,
+         };
+      }
+   }
+
+   /**
+    * register
+    * @description Registers a new user via API
+    * @param {Object} credentials - User credentials
+    * @returns {Promise<Object>} API response
+    */
+   async function register(credentials) {
+      update((state) => ({ ...state, loading: true }));
+      const url = extractRefererHeader();
+      try {
+         const response = await authApi.register(credentials, url);
+         update((state) => ({ ...state, loading: false }));
+         return response;
+      } catch (error) {
+         console.error("authStore register error:", error);
+         update((state) => ({ ...state, loading: false }));
+         return {
+            message: error.message || "Registration failed in store",
+            success: false,
+         };
+      }
+   }
+
+   /**
+    * logout
+    * @description Logs out user via API and updates store state
+    * @returns {Promise<Object>} API response
+    */
+   async function logout() {
+      update((state) => ({ ...state, loading: true }));
+      try {
+         const response = await authApi.logout();
+         setStore(response, false, null, set);
+         return response;
+      } catch (error) {
+         console.error("authStore logout error:", error);
+         setStore(null, true, null, set);
+         return {
+            message: error.message || "Logout failed in store",
+            success: false,
+         };
+      }
+   }
+
+   // ------------- check logic -------------
 
    /**
     * checkAuth
@@ -53,115 +137,10 @@ function createAuthStore() {
    async function checkSession() {
       update((state) => ({ ...state, loading: true }));
       try {
-         const dataRaw = await fetchGet(`${BACKEND_URL_AUTH}/session`);
-         const { message, data } = dataRaw;
-         if (data.id) {
-            set({
-               isAuthenticated: true,
-               session: data,
-               loading: false,
-            });
-         } else {
-            set({
-               isAuthenticated: false,
-               session: null,
-               loading: false,
-            });
-         }
+         const res = await fetchGet(`${BACKEND_URL_AUTH}/session`);
+         setStore(res, res.data.id !== null, null, set);
       } catch (error) {
-         set({ isAuthenticated: false, session: null, loading: false });
-      }
-   }
-
-   /**
-    * login
-    * @description Authenticates user via API and updates store state
-    * @param {Object} credentials - User credentials
-    * @param {string} url - url for identification of Schema
-    * @returns {Promise<Object>} API response
-    */
-   async function login(credentials, url = null) {
-      update((state) => ({ ...state, loading: true }));
-
-      try {
-         const response = await authApi.login(credentials, url);
-
-         if (
-            response.success &&
-            response.data &&
-            (response.data.userId || response.data.id)
-         ) {
-            set({
-               isAuthenticated: true,
-               session: response.data,
-               loading: false,
-            });
-         } else {
-            set({ isAuthenticated: false, session: null, loading: false });
-         }
-         return response;
-      } catch (error) {
-         set({ isAuthenticated: false, session: null, loading: false });
-         return {
-            message: error.message || "Login failed in store",
-            success: false,
-         };
-      }
-   }
-
-   /**
-    * register
-    * @description Registers a new user via API
-    * @param {Object} credentials - User credentials
-    * @returns {Promise<Object>} API response
-    */
-   async function register(credentials) {
-      update((state) => ({ ...state, loading: true }));
-      try {
-         const response = await authApi.register(credentials);
-         update((state) => ({ ...state, loading: false }));
-         return response;
-      } catch (error) {
-         console.error("authStore register error:", error);
-         update((state) => ({ ...state, loading: false }));
-         return {
-            message: error.message || "Registration failed in store",
-            success: false,
-         };
-      }
-   }
-
-   /**
-    * logout
-    * @description Logs out user via API and updates store state
-    * @returns {Promise<Object>} API response
-    */
-   async function logout() {
-      update((state) => ({ ...state, loading: true }));
-      try {
-         const response = await authApi.logout();
-         set({ isAuthenticated: false, session: null, loading: false });
-         return response;
-      } catch (error) {
-         console.error("authStore logout error:", error);
-         set({ isAuthenticated: false, session: null, loading: false });
-         return {
-            message: error.message || "Logout failed in store",
-            success: false,
-         };
-      }
-   }
-
-   /**
-    * checkReferer
-    * @description Checks the referer header for identification of Schema
-    * @returns {Promise<Object>} API response
-    */
-   async function checkReferer() {
-      const referer = extractRefererHeader();
-      if (referer) {
-         const response = await authApi.checkReferer(referer);
-         return response;
+         setStore(null, true, null, set);
       }
    }
 
@@ -172,13 +151,46 @@ function createAuthStore() {
 
    return {
       subscribe,
-      checkAuth,
-      checkSession,
-      checkReferer,
+      //
       login,
       register,
       logout,
+      // check
+      checkAuth,
+      checkSession,
    };
+}
+
+// ------------- helper functions -------------
+
+function setStore(response, check = true, url = null, set) {
+   const { data } = response || {}; // Ensure response is not null
+
+   if (check && data) {
+      // Ensure data exists before accessing its properties
+      set({
+         isAuthenticated: true,
+         session: data,
+         refererUrl: url,
+         loading: false,
+      });
+   } else {
+      set({
+         isAuthenticated: false,
+         session: null,
+         refererUrl: url, // default to null
+         loading: false,
+      });
+   }
+}
+
+/**
+ * Extract referer header from the Client App redirection
+ * @returns {string} referer header
+ */
+export function extractRefererHeader() {
+   const referer = document.referrer;
+   return referer;
 }
 
 export const authStore = createAuthStore();

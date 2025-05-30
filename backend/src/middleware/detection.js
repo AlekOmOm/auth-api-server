@@ -1,5 +1,6 @@
 import { POOL_CONTEXTS } from "../utils/pool.js";
 import { USER_ROLES } from "../utils/roles.js";
+import * as service from "../services/clientServer.js";
 /**
  * Enhanced middleware to detect and set database schema + pool context in session
  *
@@ -33,65 +34,26 @@ import { USER_ROLES } from "../utils/roles.js";
  * }
  */
 
-/**
- * Set pool context information in session
- * @param {Object} req - Express request object
- * @param {string} poolContext - Pool context identifier
- * @param {string} schema - Database schema name
- * @param {Object} metadata - Additional metadata
- */
-export const setPoolContext = (req, poolContext, schema, metadata = {}) => {
-   if (!req.session) {
-      req.session = {};
-   }
-
-   req.session.poolContext = poolContext;
-   req.session.schema = schema;
-   req.session.poolMetadata = metadata;
-
-   // Also set req.schema for downstream middleware
-   req.schema = schema;
-};
 
 /**
- * Detect schema from return_url parameter for Frontend-Login-Proxy mode
+ * Detect schema from refererUrl for Frontend-Login-Proxy mode
  * Sets CLIENT_TENANT pool context (for tenant users)
  */
-export const detectSchemaFromReturnUrl = async (req, res, next) => {
+export const detectSchemaFromUrl = async (req, res, next) => {
    try {
-      const returnUrl = req.body?.returnUrl;
+      const url = getRefererUrl(req);
 
-      if (returnUrl !== null && returnUrl !== undefined) {
+      if (url) {
          console.log(
-            "🔍 [SCHEMA DETECTION] Return URL found, proceeding with client lookup"
+            "🔍 [SCHEMA DETECTION] URL found for schema detection:",
+            url,
+            "source:",
+            returnUrl ? "body.returnUrl" : "Referer header"
          );
 
-         const authInternalPool = await getPool();
-         console.log("🔍 [SCHEMA DETECTION] Got auth internal pool");
+         const matchingClient = await service.getClientServerByReferer(url);
 
-         // Get all client servers and find matching one
-         const { rows: clientServers } = await authInternalPool.query(
-            "SELECT * FROM auth_internal.client_servers UNION ALL SELECT * FROM public.client_servers"
-         );
-
-         console.log(
-            "🔍 [SCHEMA DETECTION] Found client servers:",
-            clientServers.length,
-            clientServers.map((c) => ({
-               client_id: c.client_id,
-               app_name: c.app_name,
-               assigned_schema_name: c.assigned_schema_name,
-               allowed_return_urls: c.allowed_return_urls,
-            }))
-         );
-
-         const matchingClient = clientServers.find((client) => {
-            console.log(
-               "🔍 [SCHEMA DETECTION] Checking client:",
-               client.client_id,
-               "app_name:",
-               client.app_name,
-               "allowed_return_urls:",
+         if (matchingClient) {
                client.allowed_return_urls,
                "type:",
                typeof client.allowed_return_urls
@@ -104,11 +66,10 @@ export const detectSchemaFromReturnUrl = async (req, res, next) => {
                   "type:",
                   typeof allowedUrl,
                   "against returnUrl:",
-                  returnUrl
+                  url
                );
 
-               const matches =
-                  allowedUrl && returnUrl && returnUrl.startsWith(allowedUrl);
+               const matches = allowedUrl && url && url.startsWith(allowedUrl);
                console.log("🔍 [SCHEMA DETECTION] URL match result:", matches);
                return matches;
             });
@@ -134,7 +95,7 @@ export const detectSchemaFromReturnUrl = async (req, res, next) => {
                   client_id: matchingClient.client_id,
                   app_name: matchingClient.app_name,
                   client_mode: matchingClient.client_mode,
-                  return_url: returnUrl,
+                  return_url: url,
                   allowed_return_urls: matchingClient.allowed_return_urls,
                   user_role: USER_ROLES.USER,
                }
@@ -146,13 +107,13 @@ export const detectSchemaFromReturnUrl = async (req, res, next) => {
                metadata: {
                   client_id: matchingClient.client_id,
                   app_name: matchingClient.app_name,
-                  return_url: returnUrl,
+                  return_url: url,
                },
             });
          } else {
             console.log(
                "🔍 [SCHEMA DETECTION] ❌ No matching client found for returnUrl:",
-               returnUrl
+               url
             );
             console.log(
                "🔍 [SCHEMA DETECTION] Available clients:",
@@ -540,6 +501,28 @@ export const logPoolContext = (req, res, next) => {
    next();
 };
 
+// ------------------------------------------------------------------------------------------------
+/**
+ * Set pool context information in session
+ * @param {Object} req - Express request object
+ * @param {string} poolContext - Pool context identifier
+ * @param {string} schema - Database schema name
+ * @param {Object} metadata - Additional metadata
+ */
+export const setPoolContext = (req, poolContext, schema, metadata = {}) => {
+   if (!req.session) {
+      req.session = {};
+   }
+
+   req.session.poolContext = poolContext;
+   req.session.schema = schema;
+   req.session.poolMetadata = metadata;
+
+   // Also set req.schema for downstream middleware
+   req.schema = schema;
+};
+
+// --- export 
 export default {
    detectSchemaFromReturnUrl,
    detectSchemaFromApiToken,

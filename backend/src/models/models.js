@@ -307,8 +307,6 @@ class ClientServer {
    }
 }
 
-
-
 class Session {
    constructor(
       id = null, // db generated
@@ -329,4 +327,4 @@ class Session {
    }
 }
 
-export { ClientServer, User, Session };
+export { ClientServer, Session };

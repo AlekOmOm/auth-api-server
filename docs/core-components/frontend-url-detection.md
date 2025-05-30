@@ -45,6 +45,8 @@ If a client is found we attach its schema; otherwise the request proceeds in the
 Client ↔ Auth-System
 ──────────────────────────────────────────────────────────
 1. User clicks "Login" → SPA redirects to https://auth.example.com/login (no params needed)
+ 1.1 refererUrl is detected from the Referer header
+ 1.2 the url is included in the request body: `{ credentials, refererUrl }` (frontend\src\services\authApi.js)
 2. The login page POSTs credentials to /api/auth/login
 3. detectSchema() uses the Referer header to find the tenant
 4. Credentials validated → session created in tenant schema

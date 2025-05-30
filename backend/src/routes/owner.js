@@ -1,6 +1,6 @@
 import express from "express";
 import { isAuthenticated } from "../middleware/auth.js";
-import * as ownerService from "../services/ownerService.js";
+import * as ownerPanelService from "../services/ownerPanelService.js";
 
 const router = express.Router();
 

@@ -5,9 +5,10 @@ const BACKEND_URL_AUTH = "/api/auth"; // vite proxy
 /**
  * Register a new user
  * @param {Object} credentials - User credentials with username and password
+ * @param {string} [refererUrl] - effective URL for schema identification
  * @returns {Promise<Object>} Registration result with success status
  */
-const register = async (credentials) => {
+const register = async (credentials, refererUrl = null) => {
    try {
       // Input validation
       if (!credentials.name || !credentials.email || !credentials.password) {
@@ -17,10 +18,10 @@ const register = async (credentials) => {
          };
       }
 
-      const response = await fetchPost(
-         `${BACKEND_URL_AUTH}/register`,
-         credentials
-      );
+      const response = await fetchPost(`${BACKEND_URL_AUTH}/register`, {
+         credentials,
+         refererUrl,
+      });
 
       if (!response.data) {
          return {
@@ -168,30 +169,11 @@ const logout = async () => {
    }
 };
 
-/**
- * Check the referer header for identification of Schema
- * @param {string} referer - Referer header
- * @returns {Promise<Object>} API response
- */
-const checkReferer = async (referer) => {
-   const response = await fetchPost(`${BACKEND_URL_AUTH}/check-referer`, {
-      referer,
-   });
-   if (!response.success) {
-      return {
-         message: "Referer URL is not a registered URL",
-         success: false,
-      };
-   }
-   return response;
-};
-
 // --- export ---
 const authApi = {
    register,
    login,
    logout,
-   checkReferer,
 };
 
 export default authApi;

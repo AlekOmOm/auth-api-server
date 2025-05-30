@@ -97,30 +97,9 @@ const logout = [
       .withMessage(rules.ERROR_MESSAGES.USER.INVALID_PASSWORD),
 ];
 
-/*
- * checkReferer
- * - validate referer details
- * - is URL
- * - is valid
- */
-const checkReferer = [
-   body("referer")
-      .isURL()
-      .withMessage(rules.ERROR_MESSAGES.USER.INVALID_REFERRER),
-
-   (req, res, next) => {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-         return res.status(400).json({ errors: errors.array() });
-      }
-      next();
-   },
-];
-
 // --- export ---
 export default {
    register,
    login,
    logout,
-   checkReferer,
 };

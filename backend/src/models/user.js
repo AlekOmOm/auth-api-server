@@ -24,9 +24,25 @@ class User {
     * Convert to database-ready object (without plain secret)
     * @returns {Object} Object ready for database insertion
     */
-   toDatabaseObject() {}
+   toDatabaseObject() {
+      return {
+         id: this.id,
+         name: this.name,
+         role: this.role,
+         email: this.email,
+         password_hash: this.passwordHash,
+      };
+   }
 
-   toDatabaseArray() {}
+   toDatabaseArray() {
+      return [
+         this.id,
+         this.name,
+         this.role,
+         this.email,
+         this.passwordHash,
+      ];
+   }
 
    static fromDbRows(dbRows) {
       return dbRows.map((dbRow) => User.fromDb(dbRow));
@@ -48,4 +64,4 @@ class User {
    }
 }
 
-export { User };
+export default User;

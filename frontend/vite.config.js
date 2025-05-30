@@ -15,25 +15,34 @@ export default defineConfig(({ command, mode }) => {
       ? env.PROD_FRONTEND_PORT || 3000
       : env.DEV_FRONTEND_PORT || 3000;
 
+   // For local development, Vite typically runs on localhost or 0.0.0.0
+   // Using "frontend" as a hostname implies a containerized setup.
+   // If running locally without Docker resolving "frontend", this should be localhost.
    const FRONTEND_HOST = isProd
       ? env.PROD_FRONTEND_HOST || "localhost"
-      : "frontend";
+      : env.DEV_FRONTEND_HOST || "localhost";
 
    const BACKEND_PORT = isProd
       ? env.PROD_BACKEND_PORT || 3001
       : env.DEV_BACKEND_PORT || 3001;
 
+   // Corrected BACKEND_HOST to use environment variables or 'localhost' as a fallback.
+   // Also corrected the typo from process.env to env for PROD_BACKEND_HOST.
    const BACKEND_HOST = isProd
-      ? process.env.PROD_BACKEND_HOST || "localhost"
-      : "backend";
+      ? env.PROD_BACKEND_HOST || "localhost"
+      : env.DEV_BACKEND_HOST || "localhost";
 
-   const BACKEND_URL = isProd
-      ? `http://${BACKEND_HOST}:${BACKEND_PORT}`
-      : `http://backend:3001`;
+   // BACKEND_URL should be constructed dynamically for both prod and dev
+   // using the resolved BACKEND_HOST and BACKEND_PORT.
+   const BACKEND_URL = `http://${BACKEND_HOST}:${BACKEND_PORT}`;
 
-   const apiUrl = isProd
-      ? `http://${BACKEND_HOST}:${BACKEND_PORT}/api`
-      : `http://${BACKEND_HOST}:${BACKEND_PORT}/api`;
+   // apiUrl will now also use the corrected BACKEND_HOST
+   const apiUrl = `http://${BACKEND_HOST}:${BACKEND_PORT}/api`;
+
+   console.log("🔍 [VITE CONFIG] apiUrl:", apiUrl);
+   console.log("🔍 [VITE CONFIG] BACKEND_URL:", BACKEND_URL);
+   console.log("🔍 [VITE CONFIG] BACKEND_HOST:", BACKEND_HOST);
+   console.log("🔍 [VITE CONFIG] BACKEND_PORT:", BACKEND_PORT);
 
    return {
       plugins: [svelte()],

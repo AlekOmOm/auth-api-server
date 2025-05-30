@@ -140,7 +140,7 @@ app.use(generalLimiter);
 // --- routes ---
 
 /** * Schema detection middleware - detects client schema from URL/token */
-import { detectSchema } from "./src/middleware/schemaDetection.js";
+import { detectSchema } from "./src/middleware/detection.js";
 app.use(detectSchema);
 /** * clientServer - for host-application to connect to auth-system */
 import clientServerRoute from "./src/routes/clientServer.js";

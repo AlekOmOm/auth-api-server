@@ -39,31 +39,40 @@ export async function getUsers(schema) {
 }
 
 /**
- * get user
- * - byId
- * - byNameAndEmail
- *
- * @returns {Object} {
- *    message: string,
- *    data: User
- * }
+ * Get user by id or by name and email
+ * @param {Object} params - Parameters object
+ * @param {string} params.id - User ID (optional)
+ * @param {string} params.name - User name (optional)
+ * @param {string} params.email - User email (optional)
+ * @param {string} params.schema - The database schema
+ * @param {boolean} params.forLogin - Whether this is for login (optional)
+ * @param {string} params.password - Password for login verification (optional)
+ * @returns {Object} User data
  */
-export async function getUser(req, unhashedPassword = false) {
+export async function getUser({
+   id,
+   name,
+   email,
+   schema,
+   forLogin = false,
+   password = null,
+}) {
    try {
-      if (req.body.id) {
-         const res = await getUserById(req.body.id, req.session.schema);
+      if (id) {
+         const res = await getUserById(id, schema);
          if (res.data) {
             return res;
          }
       }
 
-      if (req.body.name && req.body.email) {
-         return await getUserByNameAndEmail(
-            req.body.name,
-            req.body.email,
-            req.session.schema,
-            unhashedPassword
-         );
+      if (name && email) {
+         return await getUserByNameAndEmail({
+            name,
+            email,
+            schema,
+            forLogin,
+            password,
+         });
       }
 
       throw new ValidationError("User ID or name and email are required");
@@ -103,19 +112,22 @@ export async function getUserById(id, schema) {
 }
 
 /**
- * Read user by email
- * @param {string} name - User's name
- * @param {string} email - User's email
- * @param {string} schema - The database schema
+ * Read user by name and email
+ * @param {Object} params - Parameters object
+ * @param {string} params.name - User's name
+ * @param {string} params.email - User's email
+ * @param {string} params.schema - The database schema
+ * @param {boolean} params.forLogin - Whether this is for login (default: false)
+ * @param {string} params.password - Password for login verification (optional)
  * @returns {Promise<Object>} Formatted response with user data or error
  */
-export async function getUserByNameAndEmail(
+export async function getUserByNameAndEmail({
    name,
    email,
    schema,
    forLogin = false,
-   password = null
-) {
+   password = null,
+}) {
    try {
       if (!name || !email) {
          throw new ValidationError("Name and email are required");
