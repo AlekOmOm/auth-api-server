@@ -1,4 +1,4 @@
-// enum of table names
+// Definitive table names for Functional Database Operations
 const TABLES = {
    client_server: "client_servers",
    user: "users",
