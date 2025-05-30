@@ -3,17 +3,6 @@
 ## Overview
 This document analyzes whether the service layer provides full CRUD and business logic operations for all database schemas in the auth-system.
 
-## Database Schemas
-
-### 1. **auth_internal** Schema
-Contains the core authentication system tables:
-- `client_servers` - Registry of client applications
-
-### 2. **client_servers** Schema (Template)
-Each client gets their own schema with:
-- `users` - User accounts for the client application
-- `sessions` - Active user sessions
-
 ## Service Layer Coverage
 
 ### ✅ Complete Coverage
