@@ -1,6 +1,7 @@
-import * as clientServerRepo from "../repo/repositories/authInternal/repository.js";
-import { ClientServer } from "../models/ClientServer.js";
-
+import ClientServer from "../models/ClientServer.js";
+import Repo from "../repo/index.js";
+// import { operations } from "../repo/connection/queries/index.js"; // Unused import
+import { toDB, fromDB } from "../models/functional/index.js";
 /**
  * Service layer for Client Server CRUD operations
  *
@@ -15,6 +16,65 @@ import { ClientServer } from "../models/ClientServer.js";
  * - deleteUserClientServer (DELETE)
  */
 
+// --- pure functions ---
+
+/**
+ * Repo instance
+ */
+const TABLE = "client_servers";
+const repo = (schema) => new Repo(schema, TABLE);
+const repoQuery = (schema, operationName) => (instance) =>
+   repo(schema).query(operationName, instance);
+
+/**
+ * pipeline function
+ * - three part flow:
+ *   1. validate request body
+ *   2. execute repo function
+ *   3. return result
+ * @async
+ * @param {*} model - model class
+ * @param {*} executor - repoQuery prepared for execution with instance
+ * @param {*} message - message to return
+ * @param  {...any} args - arguments to pass to the repo function
+ * @returns {Object} { message, data }
+ */
+const pipeline = async (model, executor, message, ...args) => {
+   try {
+      // 1. validate request body or prepare instance for lookup
+      const instance = await model.fromRequestBody(...args);
+      // 2. execute repo function, passing data transformed by toDB if necessary
+      // For getters, the raw instance (with lookup ID) is passed to executor (Repo.query)
+      // Repo.query handles toDB internally for operations that need it (create/update via getQueryConfig)
+      // However, the old pipeline was toDB(instance) BEFORE executor.
+      // Let's analyze: if executor is repo.query, repo.query now gets the raw instance.
+      // Inside repo.query, getQueryConfig is called. getQueryConfig's `inputParams` will be `[instance]`.
+      // If the operation is an `inputOp` (create/update), getQueryConfig itself applies `toDB(logicalTableName, instance)`.
+      // So, the `toDB` here in the pipeline is redundant if the `executor` path correctly handles it.
+
+      // If `executor` expects a raw model instance (for getters) or a DB-ready object (for setters passed through directly):
+      // For getter operations (like checkReferer -> getByReferer), `repo.query` expects the instance with the ID.
+      // For create/update operations, `repo.query` expects the data object.
+      // The `toDB` was originally here: `executor(toDB(LOGICAL_TABLE_NAME, instance))`
+      // This was problematic because `executor` (which is repo.query) was then getting a DB object, but `getQueryConfig` inside it ALSO tries to do `toDB`.
+
+      // Correct approach: Repo.query receives the model instance or data object directly.
+      // It then uses getQueryConfig, which specifies if toDB is needed for that specific SQL operation (inputOps).
+      const result = await executor(instance); // Pass the model instance directly
+
+      // 3. return result
+      // The result from Repo.query is already transformed by fromDB if it's an entity/array type.
+      return {
+         message: message,
+         data: result,
+      };
+   } catch (error) {
+      throw error;
+   }
+};
+
+// --- service functions ---
+
 /**
  * Register a new client server (CREATE)
  * @param {Object} params - Parameters object
@@ -25,24 +85,14 @@ import { ClientServer } from "../models/ClientServer.js";
  *    data: ClientServer
  * }
  */
-export async function registerClientServer({ clientServerData, userId }) {
-   try {
-      const clientServer = await ClientServer.fromRequestBody(
-         clientServerData,
-         userId
-      );
-
-      const createdClientServer = await clientServerRepo.createClientServer(
-         clientServer
-      );
-
-      return {
-         message: "Client server registered successfully",
-         data: createdClientServer,
-      };
-   } catch (error) {
-      throw error;
-   }
+export async function register({ clientServerData, userId, schema }) {
+   return await pipeline(
+      ClientServer,
+      repoQuery(schema, "create"),
+      "Client server registered successfully",
+      clientServerData,
+      userId
+   );
 }
 
 /**
@@ -54,20 +104,13 @@ export async function registerClientServer({ clientServerData, userId }) {
  *    data: ClientServer[]
  * }
  */
-export async function getUserClientServers({ userId }) {
-   try {
-      // Repository now returns ClientServer instances
-      const clientServers = await clientServerRepo.getClientServersByUserId(
-         userId
-      );
-
-      return {
-         message: "Client servers retrieved successfully",
-         data: clientServers,
-      };
-   } catch (error) {
-      throw error;
-   }
+export async function getUserClientServers({ userId, schema }) {
+   return await pipeline(
+      ClientServer,
+      repoQuery(schema, "getByUserId"),
+      "Client servers retrieved successfully",
+      userId
+   );
 }
 
 /**
@@ -77,60 +120,44 @@ export async function getUserClientServers({ userId }) {
  * @param {string} params.clientId - Client ID from session
  * @returns {Object} Client server details
  */
-export async function getUserClientServer({ userId, clientId }) {
-   try {
-      // Repository now returns ClientServer instance
-      const clientServer =
-         await clientServerRepo.getClientServerByUserIdAndClientId(
-            userId,
-            clientId
-         );
-
-      return {
-         message: "Client server retrieved successfully",
-         data: clientServer,
-      };
-   } catch (error) {
-      throw error;
-   }
+export async function getUserClientServer({ userId, clientId, schema }) {
+   return await pipeline(
+      ClientServer,
+      repoQuery(schema, "getByUserIdAndClientId"),
+      "Client server retrieved successfully",
+      userId,
+      clientId
+   );
 }
-
 /**
  * Update client server for a user (UPDATE)
  * @param {Object} params - Parameters object
  * @param {string} params.userId - User ID from session
  * @param {string} params.clientId - Client ID from session
  * @param {Object} params.updateData - Data to update
+ *                  - partial data -- not full ClientServer instance
  * @returns {Object} Updated client server
  */
-export async function updateUserClientServer({ userId, clientId, updateData }) {
-   try {
-      // Repository now returns ClientServer instance
-      const existingClient =
-         await clientServerRepo.getClientServerByUserIdAndClientId(
-            userId,
-            clientId
-         );
+export async function updateUserClientServer({
+   userId,
+   clientId,
+   updateData,
+   schema,
+}) {
+   const { data: existingClientServer } = await pipeline(
+      ClientServer,
+      repoQuery(schema, "getByUserIdAndClientId"),
+      "Existing Client server retrieved successfully",
+      userId,
+      clientId
+   );
 
-      // Create ClientServer instance from validated update data
-      const validatedData = ClientServer.validateUpdateData(
-         updateData,
-         existingClient
-      );
-      const clientServerToUpdate = ClientServer.fromDb(validatedData);
-
-      // Repository now returns ClientServer instance
-      const updatedClient = await clientServerRepo.updateClientServer(
-         clientServerToUpdate
-      );
-
-      return {
-         message: "Client server updated successfully",
-         data: updatedClient,
-      };
-   } catch (error) {
-      throw error;
-   }
+   return await pipeline(
+      ClientServer,
+      repoQuery(schema, "update"),
+      "Client server updated successfully",
+      ClientServer.update(updateData, existingClientServer)
+   );
 }
 
 /**
@@ -140,22 +167,14 @@ export async function updateUserClientServer({ userId, clientId, updateData }) {
  * @param {string} params.clientId - Client ID from session
  * @returns {Object} Deletion response
  */
-export async function deleteUserClientServer({ userId, clientId }) {
-   try {
-      // Repository now returns ClientServer instance
-      const deletedClient =
-         await clientServerRepo.deleteClientServerByUserIdAndClientId(
-            userId,
-            clientId
-         );
-
-      return {
-         message: "Client server deleted successfully",
-         data: deletedClient,
-      };
-   } catch (error) {
-      throw error;
-   }
+export async function deleteUserClientServer({ userId, clientId, schema }) {
+   return await pipeline(
+      ClientServer,
+      repoQuery(schema, "deleteByUserIdAndClientId"),
+      "Client server deleted successfully",
+      userId,
+      clientId
+   );
 }
 
 /**
@@ -167,23 +186,13 @@ export async function deleteUserClientServer({ userId, clientId }) {
  *    data: ClientServer
  * }
  */
-export async function verifySecretHash({ secretHash }) {
-   try {
-      const clientServer = await clientServerRepo.getClientServerBySecretHash(
-         secretHash
-      );
-
-      if (!clientServer) {
-         throw new Error("Invalid API token");
-      }
-
-      return {
-         message: "Secret hash verified successfully",
-         data: clientServer,
-      };
-   } catch (error) {
-      throw new Error("Invalid API token");
-   }
+export async function verifySecretHash({ secretHash, schema }) {
+   return await pipeline(
+      ClientServer,
+      repoQuery(schema, "getBySecretHash"),
+      "Client server retrieved successfully",
+      secretHash
+   );
 }
 
 /**
@@ -195,38 +204,13 @@ export async function verifySecretHash({ secretHash }) {
  *    data: ClientServer
  * }
  */
-export async function checkReferer({ refererUrl }) {
-   try {
-      const clientServer = await clientServerRepo.getClientServerByReferer(
-         refererUrl
-      );
-
-      if (!clientServer) {
-         return {
-            success: false,
-            message: "Referer URL is not a registered URL",
-            data: null,
-         };
-      }
-
-      return {
-         success: true,
-         message: "Referer URL is a registered URL",
-         data: clientServer,
-      };
-   } catch (error) {
-      console.error(
-         `[ClientServerService] Error in checkReferer for ${refererUrl}:`,
-         error
-      );
-      return {
-         success: false,
-         message:
-            error.message ||
-            "An unexpected error occurred while checking the referer.",
-         data: null,
-      };
-   }
+export async function checkReferer({ refererUrl, schema }) {
+   return await pipeline(
+      ClientServer,
+      repoQuery(schema, "getByReferer"),
+      "Client server retrieved successfully",
+      refererUrl
+   );
 }
 
 /**
@@ -235,49 +219,24 @@ export async function checkReferer({ refererUrl }) {
  * @param {string} url - The URL to look up
  * @returns {Promise<Object|null>} Client server data or null if not found. Structure: { success: boolean, data?: ClientServer, message?: string }
  */
-export async function getClientServerByUrl(url) {
-   try {
-      console.log(
-         `[ClientServerService] Attempting to find client server by URL: ${url}`
-      );
-      const clientServer = await clientServerRepo.findClientServerByUrl(url);
-
-      if (clientServer) {
-         console.log(
-            `[ClientServerService] Found client server for URL ${url}:`,
-            clientServer.name
-         );
-         return { success: true, data: clientServer };
-      } else {
-         console.log(
-            `[ClientServerService] No client server found for URL ${url}`
-         );
-         return {
-            success: false,
-            message: "Client server not found for the given URL.",
-         };
-      }
-   } catch (error) {
-      console.error(
-         `[ClientServerService] Error in getClientServerByUrl for ${url}:`,
-         error
-      );
-      return {
-         success: false,
-         message: error.message || "Error finding client server by URL.",
-      };
-   }
+export async function getByUrl({ url, schema }) {
+   return await pipeline(
+      ClientServer,
+      repoQuery(schema, "getByReferer"),
+      "Client server retrieved successfully",
+      url
+   );
 }
 
 export const clientServerService = {
-   registerClientServer,
+   register,
    getUserClientServers,
    getUserClientServer,
    updateUserClientServer,
    deleteUserClientServer,
    verifySecretHash,
    checkReferer,
-   getClientServerByUrl,
+   getByUrl,
 };
 
 export default clientServerService;

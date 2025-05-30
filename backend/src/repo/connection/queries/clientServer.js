@@ -57,34 +57,30 @@ export const deleteAll = `
 `;
 
 // User-specific client server queries
-export const getClientServersByUserId = `
+export const getByUserId = `
   SELECT * FROM client_servers WHERE user_id = $1 ORDER BY created_at DESC;
 `;
 
-export const getClientServerByUserIdAndClientId = `
+export const getByUserIdAndClientId = `
   SELECT * FROM client_servers WHERE user_id = $1 AND client_id = $2;
 `;
 
-export const deleteClientServerByUserIdAndClientId = `
+export const deleteByUserIdAndClientId = `
   DELETE FROM client_servers WHERE user_id = $1 AND client_id = $2 RETURNING *;
 `;
 
-import * as userQueries from "./user.js";
-import * as sessionQueries from "./session.js";
-//import * as ownerPanelQueries from "./ownerPanelQueries.js";
-
-
-
 export const CLIENT_SERVER = {
-   create: createClientServer,
-   getAll: getClientServers,
-   get: getClientServer,
-   getByClientSecretHash: getClientServerByClientSecretHash,
-   getByReferer: getClientServerByReferer,
-   update: updateClientServer,
-   delete: deleteClientServer,
-   deleteAll: deleteClientServers,
-   getByUserId: getClientServersByUserId,
-   getByUserIdAndClientId: getClientServerByUserIdAndClientId,
-   deleteByUserIdAndClientId: deleteClientServerByUserIdAndClientId,
+   // global
+   create,
+   get,
+   getAll,
+   getBySecretHash,
+   getByReferer,
+   update,
+   deleteByID,
+   deleteAll,
+   // user-specific
+   getByUserId,
+   getByUserIdAndClientId,
+   deleteByUserIdAndClientId,
 };

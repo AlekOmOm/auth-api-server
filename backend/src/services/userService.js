@@ -1,19 +1,9 @@
-import { userRepo as userAuthInternalRepo } from "../repo/repositories/userRepository.js";
-import { userRepo as userClientAppRepo } from "../repo/repositories/clientAppRepository.js"; // For client app tenant operations
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.js";
 import hashing from "../utils/hashing.js";
 
 // ---- utils ----
 import { removePasswordFromUser } from "../utils/authUtils.js";
 
-// ---- Helper to get the correct repository based on schema ----
-function getRepo(schema) {
-   if (schema === "auth_internal") {
-      return userAuthInternalRepo;
-   } else {
-      return userClientAppRepo;
-   }
-}
 
 // ---- service ----
 

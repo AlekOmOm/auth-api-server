@@ -7,7 +7,7 @@
  */
 import { Pool } from "pg";
 import config from "../../../config/env.js";
-import { ddl } from "../../DDL/client_servers.js";
+import { ddl } from "../../DDL/auth_internal_complete.js";
 
 // cache
 let pool;

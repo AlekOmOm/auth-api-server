@@ -19,7 +19,8 @@
  */
 
 import getPool from "./connection/pools/index.js";
-import query from "./connection/queries/index.js";
+import getQueryConfig from "./connection/queries/index.js";
+import { fromDB } from "../models/functional/index.js";
 
 // --- REPOSITORY ---
 class Repo {
@@ -30,8 +31,50 @@ class Repo {
    }
 
    // --- FUNCTIONAL DATABASE OPERATIONS ---
-   query(operation, ...params) {
-      return query(this.tableName, operation, ...params);
+   /**
+    * Execute a database operation
+    * @param {string} operationName - The operation to execute
+    * @param {...any} params - Parameters for the operation
+    * @returns {Promise<any>} The result of the operation
+    */
+   async query(operationName, ...params) {
+      const config = getQueryConfig(this.tableName, operationName, ...params);
+      // config = { sql, valuesExtractor, inputParams, operationType, logicalTableName }
+
+      let sqlParams = [];
+      if (
+         config.valuesExtractor &&
+         config.inputParams &&
+         config.inputParams.length > 0
+      ) {
+         // inputParams[0] is the instance or data object
+         sqlParams = config.valuesExtractor(config.inputParams[0]);
+      } else if (config.valuesExtractor) {
+         // Handle cases like getAll where there are no inputParams but paramExtractor might be relevant if it was defined differently
+         // For now, if valuesExtractor exists, it expects inputParams[0]
+         // This branch might indicate an issue if valuesExtractor exists but inputParams is empty
+      } // If no valuesExtractor, sqlParams remains [] (e.g. for getAll)
+
+      try {
+         const { rows, rowCount } = await this.pool.query(
+            config.sql,
+            sqlParams
+         );
+
+         if (config.operationType === "entity") {
+            return rows.length
+               ? fromDB(config.logicalTableName, rows[0])
+               : null;
+         } else if (config.operationType === "array") {
+            return rows.map((row) => fromDB(config.logicalTableName, row));
+         } else {
+            // For 'void' or other types, could return rowCount or raw result
+            return { rows, rowCount }; // Default for now
+         }
+      } catch (error) {
+         // console.error("Error executing query:", error, "SQL:", config.sql, "Params:", sqlParams);
+         throw error;
+      }
    }
 }
 

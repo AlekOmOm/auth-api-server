@@ -1,5 +1,5 @@
 // Definitive table names for Functional Database Operations
-const TABLES = {
+export const TABLES = {
    client_server: "client_servers",
    user: "users",
    session: "sessions",

@@ -25,7 +25,7 @@ const handshake = async (req, res, next) => {
  */
 const registerClientServer = async (req, res, next) => {
    try {
-      const serviceResult = await service.registerClientServer({
+      const serviceResult = await service.register({
          clientServerData: req.body,
          userId: getUserId(req.session),
       });

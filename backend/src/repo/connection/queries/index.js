@@ -1,42 +1,98 @@
 import { toDB, fromDB } from "../../../models/functional/index.js";
-import clientServer from "./clientServer.js";
-import session from "./session.js";
-import user from "./user.js";
-import getTable from "./TABLES.js";
+import * as clientServer from "./clientServer.js";
+import * as session from "./session.js";
+import * as user from "./user.js";
+import getTableDefault, { TABLES } from "../TABLES.js";
+
+// Use the 'get' function from the default export
+const getTable = getTableDefault.get;
 
 // Query operations registry
-const operations = {
-   [getTable.get("client_servers")]: {
-      create: clientServer.create,
-      getAll: clientServer.getAll,
-      get: clientServer.get,
-      update: clientServer.update,
-      delete: clientServer.delete,
-      deleteAll: clientServer.deleteAll,
-      getBySecretHash: clientServer.getBySecretHash,
-      getByReferer: clientServer.getByReferer,
-      getByUserId: clientServer.getByUserId,
-      getByUserIdAndClientId: clientServer.getByUserIdAndClientId,
+export const operations = {
+   [getTable("client_server")]: {
+      create: {
+         sql: clientServer.create,
+         type: "entity",
+         paramExtractor: (data) => [
+            data.client_id,
+            data.client_secret_hash,
+            data.app_name,
+            data.assigned_schema_name,
+            data.identifier_url,
+            data.entry_point_url,
+            data.authorized_urls,
+            data.user_id,
+            data.client_mode,
+         ],
+      },
+      getByReferer: {
+         sql: clientServer.getByReferer,
+         type: "entity",
+         paramExtractor: (instance) => [instance.identifier_url],
+      },
+      get: {
+         sql: clientServer.get,
+         type: "entity",
+         paramExtractor: (instance) => [instance.client_id],
+      },
+      getAll: { sql: clientServer.getAll, type: "array" },
+      getByUserId: {
+         sql: clientServer.getByUserId,
+         type: "array",
+         paramExtractor: (instance) => [instance.user_id],
+      },
+      getByUserIdAndClientId: {
+         sql: clientServer.getByUserIdAndClientId,
+         type: "entity",
+         paramExtractor: (instance) => [instance.user_id, instance.client_id],
+      },
+      update: {
+         sql: clientServer.update,
+         type: "entity",
+         paramExtractor: (data) => [
+            data.client_id,
+            data.client_secret_hash,
+            data.app_name,
+            data.assigned_schema_name,
+            data.identifier_url,
+            data.entry_point_url,
+            data.authorized_urls,
+            data.user_id,
+            data.client_mode,
+         ],
+      },
+      deleteByUserIdAndClientId: {
+         sql: clientServer.deleteByUserIdAndClientId,
+         type: "entity",
+         paramExtractor: (instance) => [instance.user_id, instance.client_id],
+      },
+      getBySecretHash: {
+         sql: clientServer.getBySecretHash,
+         type: "entity",
+         paramExtractor: (instance) => [instance.secret_hash],
+      },
    },
-   [getTable.get("users")]: {
+   [getTable("user")]: {
       create: user.create,
+      createUsers: user.createUsers,
       getAll: user.getAll,
       get: user.get,
       update: user.update,
-      delete: user.delete,
+      deleteByID: user.deleteByID,
+      deleteAll: user.deleteAll,
       getByEmail: user.getByEmail,
    },
-   [getTable.get("sessions")]: {
+   [getTable("session")]: {
       create: session.create,
       getAll: session.getAll,
       get: session.get,
       update: session.update,
-      delete: session.delete,
+      deleteByID: session.deleteById,
       deleteAll: session.deleteAll,
       getByUserId: session.getByUserId,
-      getBySessionId: session.getBySessionId,
+      getById: session.getById, // session id
       deleteByUserId: session.deleteByUserId,
-      deleteBySessionId: session.deleteBySessionId,
+      deleteById: session.deleteById,
       deleteExpired: session.deleteExpired,
    },
 };
@@ -63,41 +119,32 @@ const entityOps = [
  * @returns {any} Query result (transformed if needed)
  */
 const query = (table, operation, ...params) => {
-   // Validate table
-   if (!operations[table]) {
-      throw new Error(`Table '${table}' not found`);
+   const logicalTableName = Object.keys(TABLES).find(
+      (key) => TABLES[key] === table
+   );
+   if (!logicalTableName || !operations[getTable(logicalTableName)]) {
+      throw new Error(`Table '${table}' not found or no operations defined.`);
    }
-
-   // Validate operation
-   if (!operations[table][operation]) {
+   const operationConfig = operations[getTable(logicalTableName)][operation];
+   if (!operationConfig) {
       throw new Error(
-         `Operation '${operation}' not found for table '${table}'`
+         `Operation '${operation}' not found for table '${table}'.`
       );
    }
 
-   // Get the query function
-   const queryFn = operations[table][operation];
-
-   // Transform input data if needed
-   let transformedParams = params;
-   if (inputOps.includes(operation) && params.length > 0) {
-      transformedParams = [toDB(table, params[0]), ...params.slice(1)];
+   let processedParams = params;
+   if (inputOps.includes(operation) && params.length > 0 && params[0]) {
+      processedParams = [toDB(logicalTableName, params[0]), ...params.slice(1)];
    }
+   // For non-inputOps (like getters), params[0] is often the instance with lookup fields.
 
-   // Execute query
-   const result = queryFn(...transformedParams);
-
-   // Transform output data if needed
-   if (arrayOps.includes(operation) && Array.isArray(result)) {
-      return result.map((entity) => fromDB(table, entity));
-   }
-
-   if (entityOps.includes(operation) && result) {
-      return fromDB(table, result);
-   }
-
-   // Return as-is for other operations (delete, deleteAll, etc.)
-   return result;
+   return {
+      sql: operationConfig.sql,
+      valuesExtractor: operationConfig.paramExtractor, // Function to get SQL values from processedParams[0]
+      inputParams: processedParams, // The (potentially toDB transformed) params as passed by Repo
+      operationType: operationConfig.type, // 'entity', 'array', or 'void'/'rowCount'
+      logicalTableName: logicalTableName,
+   };
 };
 
 export default query;

@@ -20,7 +20,6 @@ CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_sessions_session_id ON sessions(session_id); 
  */
 
-
 // --- create ---
 export const create = `
   INSERT INTO sessions (id, user_id, session_id, ip_address, user_agent, expires_at)
@@ -28,9 +27,10 @@ export const create = `
   RETURNING *;
 `;
 // --- get ---
-export const getById = `SELECT * FROM sessions WHERE session_id = $1::uuid;`;
+export const get = `SELECT * FROM sessions WHERE session_id = $1::uuid;`;
 export const getAll = `SELECT * FROM sessions;`;
 export const getByUserId = `SELECT * FROM sessions WHERE user_id = $1::uuid;`;
+export const getById = `SELECT * FROM sessions WHERE id = $1::uuid;`;
 
 // --- update ---
 export const update = `
@@ -46,3 +46,16 @@ export const deleteByUserId = `DELETE FROM sessions WHERE user_id = $1::uuid;`;
 export const deleteExpired = `
   DELETE FROM sessions WHERE expires_at IS NOT NULL AND expires_at <= NOW();
 `;
+
+export const SESSION = {
+   create,
+   get,
+   getAll,
+   getByUserId,
+   getById,
+   update,
+   deleteById,
+   deleteAll,
+   deleteByUserId,
+   deleteExpired,
+};

@@ -51,7 +51,7 @@ import { v4 as uuidv4 } from "uuid";
 import bcrypt from "bcrypt";
 import { ValidationError, NotFoundError } from "../middleware/errorHandler.js";
 import BaseModel from "./base/BaseModel.js";
-
+import { pipe, curry } from "../utils/functional.js";
 class ClientServer extends BaseModel {
    constructor(
       appName,
@@ -165,6 +165,23 @@ class ClientServer extends BaseModel {
     * @returns {Promise<ClientServer>} Fully initialized ClientServer instance
     */
    static async fromRequestBody(requestBody, userId = null) {
+      // Handle cases where requestBody might be a simple string (e.g., a URL for lookup)
+      if (typeof requestBody === "string") {
+         const minimalInstance = new ClientServer(
+            `lookup-${Date.now()}`,
+            requestBody,
+            requestBody,
+            [requestBody]
+         );
+         try {
+            await minimalInstance.generateClientSecret();
+         } catch (e) {
+            /* ignore */
+         }
+         minimalInstance.clearErrors();
+         return minimalInstance;
+      }
+
       const {
          app_name: appName,
          identifier_url: identifierUrl,
@@ -201,7 +218,7 @@ class ClientServer extends BaseModel {
     * @param {Object} existingClient - Existing client server data
     * @returns {Object} Validated update data ready for database
     */
-   static validateUpdateData(requestBody, existingClient) {
+   static update(requestBody, existingClient) {
       if (!existingClient) {
          throw new ValidationError("Client server not found");
       }
@@ -384,12 +401,17 @@ class ClientServer extends BaseModel {
    }
 }
 
+export default ClientServer;
+
 // --- FUNCTIONAL OPERATIONS FOR CLIENT SERVER ---
 
 /**
  * Functional operations that work with ClientServer instances
  */
 export const ClientServerOperations = {
+   // for service pipelines
+   fromRequestBody: (requestBody) => ClientServer.fromRequestBody(requestBody),
+
    // for repo pipelines
    toDB: (clientServer) => clientServer.toDatabaseObject(),
    fromDB: (dbRow) => ClientServer.fromDb(dbRow),

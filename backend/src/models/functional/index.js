@@ -10,6 +10,12 @@ export { UserOperations } from "../User.js";
 export { SessionOperations } from "../Session.js";
 export { ClientServerOperations } from "../ClientServer.js";
 
+// --- for Service Layer ---
+/**
+ * Request - Response operations
+ */
+
+// --- for Database Operations ---
 // toDB and fromDB
 // identify the table and the operations to perform
 const MODELS = (tableName, operation) => {
