@@ -19,7 +19,7 @@ export { ClientServerOperations } from "../ClientServer.js";
 // toDB and fromDB
 // identify the table and the operations to perform
 const MODELS = (tableName, operation) => {
-   const MODELS = {
+   const modelsMap = {
       client_server: {
          toDB: ClientServerOperations.toDB,
          fromDB: ClientServerOperations.fromDB,
