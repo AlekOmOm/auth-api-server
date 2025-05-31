@@ -3,7 +3,6 @@
 
 auth-system allows for multiple client apps to be onboarded to the system.
 
-
 core components:
 - [client app authorization](./components/client-app-authorization.md)
 - [frontend url detection](./components/frontend-url-detection.md)
