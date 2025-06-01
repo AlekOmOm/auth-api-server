@@ -417,10 +417,10 @@ class ClientServer extends BaseModel {
    toApiResponse() {
       const response = super.toApiResponse();
       // Never include the secret hash in API responses
-      delete response.client_secret_hash;
+      response.client_secret_hash = undefined;
       // Include plain secret only when it's just been generated
       if (!this.client_secret) {
-         delete response.client_secret;
+         response.client_secret = undefined;
       }
       return response;
    }
@@ -519,11 +519,11 @@ export const ClientServerOperations = {
    // - updated_at
    sortByCreatedAt: (clientServers) =>
       [...clientServers].sort(
-         (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+         (a, b) => new Date(b.created_at) - new Date(a.created_at)
       ),
 
    sortByUpdatedAt: (clientServers) =>
       [...clientServers].sort(
-         (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)
+         (a, b) => new Date(b.updated_at) - new Date(a.updated_at)
       ),
 };
