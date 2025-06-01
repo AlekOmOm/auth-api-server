@@ -296,11 +296,99 @@ export async function getSessions({ userId, schema }) {
  * @returns {Object} Session information
  */
 export async function getSession({ userId, sessionData }) {
-   const data = {
-      userId: sessionUtils.getUserId(sessionData),
-      sessionDetails: sessionUtils.getSession(sessionData),
+   const currentSchema = sessionUtils.getSchema(sessionData);
+   const sessionEffectiveRole = sessionUtils.getRole(sessionData);
+
+   if (!userId) {
+      throw new AuthError("Authentication required: User ID missing.");
+   }
+   if (!currentSchema) {
+      throw new AuthError(
+         "Authentication required: Schema missing from session."
+      );
+   }
+
+   // 1. Fetch user's base details (e.g., name)
+   const repoToUse =
+      currentSchema === "auth_internal"
+         ? userAuthInternalRepo
+         : userClientAppRepo;
+   const userRecord = await repoToUse.getUser(currentSchema, userId);
+
+   if (!userRecord) {
+      throw new AuthError(
+         `User not found in schema '${currentSchema}' with ID '${userId}'.`
+      );
+   }
+   // Use removePasswordFromUser to ensure only necessary fields are kept, even if just selecting 'name'
+   const { name: userName } = removePasswordFromUser(userRecord);
+
+   // 2. Fetch authorized_urls for the client application identified by currentSchema
+   let authorized_urls = [];
+   // authorized_urls are relevant for client application schemas, not typically for "auth_internal" itself.
+   if (currentSchema !== "auth_internal") {
+      try {
+         const authDbPool = await getAuthPool(); // Pool for auth_internal DB
+         const clientServerResult = await authDbPool.query(
+            "SELECT authorized_urls FROM client_servers WHERE schema_name = $1",
+            [currentSchema]
+         );
+
+         if (
+            clientServerResult.rows.length > 0 &&
+            clientServerResult.rows[0].authorized_urls
+         ) {
+            let urls_from_db = clientServerResult.rows[0].authorized_urls;
+            if (typeof urls_from_db === "string") {
+               try {
+                  authorized_urls = JSON.parse(urls_from_db);
+                  if (!Array.isArray(authorized_urls)) {
+                     console.warn(
+                        `[AUTH SERVICE] authorized_urls for schema ${currentSchema} is not an array after parsing:`,
+                        authorized_urls
+                     );
+                     authorized_urls = []; // Default to empty if not an array
+                  }
+               } catch (parseError) {
+                  console.error(
+                     `[AUTH SERVICE] Error parsing authorized_urls JSON for schema ${currentSchema}:`,
+                     parseError,
+                     "Raw value:",
+                     urls_from_db
+                  );
+                  authorized_urls = [];
+               }
+            } else if (Array.isArray(urls_from_db)) {
+               authorized_urls = urls_from_db; // If DB returns an array directly
+            } else {
+               console.warn(
+                  `[AUTH SERVICE] authorized_urls for schema ${currentSchema} is not a string or array:`,
+                  urls_from_db
+               );
+            }
+         } else {
+            console.warn(
+               `[AUTH SERVICE] No client_server entry or authorized_urls found for schema: ${currentSchema}`
+            );
+         }
+      } catch (error) {
+         console.error(
+            `[AUTH SERVICE] Error fetching authorized_urls for schema ${currentSchema}:`,
+            error
+         );
+         // Proceed with empty authorized_urls in case of error.
+      }
+   }
+
+   const responseData = {
+      id: userId,
+      name: userName,
+      role: sessionEffectiveRole || userRecord.role, // Prefer session role, fallback to DB role.
+      schema: currentSchema,
+      authorized_urls: authorized_urls,
    };
-   return { message: "Session retrieved successfully", data: data };
+
+   return { message: "Session retrieved successfully", data: responseData };
 }
 
 /**

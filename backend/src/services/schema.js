@@ -16,6 +16,7 @@ import { ValidationError, AuthError } from "../middleware/errorHandler.js";
 import { getAuthPool } from "../repo/connection/pools/auth.js";
 import { getPoolForSchema } from "../repo/connection/pools/clientServers.js";
 import * as clientServerRepo from "../repo/repositories/authInternal/repository.js";
+import { escapeDbIdentifier } from "../utils/dbUtils.js";
 
 // Import DDL templates
 import { ddl as authInternalDDL } from "../repo/DDL/auth_internal_complete.js";
@@ -28,12 +29,15 @@ import { ddl as tenantTemplateDDL } from "../repo/DDL/tenant_template.js";
 export const createAuthInternalSchema = async () => {
    try {
       const pool = await getAuthPool();
+      await pool.query("BEGIN"); // Start transaction
 
       // Execute DDL statements (includes tables + indexes)
       const statements = authInternalDDL("auth_internal");
       for (const statement of statements) {
          await pool.query(statement);
       }
+
+      await pool.query("COMMIT"); // Commit transaction
 
       return {
          success: true,
@@ -46,6 +50,21 @@ export const createAuthInternalSchema = async () => {
          "🏗️ [SCHEMA SERVICE] Failed to create auth_internal schema:",
          error
       );
+      // Rollback transaction if an error occurs
+      // Check if pool was initialized before trying to rollback
+      if (pool) {
+         try {
+            await pool.query("ROLLBACK");
+            console.info(
+               "🏗️ [SCHEMA SERVICE] Transaction rolled back for auth_internal schema creation."
+            );
+         } catch (rollbackError) {
+            console.error(
+               "🏗️ [SCHEMA SERVICE] Failed to rollback transaction:",
+               rollbackError
+            );
+         }
+      }
       throw error;
    }
 };
@@ -88,6 +107,7 @@ export const createTenantSchema = async ({ schemaName, clientId, ownerId }) => {
       }
 
       const pool = await getAuthPool();
+      await pool.query("BEGIN"); // Start transaction
 
       // Execute tenant template DDL
       const statements = tenantTemplateDDL(schemaName);
@@ -100,6 +120,8 @@ export const createTenantSchema = async ({ schemaName, clientId, ownerId }) => {
          ...client,
          assigned_schema_name: schemaName,
       });
+
+      await pool.query("COMMIT"); // Commit transaction
 
       return {
          success: true,
@@ -115,6 +137,13 @@ export const createTenantSchema = async ({ schemaName, clientId, ownerId }) => {
          "🏗️ [SCHEMA SERVICE] Failed to create tenant schema:",
          error
       );
+      if (pool) {
+         try {
+            await pool.query("ROLLBACK");
+         } catch (rollbackError) {
+            rollbackError;
+         }
+      }
       throw error;
    }
 };
@@ -165,7 +194,9 @@ export const dropTenantSchema = async ({
       const pool = await getAuthPool();
 
       // Drop schema with CASCADE to remove all tables and data
-      await pool.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE;`);
+      // Safely escape schemaName to prevent SQL injection
+      const escapedSchemaName = escapeDbIdentifier(schemaName);
+      await pool.query(`DROP SCHEMA IF EXISTS ${escapedSchemaName} CASCADE;`);
 
       // Update client record to remove assigned schema
       const updatedClient = await clientServerRepo.updateClientServer({
@@ -307,9 +338,11 @@ export const getSchemaStats = async (schemaName) => {
       // Get row counts for each table
       for (const table of tableResult.rows) {
          try {
-            const rowResult = await pool.query(
-               `SELECT COUNT(*) as count FROM "${schemaName}"."${table.table_name}"`
-            );
+            // Use utility function for both schemaName and table.table_name
+            const query = `SELECT COUNT(*) as count FROM ${escapeDbIdentifier(
+               schemaName
+            )}.${escapeDbIdentifier(table.table_name)}`;
+            const rowResult = await pool.query(query);
             const rowCount = parseInt(rowResult.rows[0].count);
             totalRows += rowCount;
 
@@ -320,7 +353,9 @@ export const getSchemaStats = async (schemaName) => {
             });
          } catch (error) {
             console.warn(
-               `Failed to get row count for ${schemaName}.${table.table_name}:`,
+               `Failed to get row count for ${escapeDbIdentifier(
+                  schemaName
+               )}.${escapeDbIdentifier(table.table_name)}:`,
                error
             );
             tables.push({
