@@ -17,10 +17,40 @@ import { getAuthPool } from "../repo/connection/pools/auth.js";
 import { getPoolForSchema } from "../repo/connection/pools/clientServers.js";
 import * as clientServerRepo from "../repo/repositories/authInternal/repository.js";
 import { escapeDbIdentifier } from "../utils/dbUtils.js";
+import Repo from "../repo/index.js";
 
 // Import DDL templates
 import { ddl as authInternalDDL } from "../repo/DDL/auth_internal_complete.js";
 import { ddl as tenantTemplateDDL } from "../repo/DDL/tenant_template.js";
+
+// --- Pipeline Pattern Components ---
+
+const TABLE = "users";
+const repo = (schema) => new Repo(schema, TABLE);
+const repoQuery = (schema, operationName) => (instance) =>
+   repo(schema).query(operationName, instance);
+
+/**
+ * Pipeline function for service operations.
+ * @param {class} model - The model class (e.g., User).
+ * @param {function} executor - The repoQuery function prepared for execution.
+ * @param {string} message - Success message.
+ * @param  {...any} args - Arguments for model.fromRequestBody.
+ */
+const pipeline = async (model, executor, message, ...args) => {
+   try {
+      const instance = await model.fromRequestBody(...args);
+      const result = await executor(instance);
+      return {
+         message: message,
+         data: result,
+      };
+   } catch (error) {
+      throw error;
+   }
+};
+
+// ---- Service Functions ----
 
 /**
  * Create auth_internal schema (system schema)
@@ -226,14 +256,9 @@ export const dropTenantSchema = async ({
  */
 export const schemaExists = async (schemaName) => {
    try {
-      const pool = await getAuthPool();
-
-      const result = await pool.query(
-         "SELECT schema_name FROM information_schema.schemata WHERE schema_name = $1",
-         [schemaName]
-      );
-
-      return result.rows.length > 0;
+      const repo = new Repo("auth_internal", "schema");
+      const result = await repo.query("checkSchemaExists", { schemaName });
+      return result !== null;
    } catch (error) {
       console.error(
          "🔍 [SCHEMA SERVICE] Failed to check schema existence:",
@@ -250,19 +275,12 @@ export const schemaExists = async (schemaName) => {
  */
 export const listSchemas = async (ownerId = null) => {
    try {
-      const pool = await getAuthPool();
-
-      // Get schema names from information_schema
-      const schemaResult = await pool.query(`
-         SELECT schema_name 
-         FROM information_schema.schemata 
-         WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast', 'public')
-         ORDER BY schema_name
-      `);
+      const repo = new Repo("auth_internal", "schema");
+      const schemaRows = await repo.query("listNonSystemSchemas");
 
       const schemas = [];
 
-      for (const row of schemaResult.rows) {
+      for (const row of schemaRows) {
          const schemaName = row.schema_name;
 
          // Skip system schemas
@@ -273,24 +291,19 @@ export const listSchemas = async (ownerId = null) => {
          // Get client info for this schema
          let clientInfo = null;
          try {
-            const clientResult = await pool.query(
-               "SELECT client_id, app_name, user_id, created_at FROM client_servers WHERE assigned_schema_name = $1",
-               [schemaName]
-            );
-
-            if (clientResult.rows.length > 0) {
-               clientInfo = clientResult.rows[0];
-
-               // Filter by owner if specified
-               if (ownerId && clientInfo.user_id !== ownerId) {
-                  continue;
-               }
-            }
+            clientInfo = await repo.query("getClientInfoBySchema", {
+               schemaName,
+            });
          } catch (error) {
             console.warn(
                `Failed to get client info for schema ${schemaName}:`,
                error
             );
+         }
+
+         // Filter by owner if specified
+         if (ownerId && clientInfo && clientInfo.user_id !== ownerId) {
+            continue;
          }
 
          schemas.push({
@@ -319,26 +332,17 @@ export const getSchemaStats = async (schemaName) => {
    try {
       const pool = await getAuthPool();
 
-      // Get table information
-      const tableResult = await pool.query(
-         `
-         SELECT 
-            table_name,
-            (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = $1 AND table_name = t.table_name) as column_count
-         FROM information_schema.tables t
-         WHERE table_schema = $1 AND table_type = 'BASE TABLE'
-         ORDER BY table_name
-      `,
-         [schemaName]
-      );
+      // Use the repository pattern for getting table info
+      const repo = new Repo("auth_internal", "schema");
+      const tableRows = await repo.query("getSchemaTableInfo", { schemaName });
 
       const tables = [];
       let totalRows = 0;
 
       // Get row counts for each table
-      for (const table of tableResult.rows) {
+      for (const table of tableRows) {
          try {
-            // Use utility function for both schemaName and table.table_name
+            // Row count queries must be constructed dynamically due to identifier limitations
             const query = `SELECT COUNT(*) as count FROM ${escapeDbIdentifier(
                schemaName
             )}.${escapeDbIdentifier(table.table_name)}`;

@@ -10,6 +10,7 @@ import { userRepo as userAuthInternalRepo } from "../repo/repositories/userRepos
 import { userRepo as userClientAppRepo } from "../repo/repositories/clientAppRepository.js";
 import { getAuthPool } from "../repo/connection/pools/auth.js";
 import * as clientServerService from "./clientServer.js";
+import bcrypt from "bcrypt";
 
 /** ------- auth service ------- */
 
@@ -63,7 +64,11 @@ export async function login({
       if (!userForPasswordCheck) {
          throw new AuthError("Invalid credentials");
       }
-      if (userForPasswordCheck.password_hash !== credentials.password) {
+      const isPasswordValid = await bcrypt.compare(
+         credentials.password,
+         userForPasswordCheck.password_hash
+      );
+      if (!isPasswordValid) {
          throw new AuthError("Invalid credentials");
       }
 
@@ -89,21 +94,21 @@ export async function login({
                user_role: "owner",
                owned_clients: userClients[0].client_count,
                reason: "login_is_actual_owner",
-               target_page: entryPointUrl,
+               target_page: refererUrl,
             };
          } else {
             sessionUpdate.poolMetadata = {
                ...(poolMetadata || {}),
                user_role: authenticatedUser.role,
                reason: "login_auth_internal_user_not_yet_owner",
-               target_page: entryPointUrl,
+               target_page: refererUrl,
             };
          }
       } else {
          sessionUpdate.poolMetadata = {
             ...(poolMetadata || {}),
             user_role: authenticatedUser.role,
-            target_page: entryPointUrl,
+            target_page: refererUrl,
          };
       }
 
@@ -208,10 +213,8 @@ export async function register({ userData, schema, refererUrl }) {
             const clientServerLookup =
                await clientServerService.getClientServerByUrl(refererUrl);
             if (
-               clientServerLookup &&
-               clientServerLookup.success &&
-               clientServerLookup.data &&
-               clientServerLookup.data.schema_name
+               clientServerLookup?.success &&
+               clientServerLookup?.data?.schema_name
             ) {
                targetSchema = clientServerLookup.data.schema_name;
             } else {
@@ -254,7 +257,7 @@ export async function register({ userData, schema, refererUrl }) {
          userData.name,
          role,
          userData.email,
-         userData.password,
+         await bcrypt.hash(userData.password, 12),
       ]);
       return {
          message: "Registration successful",

@@ -2,6 +2,7 @@ import { toDB, fromDB } from "../../../models/functional/index.js";
 import * as clientServer from "./clientServer.js";
 import * as session from "./session.js";
 import * as user from "./user.js";
+import * as schema from "./schema.js";
 import getTableDefault, { TABLES } from "../TABLES.js";
 
 // Use the 'get' function from the default export
@@ -143,6 +144,27 @@ export const operations = {
       },
       deleteExpired: { sql: session.deleteExpired, type: "void" },
    },
+   schema: {
+      checkSchemaExists: {
+         sql: schema.checkSchemaExists,
+         type: "entity",
+         paramExtractor: (data) => [data.schemaName],
+      },
+      listNonSystemSchemas: {
+         sql: schema.listNonSystemSchemas,
+         type: "array",
+      },
+      getClientInfoBySchema: {
+         sql: schema.getClientInfoBySchema,
+         type: "entity",
+         paramExtractor: (data) => [data.schemaName],
+      },
+      getSchemaTableInfo: {
+         sql: schema.getSchemaTableInfo,
+         type: "array",
+         paramExtractor: (data) => [data.schemaName],
+      },
+   },
 };
 
 // Operations that need toDB transformation (input data)
@@ -161,12 +183,31 @@ const entityOps = [
 
 /**
  * Pure query function - handles all database operations
- * @param {string} table - Table name ('client_server', 'user', 'session')
+ * @param {string} table - Table name ('client_server', 'user', 'session', 'schema')
  * @param {string} operation - Operation name ('create', 'get', 'getAll', etc.)
  * @param {...any} params - Parameters for the operation
  * @returns {any} Query result (transformed if needed)
  */
 const query = (table, operation, ...params) => {
+   // Special handling for schema operations (not a real table)
+   if (table === "schema") {
+      const operationConfig = operations.schema[operation];
+      if (!operationConfig) {
+         throw new Error(
+            `Operation '${operation}' not found for schema operations.`
+         );
+      }
+
+      return {
+         sql: operationConfig.sql,
+         valuesExtractor: operationConfig.paramExtractor,
+         inputParams: params,
+         operationType: operationConfig.type,
+         logicalTableName: null, // Schema operations don't map to a table
+      };
+   }
+
+   // Regular table handling
    const logicalTableName = Object.keys(TABLES).find(
       (key) => TABLES[key] === table
    );

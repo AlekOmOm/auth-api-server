@@ -62,10 +62,18 @@ class Repo {
          );
 
          if (config.operationType === "entity") {
+            // For schema operations without logicalTableName, return raw result
+            if (!config.logicalTableName) {
+               return rows.length ? rows[0] : null;
+            }
             return rows.length
                ? fromDB(config.logicalTableName, rows[0])
                : null;
          } else if (config.operationType === "array") {
+            // For schema operations without logicalTableName, return raw results
+            if (!config.logicalTableName) {
+               return rows;
+            }
             return rows.map((row) => fromDB(config.logicalTableName, row));
          } else {
             // For 'void' or other types, could return rowCount or raw result
