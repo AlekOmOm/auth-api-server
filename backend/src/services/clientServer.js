@@ -83,7 +83,7 @@ export async function register({ clientServerData, userId, schema }) {
  *    data: ClientServer[]
  * }
  */
-export async function getUserClientServers({ userId, schema }) {
+export async function getAll({ userId, schema }) {
    return await pipeline(
       ClientServer,
       repoQuery(schema, "getByUserId"),
@@ -99,15 +99,18 @@ export async function getUserClientServers({ userId, schema }) {
  * @param {string} params.clientId - Client ID from session
  * @returns {Object} Client server details
  */
-export async function getUserClientServer({ userId, clientId, schema }) {
+export async function get({ userId, clientId = null, schema }) {
+   const operation = clientId ? "getByUserIdAndClientId" : "getByUserId";
+   const args = clientId ? [userId, clientId] : [userId];
+
    return await pipeline(
       ClientServer,
-      repoQuery(schema, "getByUserIdAndClientId"),
+      repoQuery(schema, operation),
       "Client server retrieved successfully",
-      userId,
-      clientId
+      ...args
    );
 }
+
 /**
  * Update client server for a user (UPDATE)
  * @param {Object} params - Parameters object
@@ -191,13 +194,12 @@ export async function getByUrl({ url, schema }) {
 
 export const clientServerService = {
    register,
-   getUserClientServers,
-   getUserClientServer,
+   getUserClientServers: getAll,
+   getUserClientServer: get,
    updateUserClientServer,
    deleteUserClientServer,
    verifySecretHash,
    getByUrl,
-   getBySchema,
 };
 
 export default clientServerService;

@@ -1,6 +1,8 @@
 // --- services ---
 import * as authService from "../services/auth.js";
-// import * as clientServerService from "../services/clientServerService.js"; // clientServerService is used by authService directly
+import * as userService from "../services/user.js";
+import * as sessionService from "../services/session.js";
+
 // --- utils ---
 import * as sessionUtils from "../utils/session.js";
 import { standardizeResponse } from "../utils/responseUtils.js"; // Import the new utility
@@ -156,7 +158,7 @@ const getSessions = async (req, res, next) => {
       const userId = sessionUtils.getUserId(req.session);
       const schema = sessionUtils.getSchema(req.session);
 
-      const serviceResult = await authService.getSessions({ userId, schema });
+      const serviceResult = await sessionService.getAll({ userId, schema });
       res.status(200).json(
          standardizeResponse({
             data: serviceResult.data,
@@ -175,10 +177,9 @@ const getSessions = async (req, res, next) => {
 const getSession = async (req, res, next) => {
    try {
       const userId = sessionUtils.getUserId(req.session);
-      const sessionData = req.session; // The service method expects the whole session object
+      const sessionData = req.session;
 
-      // authService.getSession is expected to return { message: string, data: object }
-      const serviceResult = await authService.getSession({
+      const serviceResult = await sessionService.get({
          userId,
          sessionData,
       });
@@ -196,25 +197,51 @@ const getSession = async (req, res, next) => {
 // ---- getCurrentUser ---
 /**
  * @description Get current user details
- * Extracts userId and schema, then calls authService.getCurrentUser
+ * Extracts user details and schema, then calls userService.getUser
+ *
+ * @context very protected route /me (ONLY for current user, not even admins)
+ * - returns password
+ *
+ * @returns {Object} {
+ *    id: string,
+ *    name: string,
+ *    role: string,
+ *    email: string,
+ *    password: string, // unhashed
+ *    schema: string,
+ *    urls: string[]
  */
 const getCurrentUser = async (req, res, next) => {
    try {
       const userId = sessionUtils.getUserId(req.session);
-      const schema = sessionUtils.getSchema(req.session);
-      const role = sessionUtils.getRole(req.session);
-      const poolMetadata = sessionUtils.getPoolMetadata(req.session);
+      const name = sessionUtils.getUserName(req.session);
+      const email = sessionUtils.getUserEmail(req.session);
 
-      const serviceResult = await authService.getCurrentUser({
+      const schema = sessionUtils.getSchema(req.session);
+      const { data: user, message } = await userService.getUser({
          userId,
+         name,
+         email,
          schema,
-         sessionRole: role,
-         poolMetadata,
+         withPassword: true,
       });
+      const { identifierUrl, entryPointUrl, authorizedUrls } =
+         await clientServerService.get({ userId: user.id, schema });
+
+      const data = {
+         id: user.id,
+         name: user.name,
+         role: user.role,
+         email: user.email,
+         password: user.password,
+         schema,
+         urls: [identifierUrl, entryPointUrl, ...authorizedUrls],
+      };
+
       res.status(200).json(
          standardizeResponse({
-            data: serviceResult.data,
-            message: serviceResult.message,
+            data,
+            message,
          })
       );
    } catch (error) {

@@ -83,17 +83,65 @@ export const operations = {
       getByEmail: user.getByEmail,
    },
    [getTable("session")]: {
-      create: session.create,
-      getAll: session.getAll,
-      get: session.get,
-      update: session.update,
-      deleteByID: session.deleteById,
-      deleteAll: session.deleteAll,
-      getByUserId: session.getByUserId,
-      getById: session.getById, // session id
-      deleteByUserId: session.deleteByUserId,
-      deleteById: session.deleteById,
-      deleteExpired: session.deleteExpired,
+      create: {
+         sql: session.create,
+         type: "entity",
+         paramExtractor: (data) => [
+            data.id,
+            data.user_id,
+            data.session_id,
+            data.ip_address,
+            data.user_agent,
+            data.expires_at,
+         ],
+      },
+      getAll: { sql: session.getAll, type: "array" },
+      get: {
+         sql: session.get,
+         type: "entity",
+         paramExtractor: (instance) => [
+            instance.session_id || instance.sessionId,
+         ],
+      },
+      update: {
+         sql: session.update,
+         type: "void",
+         paramExtractor: (data) => [
+            data.expires_at || data.expiresAt,
+            data.session_id || data.sessionId,
+         ],
+      },
+      deleteByID: {
+         sql: session.deleteById,
+         type: "void",
+         paramExtractor: (instance) => [
+            instance.session_id || instance.sessionId,
+         ],
+      },
+      deleteAll: { sql: session.deleteAll, type: "void" },
+      getByUserId: {
+         sql: session.getByUserId,
+         type: "array",
+         paramExtractor: (instance) => [instance.user_id || instance.userId],
+      },
+      getById: {
+         sql: session.getById,
+         type: "entity",
+         paramExtractor: (instance) => [instance.id],
+      },
+      deleteByUserId: {
+         sql: session.deleteByUserId,
+         type: "void",
+         paramExtractor: (instance) => [instance.user_id || instance.userId],
+      },
+      deleteById: {
+         sql: session.deleteById,
+         type: "void",
+         paramExtractor: (instance) => [
+            instance.session_id || instance.sessionId,
+         ],
+      },
+      deleteExpired: { sql: session.deleteExpired, type: "void" },
    },
 };
 

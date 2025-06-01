@@ -39,12 +39,29 @@ class BaseModel {
    }
 
    /**
+    * Legacy method, prefer fromRequest for service pipeline integration.
     * Create model from user input (req.body)
     * Override in child classes
     */
    static fromInput(inputData) {
       throw new Error(
          `fromInput method must be implemented in ${this.constructor.name}`
+      );
+   }
+
+   /**
+    * Create model/prepare payload from request/service layer arguments.
+    * This method is crucial for the service pipeline pattern.
+    * Child classes MUST implement this to transform raw inputs into the
+    * exact payload structure expected by the corresponding repository query.
+    * It should also handle necessary validation and data transformations (e.g., hashing).
+    * @param {...any} args - Arguments from the service layer, specific to the operation.
+    * @returns {Promise<Object|any>} The payload for the repository query.
+    * @throws {Error} If not implemented or if validation fails.
+    */
+   static async fromRequest(...args) {
+      throw new Error(
+         `static fromRequest(...args) method must be implemented in ${this.name}`
       );
    }
 
@@ -225,8 +242,6 @@ class BaseModel {
    }
 }
 
-// Copy static methods from ValidationMixin to BaseModel
-// This allows child classes to use these validation methods directly
 Object.getOwnPropertyNames(ValidationMixin).forEach((name) => {
    if (name !== "prototype" && name !== "length" && name !== "name") {
       BaseModel[name] = ValidationMixin[name];

@@ -93,7 +93,25 @@ class User extends BaseModel {
 
       return user;
    };
+   /**
+    * FromRequest
+    *
+    */
+   static fromRequestBody = (request) => {
+      const user = new User(
+         null,
+         request.body.name || null,
+         request.body.role || "user",
+         request.body.email,
+         request.body.password
+      );
 
+      if (!user.isValid()) {
+         throw new ValidationError("Invalid user data", user.getErrors());
+      }
+
+      return user;
+   };
    /**
     * Create user from database row
     * @param {Object} dbRow - Database row
@@ -191,6 +209,31 @@ class User extends BaseModel {
    };
 
    // --- PURE DATA TRANSFORMERS ---
+
+   static update(requestBody, existingUser) {
+      if (!existingUser) {
+         throw new ValidationError("User not found");
+      }
+
+      const allowedUpdates = ["name", "role"];
+
+      const updateKeys = Object.keys(requestBody).filter((key) =>
+         allowedUpdates.includes(key)
+      );
+
+      const updateData = Object.fromEntries(
+         updateKeys.map((key) => [key, requestBody[key]])
+      );
+
+      return new User(
+         existingUser.id,
+         updateData.name || existingUser.name,
+         updateData.role || existingUser.role,
+         updateData.email || existingUser.email,
+         updateData.password || existingUser.password,
+         existingUser.passwordHash
+      );
+   }
 
    /**
     * Convert to database-ready object (without plain secret)
@@ -330,6 +373,13 @@ export const UserOperations = {
    // for repo pipelines
    toDB: (user) => user.toDatabaseObject(),
    fromDB: (dbRow) => User.fromDb(dbRow),
+
+   // Utility functions
+   removePassword: (user) => {
+      if (!user) return null;
+      const { password, password_hash, ...filteredUser } = user;
+      return filteredUser;
+   },
 
    // Transformation pipelines
    prepareForApi: (user) => user.toApiResponse(),

@@ -1,5 +1,5 @@
 // --- services ---
-import * as userService from "../services/userService.js";
+import * as userService from "../services/user.js";
 import { getSchema } from "../utils/session.js";
 import { standardizeResponse } from "../utils/responseUtils.js";
 

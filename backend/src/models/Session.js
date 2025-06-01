@@ -171,7 +171,9 @@ class Session extends BaseModel {
     * Convert to database object - Pure transformation
     */
    toDatabaseObject = () => ({
+      id: this.id,
       user_id: this.userId,
+      session_id: this.sessionId,
       ip_address: this.ipAddress,
       user_agent: this.userAgent,
       expires_at: this.expiresAt,
@@ -181,7 +183,9 @@ class Session extends BaseModel {
     * Convert to database array - Pure transformation
     */
    toDatabaseArray = () => [
+      this.id,
       this.userId,
+      this.sessionId,
       this.ipAddress,
       this.userAgent,
       this.expiresAt,
@@ -207,6 +211,52 @@ class Session extends BaseModel {
       sessionId: this.sessionId,
       role: this.user?.role,
    });
+
+   /**
+    * Static factory method to create Session from request body or generic data object
+    * Allows flexible parameter shapes depending on the service layer call.
+    * @param {Object} requestBody - Should contain at least a userId or sessionId.
+    * @param {string|null} userIdFromParam - Optional userId passed separately.
+    * @returns {Session}
+    */
+   static fromRequestBody = (requestBody = {}, userIdFromParam = null) => {
+      if (requestBody instanceof Session) return requestBody;
+
+      // If first argument is a primitive (string) treat it as sessionId for lookup
+      if (typeof requestBody === "string") {
+         return new Session(null, null, requestBody);
+      }
+
+      const {
+         userId,
+         user_id,
+         sessionId,
+         session_id,
+         ipAddress,
+         ip_address,
+         userAgent,
+         user_agent,
+         expiresAt,
+         expires_at,
+         id,
+      } = requestBody || {};
+
+      const resolvedUserId = userId || user_id || userIdFromParam;
+      const resolvedSessionId = sessionId || session_id || null;
+      const resolvedIp = ipAddress || ip_address || null;
+      const resolvedUa = userAgent || user_agent || null;
+      const resolvedExpires = expiresAt || expires_at || null;
+
+      return new Session(
+         resolvedUserId,
+         id || null,
+         resolvedSessionId,
+         resolvedIp,
+         resolvedUa,
+         null,
+         resolvedExpires
+      );
+   };
 
    // --- PURE PREDICATES ---
 
