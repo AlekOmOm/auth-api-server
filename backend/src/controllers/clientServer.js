@@ -259,7 +259,7 @@ const deleteClientServerById = async (req, res, next) => {
 
 /**
  * @description Check if referer URL is a registered URL
- * Extracts referer URL and calls clientServerService.checkReferer
+ * Extracts referer URL and calls clientServerService.getByUrl
  */
 const checkRefererURL = async (req, res, next) => {
    try {
@@ -273,8 +273,8 @@ const checkRefererURL = async (req, res, next) => {
             })
          );
       }
-      const serviceResult = await service.validateReferer({
-         refererUrl,
+      const serviceResult = await service.getByUrl({
+         url: refererUrl,
       });
 
       if (serviceResult.success) {

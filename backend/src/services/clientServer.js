@@ -175,24 +175,6 @@ export async function verifySecretHash({ secretHash, schema }) {
 }
 
 /**
- * Check if referer URL is a registered URL
- * @param {Object} params - Parameters object
- * @param {string} params.refererUrl - Referer URL to check
- * @returns {Object} {
- *    message: string,
- *    data: ClientServer
- * }
- */
-export async function checkReferer({ refererUrl, schema }) {
-   return await pipeline(
-      ClientServer,
-      repoQuery(schema, "getByReferer"),
-      "Client server retrieved successfully",
-      refererUrl
-   );
-}
-
-/**
  * Get client server details by one of its URLs (identifier_url or an authorized_url)
  * This is used by auth service during registration to find the schema from referer.
  * @param {string} url - The URL to look up
@@ -214,8 +196,8 @@ export const clientServerService = {
    updateUserClientServer,
    deleteUserClientServer,
    verifySecretHash,
-   checkReferer,
    getByUrl,
+   getBySchema,
 };
 
 export default clientServerService;

@@ -410,16 +410,6 @@ export async function cleanupExpiredSessions({ schema }) {
    }
 }
 
-/**
- * Wrapper for clientServerService.checkReferer to be exposed via authService
- * @param {Object} params - Parameters object
- * @param {string} params.refererUrl - Referer URL to check
- * @returns {Promise<Object>} Response from clientServerService.checkReferer
- */
-export async function checkRefererService({ refererUrl }) {
-   return clientServerService.checkReferer({ refererUrl });
-}
-
 const authService = {
    login,
    logout,
@@ -429,7 +419,6 @@ const authService = {
    getSession,
    updateSession,
    cleanupExpiredSessions,
-   checkRefererService,
 };
 
 export default authService;
