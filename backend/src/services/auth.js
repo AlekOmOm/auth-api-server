@@ -281,15 +281,11 @@ export async function register({ userData, schema, refererUrl }) {
  * @returns {Object} All sessions
  */
 export async function getSessions({ userId, schema }) {
-   try {
-      if (!userId) throw new AuthError("Authentication required");
-      const repo =
-         schema === "auth_internal" ? userAuthInternalRepo : userClientAppRepo;
-      const sessions = await repo.getSessions(schema, userId);
-      return { message: "Sessions retrieved successfully", data: sessions };
-   } catch (error) {
-      throw error;
-   }
+   if (!userId) throw new AuthError("Authentication required");
+   const repo =
+      schema === "auth_internal" ? userAuthInternalRepo : userClientAppRepo;
+   const sessions = await repo.getSessions(schema, userId);
+   return { message: "Sessions retrieved successfully", data: sessions };
 }
 
 /**
@@ -300,15 +296,11 @@ export async function getSessions({ userId, schema }) {
  * @returns {Object} Session information
  */
 export async function getSession({ userId, sessionData }) {
-   try {
-      const data = {
-         userId: sessionUtils.getUserId(sessionData),
-         sessionDetails: sessionUtils.getSession(sessionData),
-      };
-      return { message: "Session retrieved successfully", data: data };
-   } catch (error) {
-      throw error;
-   }
+   const data = {
+      userId: sessionUtils.getUserId(sessionData),
+      sessionDetails: sessionUtils.getSession(sessionData),
+   };
+   return { message: "Session retrieved successfully", data: data };
 }
 
 /**
@@ -326,25 +318,20 @@ export async function getCurrentUser({
    sessionRole,
    poolMetadata,
 }) {
-   try {
-      if (!userId) throw new AuthError("Authentication required");
-      const finalSchema =
-         schema || process.env.SEED_SCHEMA || "client_template";
-      const repo =
-         finalSchema === "auth_internal"
-            ? userAuthInternalRepo
-            : userClientAppRepo;
-      const user = await repo.getUser(finalSchema, userId);
-      if (!user) throw new AuthError("User not found");
+   if (!userId) throw new AuthError("Authentication required");
+   const finalSchema = schema || process.env.SEED_SCHEMA || "client_template";
+   const repo =
+      finalSchema === "auth_internal"
+         ? userAuthInternalRepo
+         : userClientAppRepo;
+   const user = await repo.getUser(finalSchema, userId);
+   if (!user) throw new AuthError("User not found");
 
-      const sessionUser = removePasswordFromUser(user);
-      if (sessionRole) sessionUser.role = sessionRole;
-      if (poolMetadata) sessionUser.poolMetadata = poolMetadata;
+   const sessionUser = removePasswordFromUser(user);
+   if (sessionRole) sessionUser.role = sessionRole;
+   if (poolMetadata) sessionUser.poolMetadata = poolMetadata;
 
-      return { message: "User retrieved successfully", data: sessionUser };
-   } catch (error) {
-      throw error;
-   }
+   return { message: "User retrieved successfully", data: sessionUser };
 }
 
 /**
@@ -355,24 +342,16 @@ export async function getCurrentUser({
  * @returns {Object} Update response
  */
 export async function updateSession({ sessionId, schema }) {
-   try {
-      if (!sessionId) throw new ValidationError("Session ID is required");
-      const repo =
-         schema === "auth_internal" ? userAuthInternalRepo : userClientAppRepo;
-      const expiresAt = new Date();
-      expiresAt.setHours(expiresAt.getHours() + 24);
-      await repo.updateSessionExpiry(
-         schema,
-         sessionId,
-         expiresAt.toISOString()
-      );
-      return {
-         message: "Session updated successfully",
-         data: { expiresAt: expiresAt.toISOString() },
-      };
-   } catch (error) {
-      throw error;
-   }
+   if (!sessionId) throw new ValidationError("Session ID is required");
+   const repo =
+      schema === "auth_internal" ? userAuthInternalRepo : userClientAppRepo;
+   const expiresAt = new Date();
+   expiresAt.setHours(expiresAt.getHours() + 24);
+   await repo.updateSessionExpiry(schema, sessionId, expiresAt.toISOString());
+   return {
+      message: "Session updated successfully",
+      data: { expiresAt: expiresAt.toISOString() },
+   };
 }
 
 /**
