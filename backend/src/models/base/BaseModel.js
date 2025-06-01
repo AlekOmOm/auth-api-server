@@ -39,29 +39,16 @@ class BaseModel {
    }
 
    /**
-    * Legacy method, prefer fromRequest for service pipeline integration.
-    * Create model from user input (req.body)
-    * Override in child classes
-    */
-   static fromInput(inputData) {
-      throw new Error(
-         `fromInput method must be implemented in ${this.constructor.name}`
-      );
-   }
-
-   /**
-    * Create model/prepare payload from request/service layer arguments.
+    * Create model from request body/service layer arguments.
     * This method is crucial for the service pipeline pattern.
-    * Child classes MUST implement this to transform raw inputs into the
-    * exact payload structure expected by the corresponding repository query.
-    * It should also handle necessary validation and data transformations (e.g., hashing).
+    * Used by all service files in their pipeline pattern.
     * @param {...any} args - Arguments from the service layer, specific to the operation.
-    * @returns {Promise<Object|any>} The payload for the repository query.
+    * @returns {Object|any} Model instance or payload for the repository query.
     * @throws {Error} If not implemented or if validation fails.
     */
-   static async fromRequest(...args) {
+   static fromRequestBody(...args) {
       throw new Error(
-         `static fromRequest(...args) method must be implemented in ${this.name}`
+         `static fromRequestBody(...args) method must be implemented in ${this.name}`
       );
    }
 
@@ -104,13 +91,6 @@ class BaseModel {
       delete obj._isValid;
 
       return obj;
-   }
-
-   /**
-    * Convert to JSON (for serialization)
-    */
-   toJSON() {
-      return this.toApiResponse();
    }
 
    // --- Validation Methods ---
@@ -187,51 +167,10 @@ class BaseModel {
       return this;
    }
 
-   /**
-    * Run comprehensive validations using ValidationMixin
-    * @param {Array} validationRules - Array of validation rules
-    * @returns {Object} Validation result
-    */
-   runValidations(validationRules) {
-      const data = this.toDatabaseObject ? this.toDatabaseObject() : this;
-      const result = ValidationMixin.runValidations(data, validationRules);
-
-      if (!result.valid) {
-         result.errors.forEach((error) => {
-            this.addError(error.message, error.field);
-         });
-      }
-
-      return result;
-   }
-
-   // --- Utility Methods ---
+   // --- Essential Utility Methods ---
 
    /**
-    * Create a deep copy of the model
-    */
-   clone() {
-      const cloned = Object.create(Object.getPrototypeOf(this));
-      Object.assign(cloned, JSON.parse(JSON.stringify(this)));
-      return cloned;
-   }
-
-   /**
-    * Check if model has specific property
-    */
-   hasProperty(property) {
-      return this.hasOwnProperty(property) && this[property] !== undefined;
-   }
-
-   /**
-    * Get model class name
-    */
-   getModelName() {
-      return this.constructor.name;
-   }
-
-   /**
-    * Timestamp utilities
+    * Timestamp utilities (used by Session model)
     */
    static getCurrentTimestamp() {
       return new Date();

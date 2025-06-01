@@ -94,16 +94,19 @@ class User extends BaseModel {
       return user;
    };
    /**
-    * FromRequest
-    *
+    * Create user from request body (used by service pipeline)
+    * @param {Object} requestBody - Request body or user data
+    * @returns {User} User instance
     */
-   static fromRequestBody = (request) => {
+   static fromRequestBody = (requestBody) => {
+      // Handle both full request object and direct body
+      const body = requestBody.body || requestBody;
       const user = new User(
          null,
-         request.body.name || null,
-         request.body.role || "user",
-         request.body.email,
-         request.body.password
+         body.name || null,
+         body.role || "user",
+         body.email,
+         body.password
       );
 
       if (!user.isValid()) {
@@ -373,6 +376,7 @@ export const UserOperations = {
    // for repo pipelines
    toDB: (user) => user.toDatabaseObject(),
    fromDB: (dbRow) => User.fromDb(dbRow),
+   fromRequestBody: (...args) => User.fromRequestBody(...args),
 
    // Utility functions
    removePassword: (user) => {

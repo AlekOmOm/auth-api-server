@@ -293,6 +293,7 @@ export const SessionOperations = {
    // for repo pipelines
    toDB: (session) => session.toDatabaseObject(),
    fromDB: (dbRow) => Session.fromDb(dbRow),
+   fromRequestBody: (...args) => Session.fromRequestBody(...args),
 
    // Curried enrichment functions
    enrichWithUser: curry((user, session) => session.withUser(user)),
