@@ -41,29 +41,8 @@ const repoQuery = (schema, operationName) => (instance) =>
  */
 const pipeline = async (model, executor, message, ...args) => {
    try {
-      // 1. validate request body or prepare instance for lookup
       const instance = await model.fromRequestBody(...args);
-      // 2. execute repo function, passing data transformed by toDB if necessary
-      // For getters, the raw instance (with lookup ID) is passed to executor (Repo.query)
-      // Repo.query handles toDB internally for operations that need it (create/update via getQueryConfig)
-      // However, the old pipeline was toDB(instance) BEFORE executor.
-      // Let's analyze: if executor is repo.query, repo.query now gets the raw instance.
-      // Inside repo.query, getQueryConfig is called. getQueryConfig's `inputParams` will be `[instance]`.
-      // If the operation is an `inputOp` (create/update), getQueryConfig itself applies `toDB(logicalTableName, instance)`.
-      // So, the `toDB` here in the pipeline is redundant if the `executor` path correctly handles it.
-
-      // If `executor` expects a raw model instance (for getters) or a DB-ready object (for setters passed through directly):
-      // For getter operations (like checkReferer -> getByReferer), `repo.query` expects the instance with the ID.
-      // For create/update operations, `repo.query` expects the data object.
-      // The `toDB` was originally here: `executor(toDB(LOGICAL_TABLE_NAME, instance))`
-      // This was problematic because `executor` (which is repo.query) was then getting a DB object, but `getQueryConfig` inside it ALSO tries to do `toDB`.
-
-      // Correct approach: Repo.query receives the model instance or data object directly.
-      // It then uses getQueryConfig, which specifies if toDB is needed for that specific SQL operation (inputOps).
-      const result = await executor(instance); // Pass the model instance directly
-
-      // 3. return result
-      // The result from Repo.query is already transformed by fromDB if it's an entity/array type.
+      const result = await executor(instance);
       return {
          message: message,
          data: result,
