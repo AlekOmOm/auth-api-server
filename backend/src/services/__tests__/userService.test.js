@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import userService from "../userService.js";
+import userService from "../../services/user.js";
 import {
    NotFoundError,
    ValidationError,

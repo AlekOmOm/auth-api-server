@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import authService from "../auth.js";
+import authService from "../../services/auth.js";
 import { AuthError, ValidationError } from "../../middleware/errorHandler.js";
 import { v4 as uuidv4 } from "uuid";
 

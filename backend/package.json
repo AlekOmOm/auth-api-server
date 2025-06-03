@@ -10,7 +10,16 @@
     "nodemonDev": "nodemon server.js",
     "init-db": "node ./src/db/setupDB.js",
     "reset-db": "node ./src/db/setupDB.js --delete",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:unit": "vitest run --testNamePattern=\"^(?!.*Integration Tests)\"",
+    "test:integration": "vitest run --testNamePattern=\"Integration Tests\"",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:setup": "npm run test:db:up && npm run test:wait-for-db",
+    "test:teardown": "npm run test:db:down",
+    "test:db:up": "docker-compose -f ../docker-compose.yml up db -d",
+    "test:db:down": "docker-compose -f ../docker-compose.yml down",
+    "test:wait-for-db": "node -e \"const testSetup = require('./src/services/__tests__/setup/testSetup.js'); testSetup.waitForDatabase().then(() => console.log('Database ready')).catch(console.error);\""
   },
   "repository": {
     "type": "git",
