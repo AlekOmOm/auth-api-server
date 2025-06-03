@@ -57,15 +57,11 @@ const register = async (req, res, next) => {
  */
 const login = async (req, res, next) => {
    try {
-      const { credentials, returnUrl } = req.body;
+      const { credentials } = req.body;
       const schema = sessionUtils.getSchema(req.session);
-      const poolContext = sessionUtils.getPoolContext(req.session);
-      const poolMetadata = sessionUtils.getPoolMetadata(req.session);
-      const ipAddress = req.ip || req.connection.remoteAddress;
-      const userAgent = req.headers["user-agent"];
 
+      // check required fields
       if (!schema) {
-         // For direct errors like this, we can still use standardizeResponse
          return res.status(400).json(
             standardizeResponse({
                error: new Error("Schema not found in session"),
@@ -82,36 +78,27 @@ const login = async (req, res, next) => {
          );
       }
 
-      // Service returns { message: string, data: object, sessionUpdate?: object } or throws
-      const serviceResult = await authService.login({
+      // login
+      const { success, data, message } = await authService.login({
          credentials,
-         returnUrl,
          schema,
-         poolContext,
-         poolMetadata,
-         session: req.session, // Pass the whole session for updates
-         ipAddress,
-         userAgent,
       });
 
-      if (serviceResult.sessionUpdate) {
-         Object.assign(req.session, serviceResult.sessionUpdate);
-         // Do not send sessionUpdate to client via standardizeResponse data
-         const { sessionUpdate, ...responseData } = serviceResult.data;
-         res.status(200).json(
+      // return
+      if (!success) {
+         return res.status(400).json(
             standardizeResponse({
-               data: responseData,
-               message: serviceResult.message,
-            })
-         );
-      } else {
-         res.status(200).json(
-            standardizeResponse({
-               data: serviceResult.data,
-               message: serviceResult.message,
+               error: new Error(message),
+               statusCode: 400,
             })
          );
       }
+      res.status(200).json(
+         standardizeResponse({
+            data,
+            message,
+         })
+      );
    } catch (error) {
       next(error);
    }
@@ -126,19 +113,13 @@ const logout = async (req, res, next) => {
       const userId = sessionUtils.getUserId(req.session);
       const schema = sessionUtils.getSchema(req.session);
 
-      // Service returns { message: string } or throws
       const serviceResult = await authService.logout({
          userId,
          schema,
-         destroySession: () => {
-            return new Promise((resolve, reject) => {
-               req.session.destroy((err) => {
-                  if (err) reject(err);
-                  else resolve();
-               });
-            });
-         },
       });
+      if (serviceResult.success) {
+         req.session.destroy();
+      }
       res.status(200).json(
          standardizeResponse({ message: serviceResult.message })
       );
@@ -218,7 +199,7 @@ const getCurrentUser = async (req, res, next) => {
       const email = sessionUtils.getUserEmail(req.session);
 
       const schema = sessionUtils.getSchema(req.session);
-      const { data: user, message } = await userService.getUser({
+      const { data: user, message } = await userService.get({
          userId,
          name,
          email,

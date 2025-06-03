@@ -43,3 +43,9 @@ export const getCredentials = (req) => {
       throw error;
    }
 };
+
+// --- export ---
+export default {
+   getRefererUrl,
+   getCredentials,
+};

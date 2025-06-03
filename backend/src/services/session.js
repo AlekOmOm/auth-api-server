@@ -140,6 +140,29 @@ export async function update({ sessionId, expiresAt = null, schema }) {
 }
 
 /**
+ * deleteSession 
+ * flow:
+ * 1. deleteById or deleteByUserId
+ * 2. delete session from request
+ * 3. return success message
+ * 
+ * 
+ * @param {Object} params - Parameters object
+ * @param {string} params.sessionId - Session ID
+ * @param {string} params.userId - User ID
+ * @param {string} params.schema - Database schema
+ * @requires sessionId || userId
+ * @requires schema
+ * @returns {Object} Deleted session
+ */
+export async function deleteSession({ sessionId, userId, schema }) {
+   if (sessionId !== null) {
+      return await deleteById({ sessionId, schema });
+   }
+   return await deleteByUserId({ userId, schema });
+}
+
+/**
  * Delete a session by ID
  * @param {Object} params - Parameters object
  * @param {string} params.sessionId - Session ID

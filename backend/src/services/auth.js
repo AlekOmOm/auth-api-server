@@ -1,16 +1,9 @@
 import { AuthError, ValidationError } from "../middleware/errorHandler.js";
-import { v4 as uuidv4 } from "uuid";
-import * as sessionUtils from "../utils/session.js";
+import clientServerService from "./clientServer.js";
 import userService from "./user.js";
-import {
-   createSuccessResponse,
-   removePasswordFromUser,
-} from "../utils/authUtils.js";
-import { userRepo as userAuthInternalRepo } from "../repo/repositories/userRepository.js";
-import { userRepo as userClientAppRepo } from "../repo/repositories/clientAppRepository.js";
-import { getAuthPool } from "../repo/connection/pools/auth.js";
-import * as clientServerService from "./clientServer.js";
-import bcrypt from "bcrypt";
+import sessionService from "./session.js";
+import { prepareInstance } from "../models/functional/index.js";
+import { User, ClientServer, Session } from "../models/index.js";
 
 /** ------- auth service ------- */
 
@@ -27,253 +20,234 @@ import bcrypt from "bcrypt";
  * - schema from session context
  */
 
+// --- pure functions ---
+
+/**
+ * Service instances
+ * - services/
+ *   - user.js
+ *   - clientServer.js
+ *   - session.js
+ */
+const servicesMap = (modelClass) => {
+   const map = {
+      User: userService,
+      ClientServer: clientServerService,
+      Session: sessionService,
+   };
+   return map[modelClass];
+};
+
+/**
+ * prep pipeline
+ *
+ * pipeline function
+ * - three part flow:
+ *   1. get instance
+ *   2. get service
+ *   3. return instance and service
+ * @async
+ * @param {*} model - model class
+ * @param  {...any} args - arguments to pass on
+ * @returns {Object} { instance, service }
+ */
+const prep = async (modelClass, ...args) => {
+   const instance = await modelClass.fromRequestBody(...args);
+   const service = servicesMap(modelClass.name);
+
+   if (!service) {
+      throw new AuthError("Service not found");
+   }
+
+   return {
+      instance,
+      service,
+   };
+};
+
+/**
+ * execute pipeline
+ *
+ * pipeline function
+ * 1. prep
+ * 2. execute
+ * 3. return
+ * @async
+ * @param {*} modelClass - model class
+ * @param {*} operation - operation to execute
+ * @param {*} requiredFields - required fields for service operation
+ * @param {*} (opt null) messageParam - message to return
+ * @param  {...any} args - arguments to pass on
+ * @returns {Object} { success, data, message }
+ */
+
+const execute = async (
+   modelClass,
+   operation,
+   requiredFields,
+   messageParam = null,
+   ...args
+) => {
+   // prep
+   const { instance, service } = await prep(modelClass, ...args);
+   if (!instance) {
+      return null;
+   }
+
+   const params = prepareInstance(instance, requiredFields);
+   const operation = service[operation];
+
+   // execute
+   const { success, data, error, message } = await operation(params);
+
+   // return
+   if (success) {
+      return { success, data, message: messageParam ? messageParam : message };
+   }
+   throw new AuthError(error);
+};
+
+// --- service functions ---
+
 /**
  * Login a user and create a session
  * @param {Object} params - Parameters object
  * @param {Object} params.credentials - User credentials (email, password)
- * @param {string} params.refererUrl - Return URL after login
  * @param {string} params.schema - Database schema
- * @param {string} params.poolContext - Pool context from session
- * @param {Object} params.poolMetadata - Pool metadata from session
- * @param {Object} params.session - Current session object (for reading/updating)
- * @param {string} params.ipAddress - Client IP address
- * @param {string} params.userAgent - Client user agent
- * @returns {Object} Login response with user data and session updates
+ * @param {Optional string} params.ipAddress - Client IP address
+ * @param {Optional string} params.userAgent - Client user agent
+ * @returns {Object} {
+ *    message: string,
+ *    data: {
+ *       ...userResponseData,
+ *       schema: schema,
+ *    }
+ * }
  */
 export async function login({
    credentials,
-   refererUrl,
    schema,
-   poolContext,
-   poolMetadata,
-   session,
-   ipAddress,
-   userAgent,
+   ipAddress = null, // session.ipAddress (optional)
+   userAgent = null, // session.userAgent (optional)
 }) {
-   try {
-      if (!credentials.email || !credentials.password) {
-         throw new ValidationError("Email and password are required");
-      }
+   let requiredFields = ["name", "email", "password", "schema"];
+   const user = await execute(
+      User,
+      "get",
+      requiredFields,
+      null,
+      credentials,
+      schema
+   );
 
-      const authRepo =
-         schema === "auth_internal" ? userAuthInternalRepo : userClientAppRepo;
-      const userForPasswordCheck = await authRepo.getUserByEmail(
+   check(user, "User not found");
+
+   requiredFields = ["userId", "schema"];
+   const session = await execute(
+      Session,
+      "create",
+      requiredFields,
+      null,
+      user.id,
+      schema
+   );
+
+   check(session, "Session not created");
+
+   requiredFields = ["userId"];
+   const allowedUrls = await execute(
+      ClientServer,
+      "getAllowedUrls",
+      requiredFields,
+      null,
+      user.id,
+      schema
+   );
+
+   return {
+      success: true,
+      data: {
          schema,
-         credentials.email
-      );
-      if (!userForPasswordCheck) {
-         throw new AuthError("Invalid credentials");
-      }
-      const isPasswordValid = await bcrypt.compare(
-         credentials.password,
-         userForPasswordCheck.password_hash
-      );
-      if (!isPasswordValid) {
-         throw new AuthError("Invalid credentials");
-      }
-
-      const authenticatedUser = userForPasswordCheck;
-      const sessionUpdate = {
-         userId: authenticatedUser.id,
-         role: authenticatedUser.role,
-      };
-
-      let effectiveRole = authenticatedUser.role;
-      if (schema === "auth_internal" || poolContext === "auth_internal") {
-         const authDbPool = await getAuthPool();
-         const { rows: userClients } = await authDbPool.query(
-            "SELECT COUNT(*) as client_count FROM client_servers WHERE owner_id = $1",
-            [authenticatedUser.id]
-         );
-         if (userClients[0]?.client_count > 0) {
-            effectiveRole = "owner";
-            sessionUpdate.role = "owner";
-            sessionUpdate.poolContext = "auth_internal";
-            sessionUpdate.schema = "auth_internal";
-            sessionUpdate.poolMetadata = {
-               user_role: "owner",
-               owned_clients: userClients[0].client_count,
-               reason: "login_is_actual_owner",
-               target_page: refererUrl,
-            };
-         } else {
-            sessionUpdate.poolMetadata = {
-               ...(poolMetadata || {}),
-               user_role: authenticatedUser.role,
-               reason: "login_auth_internal_user_not_yet_owner",
-               target_page: refererUrl,
-            };
-         }
-      } else {
-         sessionUpdate.poolMetadata = {
-            ...(poolMetadata || {}),
-            user_role: authenticatedUser.role,
-            target_page: refererUrl,
-         };
-      }
-
-      const sessionRepo =
-         schema === "auth_internal" ? userAuthInternalRepo : userClientAppRepo;
-      const sessionId = uuidv4();
-      const expiresAt = new Date();
-      expiresAt.setHours(expiresAt.getHours() + 24);
-      await sessionRepo.createSession(schema, [
-         uuidv4(),
-         authenticatedUser.id,
-         sessionId,
-         ipAddress || null,
-         userAgent || null,
-         expiresAt.toISOString(),
-      ]);
-
-      const userResponseData = removePasswordFromUser(authenticatedUser);
-      const finalUserResponseData = {
-         ...userResponseData,
-         role: effectiveRole,
-      };
-
-      return {
-         message: "Login successful",
-         data: {
-            ...finalUserResponseData,
-            schema: schema,
-            poolMetadata: sessionUpdate.poolMetadata || null,
-         },
-         sessionUpdate,
-      };
-   } catch (error) {
-      console.error(
-         "🔐 [AUTH SERVICE] ❌ Login failed:",
-         error.message,
-         error.stack
-      );
-      if (!(error instanceof AuthError || error instanceof ValidationError)) {
-         throw new AuthError(
-            error.message || "Login failed due to an unexpected error"
-         );
-      }
-      throw error;
-   }
+         user,
+         session,
+         allowedUrls,
+      },
+      message: "Login successful",
+   };
 }
 
 /**
  * Logout a user and destroy their session
  * @param {Object} params - Parameters object
  * @param {string} params.userId - User ID from session
+ * @param {string} (opt) params.sessionId - Session ID from session
  * @param {string} params.schema - Database schema
- * @param {Function} params.destroySession - Function to destroy the session
  * @returns {Object} Logout response
  */
-export async function logout({ userId, schema, destroySession }) {
-   try {
-      if (!userId) {
-         throw new AuthError("No active session");
-      }
-
-      const repo =
-         schema === "auth_internal" ? userAuthInternalRepo : userClientAppRepo;
-      try {
-         await repo.deleteSessionByUserId(schema, userId);
-      } catch (dbError) {
-         console.error(
-            "🚪 [AUTH SERVICE] ❌ Database session deletion failed:",
-            dbError.message
-         );
-      }
-      try {
-         await destroySession();
-      } catch (err) {
-         console.error("🚪 [AUTH SERVICE] Session destruction error:", err);
-      }
-      return { message: "Logout successful" };
-   } catch (error) {
-      console.error("🚪 [AUTH SERVICE] ❌ Logout error:", error);
-      throw error;
-   }
+export async function logout({ userId, sessionId = null, schema }) {
+   const { success, data, message } = await execute(
+      Session,
+      "deleteSession",
+      ["userId", "schema"],
+      userId,
+      sessionId,
+      schema
+   );
+   check(success, message);
+   return { success, data, message: "Logout successful" };
 }
 
 /**
  * Register a new user
  * @param {Object} params - Parameters object
- * @param {Object} params.userData - User registration data
- * @param {string} params.schema - Database schema from session
- * @param {string} params.poolContext - Pool context from session
- * @param {Object} params.poolMetadata - Pool metadata from session
- * @param {string} params.refererUrl - Referer URL from registration
+ * @param {Object} params.credentials - User credentials (name, email, password)
+ * @param {string} params.schema - Database schema
  * @returns {Object} Registration success response
+ *
+ * @flow
+ * 1. execute createUser
+ * 2. execute getUser
+ * 3. return success message
  */
-export async function register({ userData, schema, refererUrl }) {
-   try {
-      const userType = userData.userType || "client";
-      let targetSchema;
-      if (userType === "auth") {
-         targetSchema = "auth_internal";
-      } else {
-         if (refererUrl) {
-            const clientServerLookup =
-               await clientServerService.getClientServerByUrl(refererUrl);
-            if (
-               clientServerLookup?.success &&
-               clientServerLookup.data?.schema_name
-            ) {
-               targetSchema = clientServerLookup.data.schema_name;
-            } else {
-               console.warn(
-                  "Could not determine schema from refererUrl, falling back."
-               );
-            }
-         }
-         if (!targetSchema) {
-            if (schema && schema !== "auth_internal") {
-               targetSchema = schema;
-            } else {
-               targetSchema =
-                  process.env.DEFAULT_CLIENT_SCHEMA ||
-                  "client_tradingsimulator_1748187489195";
-               console.log(
-                  "Using fallback schema for client registration:",
-                  targetSchema
-               );
-            }
-         }
-      }
+export async function register({ credentials, schema }) {
+   let { success, data, message } = await execute(
+      User,
+      "createUser",
+      ["name", "email", "password", "schema"],
+      credentials,
+      schema
+   );
+   check(success, message);
+   const updatedResult = await execute(
+      User,
+      "getUser",
+      ["userId", "schema"],
+      data.id,
+      schema
+   );
 
-      if (!userData.name || !userData.email || !userData.password) {
-         throw new ValidationError("Name, email, and password are required");
-      }
-      const repo =
-         targetSchema === "auth_internal"
-            ? userAuthInternalRepo
-            : userClientAppRepo;
-      const existingUser = await repo.getUserByEmail(
-         targetSchema,
-         userData.email
-      );
-      if (existingUser) {
-         throw new ValidationError("User with this email already exists");
-      }
-      let role = userType === "auth" ? "owner" : userData.role || "user";
-      const result = await repo.createUser(targetSchema, [
-         userData.name,
-         role,
-         userData.email,
-         await bcrypt.hash(userData.password, 12),
-      ]);
-      return {
-         message: "Registration successful",
-         data: {
-            userId: result.lastID,
-            userType: userType,
-            schema: targetSchema,
-            role: role,
-         },
-      };
-   } catch (error) {
-      console.log("📝 [AUTH SERVICE] ❌ Registration failed:", error.message);
-      throw error;
+   check(success, message);
+   return {
+      success: true,
+      data: updatedResult.data,
+      message: "User registered successfully",
+   };
+}
+
+// --- helper functions ---
+
+/**
+ * Check if a user exists
+ * @param {Object || Boolean} instance - Instance object
+ * @param {string} message - Error message
+ */
+function check(instance, message) {
+   if (!instance) {
+      throw new AuthError(message);
    }
 }
 
+// --- export ---
 const authService = {
    login,
    logout,

@@ -116,12 +116,7 @@ export async function get({ userId, clientId = null, schema }) {
  *                  - partial data -- not full ClientServer instance
  * @returns {Object} Updated client server
  */
-export async function updateUserClientServer({
-   userId,
-   clientId,
-   updateData,
-   schema,
-}) {
+export async function update({ userId, clientId, updateData, schema }) {
    const { data: existingClientServer } = await pipeline(
       ClientServer,
       repoQuery(schema, "getByUserIdAndClientId"),
@@ -145,7 +140,7 @@ export async function updateUserClientServer({
  * @param {string} params.clientId - Client ID from session
  * @returns {Object} Deletion response
  */
-export async function deleteUserClientServer({ userId, clientId, schema }) {
+export async function deleteByIDs({ userId, clientId, schema }) {
    return await pipeline(
       ClientServer,
       repoQuery(schema, "deleteByUserIdAndClientId"),
@@ -188,12 +183,35 @@ export async function getByUrl({ url, schema }) {
    );
 }
 
+/**
+ * get allowed urls for a user
+ *  - allowedUrls = identifier_url + entrypoint_url + authorized_urls
+ *
+ * @param {Object} params - Parameters object
+ * @param {string} params.userId - User ID from session
+ * @param {string} params.schema - The database schema
+ * @returns {Object} {
+ *    message: string,
+ *    data: {
+ *       allowedUrls: string[]
+ *    }
+ * }
+ */
+export async function getAllowedUrls({ userId, schema }) {
+   return await pipeline(
+      ClientServer,
+      repoQuery(schema, "getAllowedUrls"),
+      "Allowed URLs retrieved successfully",
+      userId
+   );
+}
+
 export const clientServerService = {
    register,
-   getUserClientServers: getAll,
-   getUserClientServer: get,
-   updateUserClientServer,
-   deleteUserClientServer,
+   getAll,
+   get,
+   update,
+   deleteByIDs,
    verifySecretHash,
    getByUrl,
 };

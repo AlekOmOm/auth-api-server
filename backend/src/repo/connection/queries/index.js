@@ -72,6 +72,11 @@ export const operations = {
          type: "entity",
          paramExtractor: (instance) => [instance.secret_hash],
       },
+      getAllowedUrls: {
+         sql: clientServer.getAllowedUrls,
+         type: "entity",
+         paramExtractor: (instance) => [instance.user_id],
+      },
    },
    [getTable("user")]: {
       create: {
@@ -130,7 +135,6 @@ export const operations = {
          sql: session.create,
          type: "entity",
          paramExtractor: (data) => [
-            data.id,
             data.user_id,
             data.session_id,
             data.ip_address,

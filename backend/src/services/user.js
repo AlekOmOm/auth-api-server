@@ -48,9 +48,23 @@ export async function getUsers(schema) {
  *   - login logic
  *     - check password
  *     - remove password from response
- * @param {Object} params - Parameters object
+ * @param {Object} params
+ * @requires schema
+ * @requires id || name && email
+ * @returns {Object} response {
+ *   message: string,
+ *   data: {
+ *     user: {
+ *       id: string,
+ *       name: string,
+ *       email: string,
+ *       role: string,
+ *     },
+ *     schema: string,
+ *   }
+ * }
  */
-export async function getUser({
+export async function get({
    id = null,
    name = null,
    email = null,
@@ -91,6 +105,11 @@ export async function getUser({
  * Read user by id
  * @param {string} id - User ID
  * @param {string} schema - The database schema
+ * @returns {Promise<Object>} Formatted response with user or error
+ *   - message
+ *   - data
+ *     - user
+ *     - schema
  */
 export async function getUserById(id, schema) {
    return await pipeline(
@@ -160,7 +179,7 @@ export async function deleteUser(id, schema) {
 
 export default {
    getUsers,
-   getUser,
+   get,
    getUserById,
    getUserByNameAndEmail,
    createUser,

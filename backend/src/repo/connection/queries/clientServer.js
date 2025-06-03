@@ -16,6 +16,7 @@
  * - getByUserId
  * - getByUserIdAndClientId
  * - deleteByUserIdAndClientId
+ * - getAllowedUrls
  *
  */
 
@@ -69,6 +70,10 @@ export const deleteByUserIdAndClientId = `
   DELETE FROM client_servers WHERE user_id = $1 AND client_id = $2 RETURNING *;
 `;
 
+export const getAllowedUrls = `
+  SELECT identifier_url, entry_point_url, authorized_urls FROM client_servers WHERE user_id = $1;
+`;
+
 export const CLIENT_SERVER = {
    // global
    create,
@@ -83,4 +88,6 @@ export const CLIENT_SERVER = {
    getByUserId,
    getByUserIdAndClientId,
    deleteByUserIdAndClientId,
+   // helper
+   getAllowedUrls,
 };

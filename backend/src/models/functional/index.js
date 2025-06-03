@@ -12,8 +12,17 @@ export { ClientServerOperations } from "../ClientServer.js";
 
 // --- for Service Layer ---
 /**
- * Request - Response operations
+ * prepare instance for service layer
+ * @param {Object} instance - instance to prepare
+ * @param {Array} requiredFields - required fields for service operation
+ * @returns {Object} prepared instance
  */
+export const prepareInstance = (instance, requiredFields) => {
+   return requiredFields.reduce((acc, field) => {
+      acc[field] = instance[field];
+      return acc;
+   }, {});
+};
 
 // --- for Database Operations ---
 // toDB and fromDB
