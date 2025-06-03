@@ -18,16 +18,12 @@ const repoQuery = (schema, operationName) => (instance) =>
  * @param  {...any} args - Arguments for model.fromRequestBody.
  */
 const pipeline = async (model, executor, message, ...args) => {
-   try {
-      const instance = await model.fromRequestBody(...args);
-      const result = await executor(instance);
-      return {
-         message: message,
-         data: result,
-      };
-   } catch (error) {
-      throw error;
-   }
+   const instance = await model.fromRequestBody(...args);
+   const result = await executor(instance);
+   return {
+      message: message,
+      data: result,
+   };
 };
 
 // ---- Service Functions ----
@@ -47,6 +43,11 @@ export async function getUsers(schema) {
 
 /**
  * Get user by id or by name and email. Handles login check.
+ * - aggregate operation for
+ *   - get user by id or name and email
+ *   - login logic
+ *     - check password
+ *     - remove password from response
  * @param {Object} params - Parameters object
  */
 export async function getUser({
@@ -55,10 +56,11 @@ export async function getUser({
    email = null,
    schema,
    password = null,
-   withPassword = false,
+   returnPwd = false,
 }) {
    let result = null;
 
+   // get user by id or name and email
    if (id) {
       result = await getUserById(id, schema);
    } else if (!result && name && email) {
@@ -67,6 +69,7 @@ export async function getUser({
       throw new ValidationError("User ID or name and email are required.");
    }
 
+   // login logic
    if (password) {
       if (
          !result.data.password ||
@@ -76,7 +79,8 @@ export async function getUser({
       }
    }
 
-   if (!withPassword) {
+   // remove password from response
+   if (!returnPwd) {
       return UserOperations.removePassword(result.data);
    }
 

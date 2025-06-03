@@ -214,7 +214,7 @@ export async function register({ userData, schema, refererUrl }) {
                await clientServerService.getClientServerByUrl(refererUrl);
             if (
                clientServerLookup?.success &&
-               clientServerLookup?.data?.schema_name
+               clientServerLookup.data?.schema_name
             ) {
                targetSchema = clientServerLookup.data.schema_name;
             } else {

@@ -22,9 +22,11 @@ class BaseModel {
     */
    static fromDb(dbRow) {
       if (!dbRow) {
-         throw new NotFoundError(`${this.name} not found or access denied`);
+         throw new NotFoundError(
+            `${BaseModel.name} not found or access denied`
+         );
       }
-      throw new Error(`fromDb method must be implemented in ${this.name}`);
+      throw new Error(`fromDb method must be implemented in ${BaseModel.name}`);
    }
 
    /**
@@ -35,7 +37,7 @@ class BaseModel {
       if (!Array.isArray(dbRows)) {
          return [];
       }
-      return dbRows.map((row) => this.fromDb(row));
+      return dbRows.map((row) => BaseModel.fromDb(row));
    }
 
    /**
@@ -48,7 +50,7 @@ class BaseModel {
     */
    static fromRequestBody(...args) {
       throw new Error(
-         `static fromRequestBody(...args) method must be implemented in ${this.name}`
+         `static fromRequestBody(...args) method must be implemented in ${BaseModel.name}`
       );
    }
 
@@ -79,18 +81,19 @@ class BaseModel {
     * Override in child classes
     */
    toApiResponse() {
-      // Default: return all non-sensitive properties
-      const obj = { ...this };
-
-      // Remove common sensitive fields
-      delete obj.password;
-      delete obj.passwordHash;
-      delete obj.client_secret;
-      delete obj.client_secret_hash;
-      delete obj._errors;
-      delete obj._isValid;
-
-      return obj;
+      // Default: return all non-sensitive properties using destructuring for better performance
+      /* eslint-disable camelcase */
+      const {
+         password,
+         passwordHash,
+         client_secret,
+         client_secret_hash,
+         _errors,
+         _isValid,
+         ...safe
+      } = this;
+      /* eslint-enable camelcase */
+      return safe;
    }
 
    // --- Validation Methods ---

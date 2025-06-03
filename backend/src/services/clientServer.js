@@ -40,16 +40,12 @@ const repoQuery = (schema, operationName) => (instance) =>
  * @returns {Object} { message, data }
  */
 const pipeline = async (model, executor, message, ...args) => {
-   try {
-      const instance = await model.fromRequestBody(...args);
-      const result = await executor(instance);
-      return {
-         message: message,
-         data: result,
-      };
-   } catch (error) {
-      throw error;
-   }
+   const instance = await model.fromRequestBody(...args);
+   const result = await executor(instance);
+   return {
+      message: message,
+      data: result,
+   };
 };
 
 // --- service functions ---

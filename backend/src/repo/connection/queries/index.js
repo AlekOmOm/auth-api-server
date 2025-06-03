@@ -74,14 +74,56 @@ export const operations = {
       },
    },
    [getTable("user")]: {
-      create: user.create,
-      createUsers: user.createUsers,
-      getAll: user.getAll,
-      get: user.get,
-      update: user.update,
-      deleteByID: user.deleteByID,
-      deleteAll: user.deleteAll,
-      getByEmail: user.getByEmail,
+      create: {
+         sql: user.create,
+         type: "entity",
+         paramExtractor: (data) => [
+            data.id,
+            data.name,
+            data.role,
+            data.email,
+            data.password_hash,
+         ],
+      },
+      createUsers: {
+         sql: user.createUsers,
+         type: "array",
+         paramExtractor: (users) => users,
+      },
+      getAll: {
+         sql: user.getAll,
+         type: "array",
+      },
+      get: {
+         sql: user.get,
+         type: "entity",
+         paramExtractor: (instance) => [instance.id],
+      },
+      update: {
+         sql: user.update,
+         type: "entity",
+         paramExtractor: (data) => [
+            data.name,
+            data.role,
+            data.email,
+            data.password_hash,
+            data.id,
+         ],
+      },
+      deleteByID: {
+         sql: user.deleteByID,
+         type: "void",
+         paramExtractor: (instance) => [instance.id],
+      },
+      deleteAll: {
+         sql: user.deleteAll,
+         type: "void",
+      },
+      getByEmail: {
+         sql: user.getByEmail,
+         type: "entity",
+         paramExtractor: (instance) => [instance.email],
+      },
    },
    [getTable("session")]: {
       create: {
