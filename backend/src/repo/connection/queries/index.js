@@ -4,9 +4,27 @@ import * as session from "./session.js";
 import * as user from "./user.js";
 import * as schema from "./schema.js";
 import getTableDefault, { TABLES } from "../TABLES.js";
-
-// Use the 'get' function from the default export
 const getTable = getTableDefault.get;
+
+// --- query functions ---
+/**
+ * Pure query function - handles all database operations
+ * @param {string} table - Table name ('client_server', 'user', 'session', 'schema')
+ * @param {string} operation - Operation name ('create', 'get', 'getAll', etc.)
+ * @param {...any} params - Parameters for the operation
+ * @returns {any} Query result (transformed if needed)
+ */
+const query = (table, operation, ...params) => {
+   // schema operations (not a real table)
+   if (table === "schema") {
+      return configSchema(operation, ...params);
+   }
+
+   // table operations
+   return configTable(table, operation, ...params);
+};
+
+// --- ---
 
 // Query operations registry
 export const operations = {
@@ -191,7 +209,7 @@ export const operations = {
       deleteExpired: { sql: session.deleteExpired, type: "void" },
    },
    schema: {
-      checkSchemaExists: {
+      exists: {
          sql: schema.checkSchemaExists,
          type: "entity",
          paramExtractor: (data) => [data.schemaName],
@@ -227,59 +245,97 @@ const entityOps = [
    "getByUserIdAndClientId",
 ];
 
+// --- config functions ---
 /**
- * Pure query function - handles all database operations
- * @param {string} table - Table name ('client_server', 'user', 'session', 'schema')
- * @param {string} operation - Operation name ('create', 'get', 'getAll', etc.)
+ * Configures a schema operation
+ * @param {string} operation - Operation name
  * @param {...any} params - Parameters for the operation
- * @returns {any} Query result (transformed if needed)
+ * @returns {Object} Config object for the operation
  */
-const query = (table, operation, ...params) => {
-   // Special handling for schema operations (not a real table)
-   if (table === "schema") {
-      const operationConfig = operations.schema[operation];
-      if (!operationConfig) {
-         throw new Error(
-            `Operation '${operation}' not found for schema operations.`
-         );
-      }
-
-      return {
-         sql: operationConfig.sql,
-         valuesExtractor: operationConfig.paramExtractor,
-         inputParams: params,
-         operationType: operationConfig.type,
-         logicalTableName: null, // Schema operations don't map to a table
-      };
+const configSchema = (operation, ...params) => {
+   const operationConfig = operations.schema[operation];
+   if (!operationConfig) {
+      throw new Error(
+         `Operation '${operation}' not found for schema operations.`
+      );
    }
 
-   // Regular table handling
+   return {
+      sql: operationConfig.sql,
+      valuesExtractor: operationConfig.paramExtractor,
+      inputParams: params,
+      operationType: operationConfig.type,
+      logicalTableName: null, // Schema operations don't map to a table
+   };
+};
+
+/**
+ * Configures a table operation
+ * @param {string} table - Table name
+ * @param {string} operation - Operation name
+ * @param {...any} params - Parameters for the operation
+ * @returns {Object} Config object for the operation
+ */
+const configTable = (table, operation, ...params) => {
+   const logicalTableName = getTableName(table);
+   const operationConfig = getOperationConfig(logicalTableName, operation);
+
+   let processedParams = getProcessedParams(operation, params);
+
+   return {
+      sql: operationConfig.sql,
+      valuesExtractor: operationConfig.paramExtractor,
+      inputParams: processedParams,
+      operationType: operationConfig.type,
+      logicalTableName: logicalTableName,
+   };
+};
+
+// --- helper functions ---
+
+/**
+ * Gets the logical table name for a given table
+ * @param {string} table - Table name
+ * @returns {string} Logical table name
+ */
+const getTableName = (table) => {
    const logicalTableName = Object.keys(TABLES).find(
       (key) => TABLES[key] === table
    );
    if (!logicalTableName || !operations[getTable(logicalTableName)]) {
       throw new Error(`Table '${table}' not found or no operations defined.`);
    }
+   return logicalTableName;
+};
+
+/**
+ * Gets the operation config for a given operation
+ * @param {string} logicalTableName - Logical table name
+ * @param {string} operation - Operation name
+ * @returns {Object} Operation config
+ */
+const getOperationConfig = (logicalTableName, operation) => {
    const operationConfig = operations[getTable(logicalTableName)][operation];
    if (!operationConfig) {
       throw new Error(
          `Operation '${operation}' not found for table '${table}'.`
       );
    }
+   return operationConfig;
+};
 
+/**
+ * Gets the processed parameters for a given operation
+ * @param {string} operation - Operation name
+ * @param {...any} params - Parameters for the operation
+ * @returns {any} Processed parameters
+ */
+const getProcessedParams = (operation, params) => {
    let processedParams = params;
    if (inputOps.includes(operation) && params.length > 0 && params[0]) {
       processedParams = [toDB(logicalTableName, params[0]), ...params.slice(1)];
    }
-   // For non-inputOps (like getters), params[0] is often the instance with lookup fields.
-
-   return {
-      sql: operationConfig.sql,
-      valuesExtractor: operationConfig.paramExtractor, // Function to get SQL values from processedParams[0]
-      inputParams: processedParams, // The (potentially toDB transformed) params as passed by Repo
-      operationType: operationConfig.type, // 'entity', 'array', or 'void'/'rowCount'
-      logicalTableName: logicalTableName,
-   };
+   return processedParams;
 };
 
 export default query;

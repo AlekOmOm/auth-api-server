@@ -1,5 +1,5 @@
 import * as service from "../services/clientServer.js";
-import { getUserId } from "../utils/session.js";
+import { getUserId } from "../utils/request/session.js";
 import { standardizeResponse } from "../utils/responseUtils.js";
 
 /**

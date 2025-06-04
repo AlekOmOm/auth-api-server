@@ -31,7 +31,7 @@ User Login → Session Created → Schema Detected → Session Enhanced
 ```javascript
 session = {
   userId: "user_123",           // Authenticated user ID
-  role: "user|admin",           // User role/permissions
+  role: "user|owner|admin",     // User role/permissions/owner
   schema: "client_app_123",     // Database schema (tenant)
   sessionId: "session_uuid",    // Unique session identifier
   isAuthenticated: true         // Authentication status

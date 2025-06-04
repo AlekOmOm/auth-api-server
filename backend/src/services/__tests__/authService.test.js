@@ -8,7 +8,7 @@ vi.mock("uuid", () => ({
    v4: vi.fn(() => "mock-uuid-1234"),
 }));
 
-vi.mock("../../utils/session.js", () => ({
+vi.mock("../../utils/request/session.js", () => ({
    getUserId: vi.fn((session) => session?.userId),
    getSession: vi.fn((session) => session),
 }));

@@ -9,6 +9,7 @@ import { ValidationError } from "../middleware/errorHandler.js";
  * @param {string} schema - Database schema (tenant)
  * @param {string} (opt) sessionId - Unique session identifier
  * @param {boolean} (opt) isAuthenticated - Authentication status
+ * @param {string[]} (opt) allowedUrls - Allowed URLs
  * @returns {Object} session object
  *
  */
@@ -18,8 +19,10 @@ export const setObj = (
       userId = null,
       role = null,
       schema,
+      ownerId = null,
       sessionId = null,
       isAuthenticated = undefined,
+      allowedUrls = null,
    }
 ) => {
    if (!req.session) {
@@ -34,13 +37,26 @@ export const setObj = (
    req.session.userId = userId !== null ? userId : req.session.userId;
    req.session.role = role !== null ? role : req.session.role;
    req.session.schema = schema !== null ? schema : req.session.schema;
+   req.session.ownerId = ownerId !== null ? ownerId : req.session.ownerId;
    req.session.sessionId =
       sessionId !== null ? sessionId : req.session.sessionId;
    req.session.isAuthenticated =
       isAuthenticated !== undefined
          ? isAuthenticated
          : req.session.isAuthenticated;
+   req.session.allowedUrls =
+      allowedUrls !== null ? allowedUrls : req.session.allowedUrls;
 };
+
+/**
+ * retrieve sessionId from session
+ * @param {Object} session - Express session object
+ * @returns {string} sessionId || undefined
+ */
+export function getSessionId(session) {
+   return session?.sessionId; // undefined if not set
+}
+
 /**
  * retrieve userId from session
  */
@@ -91,13 +107,18 @@ export function getSchema(session) {
  * @returns {void} - updates session object
  */
 export function setSchema(session, schema) {
-   if (!session) {
-      throw new ValidationError("Session is required");
-   }
-   if (!schema) {
-      throw new ValidationError("Schema is required");
-   }
+   check(session, "Session is required");
+   check(schema, "Schema is required");
    session.schema = schema;
+}
+
+/**
+ * set ownerId in session
+ */
+export function setOwnerId(session, ownerId) {
+   check(session, "Session is required");
+   check(ownerId, "Owner ID is required");
+   session.ownerId = ownerId;
 }
 
 /**
@@ -115,9 +136,11 @@ export function getSession(req) {
 }
 /**
  * Get user role from session metadata
+ * @param {Object} req - Express request object
+ * @returns {string} user role || undefined
  */
 export const getUserRole = (req) => {
-   return req.session?.role || USER_ROLES.USER;
+   return req.session?.role || undefined;
 };
 
 /**
@@ -141,11 +164,27 @@ export const isTenantUser = (req) => {
    return getUserRole(req) === USER_ROLES.USER;
 };
 
+// ---- helper functions ----
+
+/**
+ * @description check if value is defined
+ * @param {*} value
+ * @param {string} message
+ * @returns {void}
+ */
+function check(value, message) {
+   if (!value) {
+      throw new ValidationError(message);
+   }
+}
+
 // --- export ---
 const sessionUtils = {
    setObj,
    getSchema,
    setSchema,
+   getSessionId,
+   setOwnerId,
    getUserId,
    getClientId,
    getClientSecretHash,

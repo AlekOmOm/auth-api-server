@@ -95,10 +95,10 @@ const execute = async (
    }
 
    const params = prepareInstance(instance, requiredFields);
-   const operation = service[operation];
+   const serviceMethod = service[operation];
 
    // execute
-   const { success, data, error, message } = await operation(params);
+   const { success, data, error, message } = await serviceMethod(params);
 
    // return
    if (success) {
@@ -163,6 +163,12 @@ export async function login({
       user.id,
       schema
    );
+
+   updateSession(session, {
+      schema,
+      user,
+      allowedUrls,
+   });
 
    return {
       success: true,
@@ -234,6 +240,24 @@ export async function register({ credentials, schema }) {
    };
 }
 
+/**
+ * isOwner
+ * @param {Object} params - Parameters object
+ * @param {string} params.userId - User ID from session
+ * @param {string} params.schema - Database schema
+ * @returns {Object} { success, data, message }
+ */
+export async function isOwner({ req }) {
+   const { ownerId, schema } = requestUtils.session.getSession(req);
+   const { success, data, message } = await execute(
+      User,
+      "getUser",
+      ["userId", "schema"],
+      ownerId,
+      schema
+   );
+   return;
+}
 // --- helper functions ---
 
 /**

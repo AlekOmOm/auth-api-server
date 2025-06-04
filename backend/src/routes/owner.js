@@ -1,6 +1,6 @@
 import express from "express";
 import { isAuthenticated } from "../middleware/auth.js";
-import * as ownerPanelService from "../services/ownerPanelService.js";
+import * as ownerPanelService from "../services/ownerPanel.js";
 
 const router = express.Router();
 
@@ -30,7 +30,7 @@ router.get("/stats", isAuthenticated, async (req, res, next) => {
          });
       }
 
-      const stats = await ownerService.getOwnerStatistics(req);
+      const stats = await ownerPanelService.getOwnerStatistics(req);
       res.json({
          success: true,
          data: stats,
@@ -52,7 +52,7 @@ router.get(
    async (req, res, next) => {
       try {
          const { clientId } = req.params;
-         const users = await ownerService.getClientUsers(req, clientId);
+         const users = await ownerPanelService.getClientUsers(req, clientId);
 
          res.json({
             success: true,
@@ -76,7 +76,7 @@ router.post(
          const { clientId } = req.params;
          const userData = req.body;
 
-         const newUser = await ownerService.createClientUser(
+         const newUser = await ownerPanelService.createClientUser(
             req,
             clientId,
             userData
@@ -105,7 +105,7 @@ router.put(
          const { clientId, userId } = req.params;
          const updateData = req.body;
 
-         const updatedUser = await ownerService.updateClientUser(
+         const updatedUser = await ownerPanelService.updateClientUser(
             req,
             clientId,
             userId,
@@ -134,7 +134,7 @@ router.delete(
       try {
          const { clientId, userId } = req.params;
 
-         await ownerService.deleteClientUser(req, clientId, userId);
+         await ownerPanelService.deleteClientUser(req, clientId, userId);
 
          res.json({
             success: true,
@@ -157,7 +157,11 @@ router.get(
       try {
          const { clientId, userId } = req.params;
 
-         const user = await ownerService.getClientUser(req, clientId, userId);
+         const user = await ownerPanelService.getClientUser(
+            req,
+            clientId,
+            userId
+         );
 
          res.json({
             success: true,
@@ -182,7 +186,10 @@ router.get(
       try {
          const { clientId } = req.params;
 
-         const analytics = await ownerService.getClientAnalytics(req, clientId);
+         const analytics = await ownerPanelService.getClientAnalytics(
+            req,
+            clientId
+         );
 
          res.json({
             success: true,

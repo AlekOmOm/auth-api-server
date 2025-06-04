@@ -1,4 +1,4 @@
-import ClientServer from "../models/ClientServer.js";
+import { Models, ClientServer } from "../models/index.js";
 import Repo from "../repo/index.js";
 // import { operations } from "../repo/connection/queries/index.js"; // Unused import
 import { toDB, fromDB } from "../models/functional/index.js";
@@ -33,14 +33,14 @@ const repoQuery = (schema, operationName) => (instance) =>
  *   2. execute repo function
  *   3. return result
  * @async
- * @param {*} model - model class
+ * @param {*} modelClass - model class
  * @param {*} executor - repoQuery prepared for execution with instance
  * @param {*} message - message to return
  * @param  {...any} args - arguments to pass to the repo function
  * @returns {Object} { message, data }
  */
-const pipeline = async (model, executor, message, ...args) => {
-   const instance = await model.fromRequestBody(...args);
+const pipeline = async (modelClass, executor, message, ...args) => {
+   const instance = await modelClass.fromRequestBody(...args);
    const result = await executor(instance);
    return {
       message: message,
@@ -171,8 +171,13 @@ export async function verifySecretHash({ secretHash, schema }) {
 /**
  * Get client server details by one of its URLs (identifier_url or an authorized_url)
  * This is used by auth service during registration to find the schema from referer.
- * @param {string} url - The URL to look up
- * @returns {Promise<Object|null>} Client server data or null if not found. Structure: { success: boolean, data?: ClientServer, message?: string }
+ * @param {Object} params - Parameters object
+ * @param {string} params.url - The URL to look up
+ * @param {string} params.schema - The database schema
+ * @returns {Object} {
+ *    message: string,
+ *    data: ClientServer
+ * }
  */
 export async function getByUrl({ url, schema }) {
    return await pipeline(

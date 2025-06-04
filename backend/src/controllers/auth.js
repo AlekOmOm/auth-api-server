@@ -4,7 +4,7 @@ import * as userService from "../services/user.js";
 import * as sessionService from "../services/session.js";
 
 // --- utils ---
-import * as sessionUtils from "../utils/session.js";
+import * as sessionUtils from "../utils/request/session.js";
 import { standardizeResponse } from "../utils/responseUtils.js"; // Import the new utility
 
 // --- controller ---

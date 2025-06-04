@@ -17,21 +17,24 @@
  */
 
 // --- models ---
-import ClientServer from "./ClientServer.js";
-import Session from "./Session.js";
-import User from "./User.js";
+import { ClientServer, ClientServerOperations } from "./ClientServer.js";
+import { Session, SessionOperations } from "./Session.js";
+import { User, UserOperations } from "./User.js";
+import Schema from "./Schema.js";
 
 // operations
-export { ClientServerOperations } from "./ClientServer.js";
-export { SessionOperations } from "./Session.js";
-export { UserOperations } from "./User.js";
+export {
+   ClientServerOperations,
+   SessionOperations,
+   UserOperations,
+} from "./index.js";
 
 // base and validation
 import BaseModel from "./base/BaseModel.js";
 import ValidationMixin from "./base/ValidationMixin.js";
 
 // --- exports ---
-export { ClientServer, Session, User, BaseModel, ValidationMixin };
+export { ClientServer, Session, User, Schema, BaseModel, ValidationMixin };
 export const operations = {
    ClientServerOperations,
    SessionOperations,
@@ -42,6 +45,7 @@ export default {
    ClientServer,
    Session,
    User,
+   Schema,
    BaseModel,
    ValidationMixin,
    operations,
@@ -51,4 +55,5 @@ export const Models = {
    ClientServer,
    Session,
    User,
+   Schema,
 };

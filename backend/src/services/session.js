@@ -57,6 +57,7 @@ export async function create({
    schema,
 }) {
    const input = { userId, ipAddress, userAgent };
+
    return await pipeline(
       Session,
       repoQuery(schema, "create"),

@@ -5,7 +5,6 @@
  * - Schema setup/cleanup
  */
 
-import { getAuthPool } from "../../repo/connection/pools/auth.js";
 import pg from "pg";
 import { v4 as uuidv4 } from "uuid";
 import bcrypt from "bcrypt";

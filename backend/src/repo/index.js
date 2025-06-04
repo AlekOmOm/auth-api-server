@@ -31,6 +31,10 @@ class Repo {
    }
 
    // --- FUNCTIONAL DATABASE OPERATIONS ---
+
+   async querySchema(operationName, ...params) {
+      const config = getQueryConfig.schema()
+   }
    /**
     * Execute a database operation
     * @param {string} operationName - The operation to execute
@@ -47,13 +51,8 @@ class Repo {
          config.inputParams &&
          config.inputParams.length > 0
       ) {
-         // inputParams[0] is the instance or data object
          sqlParams = config.valuesExtractor(config.inputParams[0]);
-      } else if (config.valuesExtractor) {
-         // Handle cases like getAll where there are no inputParams but paramExtractor might be relevant if it was defined differently
-         // For now, if valuesExtractor exists, it expects inputParams[0]
-         // This branch might indicate an issue if valuesExtractor exists but inputParams is empty
-      } // If no valuesExtractor, sqlParams remains [] (e.g. for getAll)
+      }
 
       try {
          const { rows, rowCount } = await this.pool.query(
@@ -62,7 +61,6 @@ class Repo {
          );
 
          if (config.operationType === "entity") {
-            // For schema operations without logicalTableName, return raw result
             if (!config.logicalTableName) {
                return rows.length ? rows[0] : null;
             }
@@ -70,17 +68,14 @@ class Repo {
                ? fromDB(config.logicalTableName, rows[0])
                : null;
          } else if (config.operationType === "array") {
-            // For schema operations without logicalTableName, return raw results
             if (!config.logicalTableName) {
                return rows;
             }
             return rows.map((row) => fromDB(config.logicalTableName, row));
          } else {
-            // For 'void' or other types, could return rowCount or raw result
             return { rows, rowCount }; // Default for now
          }
       } catch (error) {
-         // console.error("Error executing query:", error, "SQL:", config.sql, "Params:", sqlParams);
          throw error;
       }
    }

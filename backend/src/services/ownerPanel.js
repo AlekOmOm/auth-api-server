@@ -1,9 +1,3 @@
-import { ValidationError, AuthError } from "../middleware/errorHandler.js";
-import { getAuthPool } from "../repo/connection/pools/auth.js";
-import { getPoolForSchema } from "../repo/connection/pools/clientServers.js";
-import * as clientServerRepo from "../repo/repositories/authInternal/repository.js";
-import userService from "./userService.js";
-
 /**
  * Owner Panel Service
  *

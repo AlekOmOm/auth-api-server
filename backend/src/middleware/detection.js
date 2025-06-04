@@ -61,10 +61,23 @@ export const detectSchema = async (req, res, next) => {
  */
 export const detectSchemaFromUrl = async (req, res, next) => {
    const url = requestUtils.body.getRefererUrl(req);
-   const clientServerDetails = await executeIf(url, service.getByUrl, url);
+   const clientServerDetails = await executeIf(url, service.getByUrl, {
+      url,
+      schema: req.session.schema,
+   });
 
+   /**
+    * clientServerDetails = {
+    *    message: string,
+    *    data: ClientServer {
+    *       user_id: string,
+    *       schema: string,
+    *       authorized_urls: string[],
+    *    }
+    * }
+    */
    if (clientServerDetails && clientServerDetails.schema) {
-      requestUtils.session.setSchema(req.session, clientServerDetails.schema);
+      requestUtils.session.setObj(req, clientServerDetails.data.toApiResponse());
    }
    next();
 };
@@ -78,7 +91,15 @@ export const detectSchemaFromApiToken = async (req, res, next) => {
    const tokenDetails = await executeIf(token, verifyApiToken, token);
 
    if (tokenDetails && tokenDetails.schema) {
-      requestUtils.session.setSchema(req.session, tokenDetails.schema);
+      requestUtils.session.setObj(req, {
+         userId: tokenDetails.user_id,
+         role: requestUtils.session.getUserRole(req),
+         schema: tokenDetails.schema,
+         ownerId: tokenDetails.user_id,
+         sessionId: requestUtils.session.getSessionId(req.session),
+         isAuthenticated: requestUtils.session.isAuthenticated(req.session),
+         allowedUrls: tokenDetails.authorized_urls,
+      });
    }
    next();
 };

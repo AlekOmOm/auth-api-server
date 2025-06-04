@@ -2,7 +2,7 @@ const mockFromRequestBody = jest.fn();
 const mockClientServerUpdate = jest.fn();
 const mockToDB = jest.fn((instance) => instance); // Simple pass-through
 
-jest.mock("../models/ClientServer.js", () => ({
+jest.mock("../../models/ClientServer.js", () => ({
    __esModule: true,
    default: {
       fromRequestBody: mockFromRequestBody,

@@ -3,7 +3,7 @@ import config from "../../../config/env.js";
 import { ddl } from "../../DDL/tenant_template.js";
 
 // Cache
-const schemas = {};
+const poolsCached = {};
 
 /**
  * Returns a pg.Pool connected to the given schema (creates it on first use).
@@ -12,8 +12,8 @@ const schemas = {};
  *   const { rows } = await pool.query("SELECT * FROM users");
  */
 export const getPoolForSchema = async (schemaName = "client_template") => {
-   if (schemas[schemaName]) {
-      return schemas[schemaName];
+   if (poolsCached[schemaName]) {
+      return poolsCached[schemaName];
    }
 
    // Transform config.POSTGRES to match pg Pool constructor expectations
@@ -28,7 +28,7 @@ export const getPoolForSchema = async (schemaName = "client_template") => {
    const localPool = new Pool(pgConfig);
    await localPool.connect();
    await initSchema(localPool, schemaName);
-   schemas[schemaName] = localPool;
+   poolsCached[schemaName] = localPool;
    await localPool.query(`set search_path to ${schemaName}, public`);
    return localPool;
 };

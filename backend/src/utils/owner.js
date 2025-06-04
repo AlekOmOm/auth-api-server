@@ -24,9 +24,8 @@ import { v4 as uuidv4 } from "uuid";
  * @returns {Object} Client server data if owned
  * @throws {Error} If not owned or not found
  */
-async function verifyClientOwnership(req, clientId) {
-   const userRole = getUserRole(req);
-   const userId = req.session?.userId;
+async function verifyClientOwnership(req) {
+   const { ownerId, schema } = requestUtils.session.getSession(req);
 
    if (!userId) {
       throw new Error("Authentication required");
