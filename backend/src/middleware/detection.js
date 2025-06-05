@@ -22,16 +22,13 @@ import requestUtils from "../utils/request/index.js";
  * structure of req after detectSchema:
  * {
  *   session: {
- *     poolContext: string,
+ *     userId: string,
+ *     role: string, // admin, owner, user
  *     schema: string,
- *     client_id: string,
- *     poolMetadata: {
- *       app_name: string,
- *       client_mode: string,
- *       return_url: string,
- *       allowed_return_urls: string[],
- *       user_role: string,
- *     },
+ *     ownerId: string,
+ *     sessionId: string,
+ *     isAuthenticated: boolean,
+ *     allowedUrls: string[],
  *   }
  * }
  */
