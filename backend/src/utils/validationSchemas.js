@@ -1,5 +1,5 @@
-import { ValidationError } from "../middleware/errorHandler.js";
-import User from "../models/User.js"; // To potentially reuse existing static validation methods
+import { ValidationError } from "../utils/customErrors.js";
+import ValidationMixin from "../models/base/ValidationMixin.js";
 
 /**
  * Placeholder for owner-specific validation rules (auth_internal schema).
@@ -16,7 +16,7 @@ const ownerValidationRules = {
             valid: false,
             message: "Owner name must contain only letters and spaces.",
          };
-      if (!User.validateStringLength(value, 3, 50))
+      if (!ValidationMixin.validateStringLength(value, 3, 50))
          return {
             valid: false,
             message: "Owner name must be between 3 and 50 characters.",
@@ -26,7 +26,7 @@ const ownerValidationRules = {
    email: (value) => {
       if (!value)
          return { valid: false, message: "Email is required for owners." };
-      if (!User.isValidEmail(value))
+      if (!ValidationMixin.isValidEmail(value))
          return { valid: false, message: "Invalid email format for owner." };
       if (value.length > 50)
          return {
@@ -43,7 +43,7 @@ const ownerValidationRules = {
             valid: false,
             message: "Owner password must be between 8 and 100 characters.",
          };
-      const strength = User.validatePasswordStrength(value);
+      const strength = ValidationMixin.validatePasswordStrength(value);
       if (!strength.valid) return { valid: false, message: strength.error };
       return { valid: true };
    },
@@ -81,7 +81,7 @@ const clientUserValidationRules = {
             valid: false,
             message: "Name must contain only letters and spaces.",
          };
-      if (!User.validateStringLength(value, 3, 50))
+      if (!ValidationMixin.validateStringLength(value, 3, 50))
          return {
             valid: false,
             message: "Name must be between 3 and 50 characters.",
@@ -90,7 +90,7 @@ const clientUserValidationRules = {
    },
    email: (value) => {
       if (!value) return { valid: false, message: "Email is required." };
-      if (!User.isValidEmail(value))
+      if (!ValidationMixin.isValidEmail(value))
          return { valid: false, message: "Invalid email format." };
       if (value.length > 50)
          return {
@@ -106,7 +106,7 @@ const clientUserValidationRules = {
             valid: false,
             message: "Password must be between 8 and 100 characters.",
          };
-      const strength = User.validatePasswordStrength(value);
+      const strength = ValidationMixin.validatePasswordStrength(value);
       if (!strength.valid) return { valid: false, message: strength.error };
       return { valid: true };
    },
@@ -163,7 +163,10 @@ export function validateUserForContext(schema, userData) {
    // Example: check if essential fields defined in rules are present in userData
    // This is a simplistic check; ideally, rules would define what's required.
    if (schema === "auth_internal") {
-      if (userData.role && !["owner", "admin"].includes(userData.role)) {
+      if (
+         userData.role &&
+         !["owner", "admin"].includes(userData.role.toLowerCase().trim())
+      ) {
          errors.push({
             field: "role",
             message:
@@ -172,7 +175,7 @@ export function validateUserForContext(schema, userData) {
       }
    } else {
       // client schema
-      if (userData.role && userData.role !== "user") {
+      if (userData.role && userData.role.toLowerCase().trim() !== "user") {
          errors.push({
             field: "role",
             message: "Invalid role for client context. Must be 'user'.",

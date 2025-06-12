@@ -1,4 +1,4 @@
-import { ValidationError } from "../../middleware/errorHandler.js";
+import { ValidationError } from "../../utils/customErrors.js";
 
 /**
  * get refererUrl from request body

@@ -49,8 +49,10 @@ CREATE INDEX IF NOT EXISTS idx_sessions_session_id ON sessions(session_id);
 
 // import { v4 as uuidv4 } from "uuid";
 // import bcrypt from "bcrypt"; // Temporarily commented for testing Vitest module loading
-// import { ValidationError, NotFoundError } from "../middleware/errorHandler.js";
+import { ValidationError, NotFoundError } from "../utils/customErrors.js";
 import BaseModel from "./base/BaseModel.js";
+import { generateUuidV4 } from "../utils/uuid.js";
+import crypto from "crypto";
 // import { pipe, curry } from "../utils/functional.js";
 
 export class ClientServer extends BaseModel {
@@ -61,32 +63,134 @@ export class ClientServer extends BaseModel {
       this.entry_point_url = entryPointUrl;
       this.authorized_urls = authorizedUrls;
       this.user_id = userId;
-      this.client_id = "temp-client-id"; // Placeholder
-      this.assigned_schema_name = "temp-schema-name"; // Placeholder
-      this.client_secret_hash = "temp-hash"; // Placeholder
+      this.client_id = `cs_${generateUuidV4()}`; // Generate unique client ID
+      this.assigned_schema_name = `client_${crypto
+         .randomBytes(8)
+         .toString("hex")}`; // Generate unique schema name
+
+      // Generate plain secret and its hash
+      this._plainClientSecret = crypto.randomBytes(32).toString("hex"); // Plain secret
+      this.client_secret_hash = crypto
+         .createHash("sha256")
+         .update(this._plainClientSecret)
+         .digest("hex"); // Hash of the plain secret
+
       console.log(
-         "[ClientServer CONSTRUCTOR_DIAGNOSTIC] Simplified ClientServer instance created."
+         "[ClientServer CONSTRUCTOR_DIAGNOSTIC] ClientServer instance created with unique IDs and secret."
       );
    }
 
-   // Comment out all other methods and static methods to simplify
-   // validate() { this.clearErrors(); return this; }
-   // static async fromRequestBody(requestData, operationUserId = null) {
-   //   console.log("[ClientServer DIAGNOSTIC] fromRequestBody called with:", requestData);
-   //   return new ClientServer("diag", "diag", "diag", [], "diag");
-   // }
-   // static update(requestBody, existingClient) { return { ...existingClient, ...requestBody }; }
-   // async generateClientSecret() { this.client_secret_hash = "new-temp-hash"; return "secret"; }
-   // static async create() { return new ClientServer("diag_create", "diag", "diag", [], "diag"); }
-   // static forLogin() { return new ClientServer("diag_login", "diag", "diag", [], "diag"); }
+   getPlainClientSecretOnce() {
+      const secret = this._plainClientSecret;
+      delete this._plainClientSecret; // Clear it after retrieval
+      return secret;
+   }
+
+   validate() {
+      this.clearErrors();
+      return this;
+   }
+
+   static fromRequestBody(requestData, operationUserId = null) {
+      console.log(
+         "[ClientServer DIAGNOSTIC] fromRequestBody called with:",
+         requestData
+      );
+      if (typeof requestData === "string") {
+         // For string inputs (like URL lookup), create a minimal instance
+         // Ensure it's still an instance of ClientServer
+         const instance = new ClientServer(null, requestData, null, [], null);
+         // Clear any validation errors that might arise from missing constructor args
+         // if they are not relevant for a lookup operation.
+         instance.clearErrors();
+         return instance;
+      }
+
+      // Extract data from request body
+      const data = requestData.body || requestData;
+
+      // Create instance with provided data
+      const instance = new ClientServer(
+         data.app_name || data.appName,
+         data.identifier_url || data.identifierUrl,
+         data.entry_point_url || data.entryPointUrl,
+         data.authorized_urls || data.authorizedUrls || [],
+         operationUserId || data.user_id || data.userId
+      );
+
+      // Set additional properties if provided
+      if (data.client_id) instance.client_id = data.client_id;
+      if (data.assigned_schema_name)
+         instance.assigned_schema_name = data.assigned_schema_name;
+      if (data.client_secret_hash)
+         instance.client_secret_hash = data.client_secret_hash;
+
+      return instance;
+   }
+
+   static update(requestBody, existingClient) {
+      return { ...existingClient, ...requestBody };
+   }
+
+   async generateClientSecret() {
+      this.client_secret_hash = "new-temp-hash";
+      return "secret";
+   }
+
+   static async create() {
+      return new ClientServer("diag_create", "diag", "diag", [], "diag");
+   }
+
+   static forLogin() {
+      return new ClientServer("diag_login", "diag", "diag", [], "diag");
+   }
+
    toDatabaseObject() {
-      return { client_id: this.client_id };
+      return {
+         client_id: this.client_id,
+         client_secret_hash: this.client_secret_hash,
+         app_name: this.app_name,
+         assigned_schema_name: this.assigned_schema_name,
+         identifier_url: this.identifier_url,
+         entry_point_url: this.entry_point_url,
+         authorized_urls: this.authorized_urls,
+         user_id: this.user_id,
+         client_mode: this.client_mode,
+         // created_at and updated_at are usually handled by the database automatically
+      };
    }
-   // static fromDb(dbRow) { return new ClientServer(dbRow.app_name, dbRow.identifier_url, dbRow.entry_point_url, dbRow.authorized_urls, dbRow.user_id); }
+
+   static fromDb(dbRow) {
+      if (!dbRow) return null;
+      return new ClientServer(
+         dbRow.app_name,
+         dbRow.identifier_url,
+         dbRow.entry_point_url,
+         dbRow.authorized_urls,
+         dbRow.user_id
+      );
+   }
+
    toApiResponse() {
-      return { client_id: this.client_id };
+      return {
+         client_id: this.client_id,
+         app_name: this.app_name,
+         identifier_url: this.identifier_url,
+         entry_point_url: this.entry_point_url,
+         authorized_urls: this.authorized_urls,
+         assigned_schema_name: this.assigned_schema_name,
+      };
    }
-   // isExpired() { return false; }
-   // hasUser() { return true; }
-   // hasSchema() { return true; }
+
+   isExpired() {
+      return false;
+   }
+
+   hasUser() {
+      return true;
+   }
+
+   hasSchema() {
+      return true;
+   }
 }

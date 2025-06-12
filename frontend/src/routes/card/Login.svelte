@@ -49,9 +49,10 @@
       // console.log("🔍 [LOGIN COMPONENT] Calling authStore.login...");
       const response = await authStore.login(credentials); // Pass only credentials
       
-      // console.log("🔍 [LOGIN] After authStore.login - sessionStorage auth_return_url remains:", sessionStorage.getItem('auth_return_url'));
-      // console.log("🔍 [LOGIN] Login API response:", response);
-      // console.log("🔍 [LOGIN COMPONENT] Response received:", response);
+      console.log("🔍 [LOGIN] After authStore.login - sessionStorage auth_return_url remains:", sessionStorage.getItem('auth_return_url'));
+      console.log("🔍 [LOGIN] Login API response:", response);
+      console.log("🔍 [LOGIN COMPONENT] Response received:", response);
+      console.log("🔍 [LOGIN] Response data structure:", response.data);
       
       if (response.success) { 
         // console.log("🔍 [LOGIN] Login successful, calling loginRedirect utility");
@@ -61,11 +62,11 @@
         // sessionStorage.removeItem('auth_return_url'); // Moved to loginRedirect or handled if redirect is external
       } else {
         // console.log("🔍 [LOGIN COMPONENT] Login failed with response:", response);
-        errorMessage = response.message || 'Login failed.';
+        errorMessage = response.message || 'Login failed. Please check your credentials.';
       }
     } catch (error) {
       console.error('🔍 [LOGIN COMPONENT] Login error caught:', error);
-      errorMessage = 'Login failed. Please check your credentials and try again.';
+      errorMessage = error.message || 'Login failed. Please check your credentials and try again.';
     } finally {
       // console.log("🔍 [LOGIN COMPONENT] Setting isLoading to false");
       isLoading = false;

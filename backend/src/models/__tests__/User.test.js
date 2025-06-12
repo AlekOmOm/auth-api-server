@@ -1,10 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { User } from "../User.js";
 import BaseModel from "../base/BaseModel.js";
-import {
-   ValidationError,
-   NotFoundError,
-} from "../../middleware/errorHandler.js";
+import { NotFoundError, ValidationError } from "../../utils/customErrors.js";
 
 // Mock dependencies
 vi.mock("../../utils/uuid.js", () => ({

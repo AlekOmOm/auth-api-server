@@ -3,20 +3,15 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
    testDir: "./test/playwright-tests", // Restrict test discovery to this directory
    reporter: [["json", { outputFile: "test-results/playwright-report.json" }]], // Configure JSON reporter
+   use: {
+      baseURL: "http://localhost:3000",
+      trace: "on-first-retry",
+   },
    projects: [
       {
          name: "chromium",
          use: { browserName: "chromium" },
       },
-      // You can add other browsers here if needed, e.g.:
-      // {
-      //   name: 'firefox',
-      //   use: { browserName: 'firefox' },
-      // },
-      // {
-      //   name: 'webkit',
-      //   use: { browserName: 'webkit' },
-      // },
    ],
    // If your app is started by a command before tests, configure webServer here.
    // webServer: {

@@ -5,10 +5,10 @@ console.log(
 
 import {
    AuthError,
-   ValidationError,
    ConflictError,
    NotFoundError,
-} from "../middleware/errorHandler.js";
+   ValidationError,
+} from "../utils/customErrors.js";
 import clientServerService from "./clientServer.js";
 import userService from "./user.js";
 import sessionService from "./session.js";
@@ -263,13 +263,11 @@ export async function login({
  * @returns {Object} Logout response
  */
 export async function logout({ userId, sessionId = null, schema }) {
-   const { success, data, message } = await execute(
-      Session,
-      "deleteSession",
-      ["userId", "schema"],
-      null, // messageParam
-      { userId, sessionId, schema } // Data for Session.fromRequestBody
-   );
+   const { success, data, message } = await sessionService.deleteSession({
+      userId,
+      sessionId,
+      schema,
+   });
    check(success, message);
    return { success, data, message: "Logout successful" };
 }
@@ -289,6 +287,10 @@ export async function logout({ userId, sessionId = null, schema }) {
  * 5. return success message
  */
 export async function register({ userData, schema, req }) {
+   console.log("[AUTH_SERVICE_REGISTER] userData:", userData);
+   console.log("[AUTH_SERVICE_REGISTER] schema:", schema);
+   console.log("[AUTH_SERVICE_REGISTER] req:", req);
+
    // Step 1: Check if email already exists
    let userExists = false;
    try {
@@ -441,13 +443,10 @@ export async function register({ userData, schema, req }) {
 export async function getSessions({ userId, schema }) {
    check(userId, "User ID is required for getting sessions");
 
-   const { success, data, message } = await execute(
-      Session,
-      "getSessionsByUser",
-      ["userId", "schema"],
-      "Sessions retrieved successfully",
-      { userId, schema }
-   );
+   const { success, data, message } = await sessionService.getByUserId({
+      userId,
+      schema,
+   });
 
    return { success, data, message };
 }
@@ -462,13 +461,10 @@ export async function getSessions({ userId, schema }) {
 export async function getCurrentUser({ userId, schema = "client_app" }) {
    check(userId, "User ID is required for getting current user");
 
-   const { success, data, message } = await execute(
-      User,
-      "getUser",
-      ["id", "schema"],
-      "Current user retrieved successfully",
-      { id: userId, schema }
-   );
+   const { success, data, message } = await userService.get({
+      id: userId,
+      schema,
+   });
 
    return { success, data, message };
 }
@@ -507,15 +503,16 @@ export async function getSession({ userId, sessionData }) {
  * @returns {Object} { success, data, message }
  */
 export async function isOwner({ req }) {
-   const { ownerId, schema } = requestUtils.session.getSession(req);
-   const { success, data, message } = await execute(
-      User,
-      "getUser",
-      ["userId", "schema"],
-      ownerId,
-      schema
-   );
-   return;
+   const ownerId = sessionUtils.getUserId(req.session);
+   const schema = sessionUtils.getSchema(req.session);
+   if (!ownerId || !schema) {
+      return { success: false, message: "No owner ID or schema in session" };
+   }
+   const { success, data, message } = await userService.get({
+      id: ownerId,
+      schema,
+   });
+   return { success, data, message };
 }
 
 /**
@@ -553,33 +550,58 @@ export async function validateUserSchemaAccess(
       return true;
    }
 
-   const userResult = await userService.get({
-      id: userIdFromSession,
-      schema: userSchemaFromSession,
-   });
+   if (userSchemaFromSession === "auth_internal") {
+      // For auth_internal users, check their role to determine cross-schema access
+      const userResult = await userService.get({
+         id: userIdFromSession,
+         schema: userSchemaFromSession,
+      });
 
-   if (!userResult || !userResult.success || !userResult.data) {
-      console.warn(
-         `[AUTH_VALIDATE_SCHEMA_ACCESS] User (ID: ${userIdFromSession}) not found in schema '${userSchemaFromSession}'.`
-      );
-      throw new AuthError(
-         "User session invalid or user not found, cannot validate schema access."
-      );
+      if (!userResult || !userResult.success || !userResult.data) {
+         console.warn(
+            `[AUTH_VALIDATE_SCHEMA_ACCESS] User (ID: ${userIdFromSession}) not found in schema '${userSchemaFromSession}'.`
+         );
+         throw new AuthError(
+            "User session invalid or user not found, cannot validate schema access."
+         );
+      }
+      const user = userResult.data;
+
+      if (user.role === "owner" || user.role === "admin") {
+         console.log(
+            `[AUTH_VALIDATE_SCHEMA_ACCESS] Privileged user ${user.email} (role: ${user.role} in ${userSchemaFromSession}) accessing target schema '${targetSchemaFromRequest}'. Access granted.`
+         );
+         return true;
+      }
    }
-   const user = userResult.data;
 
-   if (
-      (user.role === "owner" || user.role === "admin") &&
-      userSchemaFromSession === "auth_internal"
-   ) {
+   // For all other cross-schema access attempts, check if the user exists in the target schema
+   // This allows users who have accounts in multiple schemas to switch between them
+   try {
+      const targetSchemaUserResult = await userService.get({
+         id: userIdFromSession,
+         schema: targetSchemaFromRequest,
+      });
+
+      if (
+         targetSchemaUserResult &&
+         targetSchemaUserResult.success &&
+         targetSchemaUserResult.data
+      ) {
+         console.log(
+            `[AUTH_VALIDATE_SCHEMA_ACCESS] User ${userIdFromSession} has account in target schema '${targetSchemaFromRequest}'. Access granted.`
+         );
+         return true;
+      }
+   } catch (error) {
+      // User doesn't exist in target schema, which is expected for most cross-schema attempts
       console.log(
-         `[AUTH_VALIDATE_SCHEMA_ACCESS] Privileged user ${user.email} (role: ${user.role} in ${userSchemaFromSession}) accessing target schema '${targetSchemaFromRequest}'. Access granted.`
+         `[AUTH_VALIDATE_SCHEMA_ACCESS] User ${userIdFromSession} not found in target schema '${targetSchemaFromRequest}'.`
       );
-      return true;
    }
 
    console.warn(
-      `[AUTH_VALIDATE_SCHEMA_ACCESS] Unauthorized cross-schema access attempt: User ${user.email} (ID: ${user.id}, role: ${user.role} in '${userSchemaFromSession}') trying to access target schema '${targetSchemaFromRequest}'.`
+      `[AUTH_VALIDATE_SCHEMA_ACCESS] Unauthorized cross-schema access attempt: User ${userIdFromSession} from '${userSchemaFromSession}' trying to access '${targetSchemaFromRequest}'.`
    );
    throw new AuthError(
       `User from schema '${userSchemaFromSession}' is not authorized to access data in schema '${targetSchemaFromRequest}'.`

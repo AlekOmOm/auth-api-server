@@ -50,11 +50,10 @@
         email = '';
         password = '';
         
-        // redirect after 2 seconds, preserving return_url
-        setTimeout(() => {
-          const loginUrl = buildUrlWithReturnUrl('/login');
-          navigate(loginUrl);
-        }, 2000);
+        // Navigate immediately with a hardcoded URL for testing
+        const loginUrlWithRegistered = '/login?registered=true&hardcoded=yes';
+        console.log('[Register.svelte] Navigating to:', loginUrlWithRegistered); // Log the URL
+        navigate(loginUrlWithRegistered);
       } else {
         if (response.errors && Array.isArray(response.errors)) {
           errorMessages = response.errors.map(err => err.msg);

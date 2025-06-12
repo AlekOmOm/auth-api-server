@@ -1,5 +1,7 @@
 import { Schema } from "../models/index.js";
 import Repo from "../repo/index.js";
+import getAuthPool from "../repo/connection/pools/auth.js";
+import * as schemaQueries from "../repo/connection/queries/schema.js";
 
 /**
  * Service layer for Schema operations following pipeline pattern
@@ -12,12 +14,8 @@ import Repo from "../repo/index.js";
 
 // --- Pipeline functions for different schema types ---
 
-const systemRepo = () => new Repo("information_schema", "schemata");
 const tenantRepo = (schemaName) => new Repo(schemaName, "users");
 const authRepo = () => new Repo("auth_internal", "client_servers");
-
-const systemQuery = (operationName) => (instance) =>
-   systemRepo().query(operationName, instance);
 
 const tenantQuery = (schemaName, operationName) => (instance) =>
    tenantRepo(schemaName).query(operationName, instance);
@@ -49,20 +47,27 @@ const pipeline = async (modelClass, executor, message, ...args) => {
  * Uses PostgreSQL system catalogs
  */
 export async function checkExists({ schemaName }) {
-   const result = await pipeline(
-      Schema,
-      systemQuery("checkSchemaExists"),
-      "Schema existence checked successfully",
-      { schema: schemaName }
-   );
+   try {
+      const authPool = await getAuthPool();
+      const result = await authPool.query(schemaQueries.checkSchemaExists, [
+         schemaName,
+      ]);
 
-   return {
-      message: result.message,
-      data: {
-         exists: result.data !== null,
-         schemaName: schemaName,
-      },
-   };
+      return {
+         success: true,
+         message: "Schema existence checked successfully",
+         data: {
+            exists: result.rows.length > 0,
+            schemaName: schemaName,
+         },
+      };
+   } catch (error) {
+      console.error(
+         "[Schema Service] Failed to check schema existence:",
+         error
+      );
+      throw error;
+   }
 }
 
 /**
@@ -70,11 +75,19 @@ export async function checkExists({ schemaName }) {
  * Uses PostgreSQL system catalogs
  */
 export async function getAllTenantSchemas() {
-   return await pipeline(
-      Schema,
-      systemQuery("getAllTenantSchemas"),
-      "Tenant schemas retrieved successfully"
-   );
+   try {
+      const authPool = await getAuthPool();
+      const result = await authPool.query(schemaQueries.getAllTenantSchemas);
+
+      return {
+         success: true,
+         message: "Tenant schemas retrieved successfully",
+         data: result.rows,
+      };
+   } catch (error) {
+      console.error("[Schema Service] Failed to get tenant schemas:", error);
+      throw error;
+   }
 }
 
 /**
@@ -110,7 +123,7 @@ export async function getTenantStats({ schema }) {
             : 0,
          tables: ["users", "sessions"],
       },
-   }
+   };
 }
 
 /**
@@ -152,6 +165,62 @@ export async function unassignFromClient({ clientId, schema }) {
    );
 }
 
+/**
+ * List all schemas (READ)
+ * Uses getAllTenantSchemas internally
+ */
+export async function listSchemas() {
+   return await getAllTenantSchemas();
+}
+
+/**
+ * Create a new schema (CREATE)
+ * Note: Actual schema creation would require database admin privileges
+ * This is a placeholder that returns success
+ */
+export async function createSchema(schemaData) {
+   return {
+      success: true,
+      message: "Schema creation is not implemented in this version",
+      data: {
+         schema_name: schemaData.schema_name,
+         description: schemaData.description,
+      },
+   };
+}
+
+/**
+ * Update schema metadata (UPDATE)
+ * Note: Schema metadata updates would be stored elsewhere
+ * This is a placeholder that returns success
+ */
+export async function updateSchema(schemaId, schemaData) {
+   return {
+      success: true,
+      message: "Schema update is not implemented in this version",
+      data: {
+         id: schemaId,
+         schema_name: schemaData.schema_name,
+         description: schemaData.description,
+      },
+   };
+}
+
+/**
+ * Delete a schema (DELETE)
+ * Note: Schema deletion would require database admin privileges
+ * This is a placeholder that returns success
+ */
+export async function deleteSchema(schemaId) {
+   return {
+      success: true,
+      message: "Schema deletion is not implemented in this version",
+      data: {
+         id: schemaId,
+      },
+   };
+}
+
 export const schemaService = {
    checkExists,
    getAllTenantSchemas,
@@ -159,6 +228,10 @@ export const schemaService = {
    getClientBySchema,
    assignToClient,
    unassignFromClient,
+   listSchemas,
+   createSchema,
+   updateSchema,
+   deleteSchema,
 };
 
 export default schemaService;

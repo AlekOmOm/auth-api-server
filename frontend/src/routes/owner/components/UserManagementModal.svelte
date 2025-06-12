@@ -190,6 +190,7 @@
   <div class="modal" 
        onclick={(e) => e.stopPropagation()}
        onkeydown={(e) => { if (e.key === 'Escape') onClose?.(); }}
+       role="document"
        aria-modal="true">
     <div class="modal-header">
       <h2 id="userManagementModalTitle">👥 Manage Users - {clientServer?.app_name}</h2>

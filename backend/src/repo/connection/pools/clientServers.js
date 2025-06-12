@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import format from "pg-format";
 import config from "../../../config/env.js";
 import { ddl } from "../../DDL/tenant_template.js";
 
@@ -29,7 +30,7 @@ export const getPoolForSchema = async (schemaName = "client_template") => {
    await localPool.connect();
    await initSchema(localPool, schemaName);
    poolsCached[schemaName] = localPool;
-   await localPool.query(`set search_path to ${schemaName}, public`);
+   await localPool.query(format("SET search_path TO %I, public", schemaName));
    return localPool;
 };
 
@@ -40,7 +41,10 @@ export const getPoolForSchema = async (schemaName = "client_template") => {
  * - execute statements
  */
 const initSchema = async (currentPool, schemaName) => {
-   await currentPool.query(`CREATE SCHEMA IF NOT EXISTS ${schemaName};`);
+   // Use pg-format for safe identifier quoting
+   await currentPool.query(
+      format("CREATE SCHEMA IF NOT EXISTS %I", schemaName)
+   );
    if (schemaName === "client_template") {
       return;
    }

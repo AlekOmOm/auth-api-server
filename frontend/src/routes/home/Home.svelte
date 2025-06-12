@@ -40,7 +40,7 @@
 </script>
 
 <div class="header">
-  <h1>Home</h1>
+  <h2>Home</h2>
   <!-- Removed logout button from here, assuming it's part of a global header or per-page context if needed -->
 </div>
 
@@ -67,10 +67,16 @@
         {/if}
       {:else}
         <p>Your application link is not configured, or you are viewing the Auth System's home page.</p>
+        <div style="margin-top: 1rem;">
+          <Link to="/owner" class="btn btn-secondary">Access Owner Panel</Link>
+        </div>
       {/if}
     {:else}
       <!-- Fallback for authenticated user but unrecognized role or missing details -->
       <p>User authenticated, but role not recognized or application details are missing.</p>
+      <div style="margin-top: 1rem;">
+        <Link to="/owner" class="btn btn-secondary">Access Owner Panel</Link>
+      </div>
     {/if}
   {:else} <!-- Not loading, Not authenticated -->
     <p>Please <Link to="/login" class="link">login</Link> to continue.</p>
@@ -79,7 +85,7 @@
 
 {#if isAuthenticated && currentUser}
   <div style="margin-top: 2rem; text-align: center;">
-    <button on:click={handleLogout} class="btn btn-secondary">Logout</button>
+    <button onclick={handleLogout} class="btn btn-secondary">Logout</button>
   </div>
 {/if}
 
@@ -137,14 +143,6 @@
 
   .btn-secondary:hover {
     background-color: #5a5a5a;
-  }
-
-  .link {
-    color: #646cff;
-    text-decoration: none;
-  }
-  .link:hover {
-    text-decoration: underline;
   }
 
   /* Ensure styles for h1, h2, p are pleasant */

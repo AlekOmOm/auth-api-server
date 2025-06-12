@@ -1,11 +1,10 @@
-import { NotFoundError, ValidationError } from "../middleware/errorHandler.js";
+import { NotFoundError, ValidationError } from "../utils/customErrors.js";
 import BaseModel from "./base/BaseModel.js";
 import { pipe, curry, pick, omit } from "../utils/functional.js";
 import { generateUuidV4 } from "../utils/uuid.js";
 import { validateUserForContext } from "../utils/validationSchemas.js";
 
-// Temporarily comment out hashing for testing module load issues
-// import hashing from "../utils/hashing.js"; 
+import hashing from "../utils/hashing.js";
 
 /**
  * User Model - Functional + OOP Hybrid
@@ -62,9 +61,7 @@ export class User extends BaseModel {
       if (passwordHash) {
          this.passwordHash = passwordHash;
       } else if (password) {
-         // Temporarily disable hashing call
-         // this.passwordHash = hashing.hash(password);
-         this.passwordHash = `temp_hashed_${password}`; // Placeholder
+         this.passwordHash = hashing.hash(password);
       }
 
       // Run validation on construction
@@ -442,8 +439,7 @@ export class User extends BaseModel {
     */
    verifyPassword = (plainPassword) => {
       if (!this.passwordHash) return false;
-      // return hashing.same(plainPassword, this.passwordHash); // Temporarily disable hashing call
-      return this.passwordHash === `temp_hashed_${plainPassword}`; // Placeholder logic
+      return hashing.same(plainPassword, this.passwordHash);
    };
 
    /**
@@ -493,3 +489,15 @@ export class User extends BaseModel {
       ];
    }
 }
+
+// Copy static methods from BaseModel to User (to ensure ValidationMixin methods are available)
+Object.getOwnPropertyNames(BaseModel).forEach((name) => {
+   if (
+      name !== "prototype" &&
+      name !== "length" &&
+      name !== "name" &&
+      !(name in User)
+   ) {
+      User[name] = BaseModel[name];
+   }
+});

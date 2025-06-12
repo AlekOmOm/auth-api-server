@@ -75,7 +75,7 @@ function createAuthStore() {
       update((state) => ({ ...state, loading: true }));
       const url = extractRefererHeader();
       try {
-         const response = await authApi.register(credentials, url);
+         const response = await authApi.register(credentials);
          update((state) => ({ ...state, loading: false }));
          return response;
       } catch (error) {
@@ -137,7 +137,8 @@ function createAuthStore() {
    async function checkSession() {
       update((state) => ({ ...state, loading: true }));
       try {
-         const res = await fetchGet(`${BACKEND_URL_AUTH}/session`); // res is the direct JSON from backend
+         const res = await fetchGet(`${BACKEND_URL_AUTH}/session`, {}); // Pass empty options object
+         // res is the direct JSON from backend.
          // For fetchGet, success is implied if no error is thrown.
          // Authentication is confirmed if res.data, res.data.user, and res.data.user.id exist.
          setStore(

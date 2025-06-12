@@ -104,6 +104,16 @@ export async function loginRedirect(response, returnUrlFromSession) {
             `🔄 [LOGIN REDIRECT UTIL] Internal path detected, Svelte navigating to: ${finalReturnUrl}`
          );
          navigate(finalReturnUrl, { replace: true });
+
+         // Add fallback navigation if Svelte navigate doesn't work
+         setTimeout(() => {
+            if (window.location.pathname !== finalReturnUrl) {
+               console.log(
+                  `🔄 [LOGIN REDIRECT UTIL] Svelte navigate didn't work, using window.location`
+               );
+               window.location.href = finalReturnUrl;
+            }
+         }, 100);
       }
    } else {
       // This case should ideally not be reached if fallbacks are set correctly.

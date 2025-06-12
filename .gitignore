@@ -143,3 +143,9 @@ dist
 *-DESKTOP-*
 PR-2-Implementation.md
 PR-2-Implementation.md
+
+# Test results
+test-results/
+test-summary.json
+playwright-report.json
+.last-run.json

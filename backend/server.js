@@ -144,6 +144,11 @@ app.use(generalLimiter);
 
 // --- routes ---
 
+// Health check endpoint
+app.get("/api/health", (req, res) => {
+   res.json({ status: "healthy", timestamp: new Date().toISOString() });
+});
+
 /** * Schema detection middleware - detects client schema from URL/token */
 import { detectSchema } from "./src/middleware/detection.js";
 app.use(detectSchema);
@@ -160,6 +165,10 @@ app.use("/api/users", userRoute);
 /** * owner - for client server owners to manage their applications and users */
 import ownerRoute from "./src/routes/owner.js";
 app.use("/api/owner", ownerRoute);
+
+/** * schema - for managing schemas/tenants */
+import schemaRoute from "./src/routes/schema.js";
+app.use("/api/schema", schemaRoute);
 
 // --- Global Error Handler ---
 // This MUST be the last piece of middleware added.

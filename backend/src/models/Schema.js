@@ -1,5 +1,5 @@
 import BaseModel from "./base/BaseModel.js";
-import { ValidationError } from "../middleware/errorHandler.js";
+import { ValidationError } from "../utils/customErrors.js";
 
 class Schema extends BaseModel {
    constructor(schemaName = null, name = null, clientId = null) {
@@ -8,7 +8,6 @@ class Schema extends BaseModel {
       this.name = name;
       this.clientId = clientId;
    }
-
 
    /**
     * Validate Schema instance

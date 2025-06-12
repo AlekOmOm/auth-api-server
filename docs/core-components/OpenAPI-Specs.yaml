@@ -27,6 +27,19 @@ components:
       bearerFormat: JWT
       description: JWT token for client-server API authentication
 
+  parameters:
+    SchemaContext:
+      name: X-Schema-Context
+      in: header
+      required: false
+      schema:
+        type: string
+      description: |
+        URL or JSON for multi-tenant schema detection.
+        Required when operating on tenant-specific data.
+        Format: URL string or {"refererUrl": "URL"}
+        Example: "http://localhost:3000/" or {"refererUrl": "http://localhost:3000/"}
+
   schemas:
     User:
       type: object
@@ -47,6 +60,11 @@ components:
         role:
           type: string
           enum: [user, admin, owner]
+          description: |
+            User role in the system:
+            - admin: Full system access, all schemas
+            - owner: Manage own client applications only
+            - user: Basic user operations in assigned schema
         schema:
           type: string
           description: Database schema (tenant identifier)
@@ -79,11 +97,20 @@ components:
             password:
               type: string
               minLength: 8
-          required: [email, password]
+              pattern: '^(?=.*[A-Z])(?=.*[a-z])(?=.*\d).{8,}$'
+              description: |
+                Password must be at least 8 characters and contain:
+                - At least one uppercase letter
+                - At least one lowercase letter  
+                - At least one digit
+              example: "Password123"
         returnUrl:
           type: string
           format: uri
           description: URL to redirect to after successful login
+        schema:
+          type: string
+          description: "Optional. The schema context for the login request. If not provided and not set by preceding middleware, defaults to 'auth_internal'."
       required: [credentials]
 
     RegisterRequest:
@@ -102,7 +129,13 @@ components:
           type: string
           minLength: 8
           maxLength: 100
-          description: "Must contain an uppercase letter, a lowercase letter, a digit, and be 8-100 characters long."
+          pattern: '^(?=.*[A-Z])(?=.*[a-z])(?=.*\d).{8,}$'
+          description: |
+            Password must be at least 8 characters and contain:
+            - At least one uppercase letter
+            - At least one lowercase letter
+            - At least one digit
+          example: "Password123"
         role:
           type: string
           enum: [user, admin, owner]
@@ -111,22 +144,49 @@ components:
 
     ClientServer:
       type: object
+      required:
+        - app_name
+        - allowed_return_urls
       properties:
         client_id:
           type: string
-          description: Unique client identifier
+          description: Unique client identifier (generated)
+          example: "client_f47ac10b58cc4372a567"
+        client_secret:
+          type: string
+          description: Client secret (only returned on registration)
         app_name:
           type: string
           description: Human-readable application name
-        assigned_schema_name:
+        identifier_url:
           type: string
-          description: Database schema assigned to this client
+          format: uri
+          description: Primary URL for schema detection (defaults to first allowed_return_url)
+          example: "https://myapp.com"
+        entry_point_url:
+          type: string
+          format: uri
+          description: Entry point URL for the client application
+        authorized_urls:
+          type: array
+          items:
+            type: string
+            format: uri
+          description: URLs authorized for schema detection (defaults to allowed_return_urls)
         allowed_return_urls:
           type: array
           items:
             type: string
             format: uri
-          description: URLs allowed for authentication redirects
+          description: OAuth redirect URLs
+        assigned_schema_name:
+          type: string
+          description: PostgreSQL schema assigned to this client
+          example: "client_myapp_1234567890"
+        owner_id:
+          type: string
+          format: uuid
+          description: User ID of the client owner
         client_mode:
           type: string
           enum: [frontend-login-proxy, api-auth-server]
@@ -170,6 +230,8 @@ paths:
       tags: [Authentication]
       summary: User login
       description: Authenticate user with email/password and create session
+      parameters:
+        - $ref: '#/components/parameters/SchemaContext'
       requestBody:
         required: true
         content:
@@ -181,6 +243,8 @@ paths:
                 email: user@example.com
                 password: securepassword123
               returnUrl: https://client-app.com/dashboard
+              # Example including optional schema
+              # schema: "client_schema_xyz"
       responses:
         '200':
           description: Login successful
@@ -200,17 +264,32 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '400':
-          description: Validation error
+          description: Validation error. This can include invalid credentials or if a schema cannot be determined and the default schema is misconfigured.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                schemaDeterminationFailure:
+                  summary: Schema determination failure
+                  value:
+                    message: "Schema could not be determined for the request, and default schema is invalid or not configured."
+                    errors: []
+                invalidCredentialsExample:
+                  summary: Invalid input (example)
+                  value:
+                    message: "Validation failed for login."
+                    errors:
+                      - field: "credentials.email"
+                        message: "Email is required and must be a valid email format."
 
   /auth/register:
     post:
       tags: [Authentication]
       summary: User registration
       description: Register a new user account
+      parameters:
+        - $ref: '#/components/parameters/SchemaContext'
       requestBody:
         required: true
         content:
@@ -225,11 +304,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponse'
         '400':
-          description: Validation error or user already exists
+          description: Validation error. This can include issues like invalid input, or if a schema cannot be determined and the default schema is misconfigured.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missingSchema:
+                  summary: Schema determination failure
+                  value:
+                    message: "Schema could not be determined for the request, and default schema is invalid or not configured."
+                    errors: []
+                validationFailed:
+                  summary: Standard validation failure
+                  value:
+                    message: "Validation failed."
+                    errors:
+                      - field: "email"
+                        message: "must be a valid email address"
 
   /auth/logout:
     post:
@@ -265,6 +357,8 @@ paths:
         - Automated tests & monitoring
         
         Returns user details including authorized URLs for client-side route protection.
+      parameters:
+        - $ref: '#/components/parameters/SchemaContext'
       security:
         - sessionAuth: []
       responses:
@@ -311,6 +405,118 @@ paths:
                   error:
                     type: string
                     enum: [SESSION_REVOKED]
+
+  /auth/me:
+    get:
+      tags: [Authentication]
+      summary: Get current user (non-admin)
+      description: Get the currently authenticated user's information (excludes admin users)
+      security:
+        - sessionAuth: []
+      responses:
+        '200':
+          description: User retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - User is admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/admin:
+    get:
+      tags: [Authentication]
+      summary: Get current admin user
+      description: Get the currently authenticated admin user's information
+      security:
+        - sessionAuth: []
+      responses:
+        '200':
+          description: Admin user retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - User is not admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/sessions:
+    post:
+      tags: [Authentication]
+      summary: Get all sessions for current user
+      description: Retrieve all active sessions for the authenticated user
+      security:
+        - sessionAuth: []
+      responses:
+        '200':
+          description: Sessions retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          sessions:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                session_id:
+                                  type: string
+                                user_id:
+                                  type: string
+                                ip_address:
+                                  type: string
+                                user_agent:
+                                  type: string
+                                created_at:
+                                  type: string
+                                  format: date-time
+                                expires_at:
+                                  type: string
+                                  format: date-time
+                                is_current:
+                                  type: boolean
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   # User Management Endpoints
   /users:
@@ -397,6 +603,13 @@ paths:
                 password:
                   type: string
                   minLength: 8
+                  pattern: '^(?=.*[A-Z])(?=.*[a-z])(?=.*\d).{8,}$'
+                  description: |
+                    Password must be at least 8 characters and contain:
+                    - At least one uppercase letter
+                    - At least one lowercase letter
+                    - At least one digit
+                  example: "Password123"
                 role:
                   type: string
                   enum: [user, admin]
@@ -524,6 +737,943 @@ paths:
                       data:
                         $ref: '#/components/schemas/ClientServer'
 
+    put:
+      tags: [Client Server Management]
+      summary: Update current client server info
+      description: Update the authenticated client server's information
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                app_name:
+                  type: string
+                  description: Human-readable application name
+                allowed_return_urls:
+                  type: array
+                  items:
+                    type: string
+                    format: uri
+                  description: URLs allowed for authentication redirects
+      responses:
+        '200':
+          description: Client server updated successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ClientServer'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /clientServer/user/register:
+    post:
+      tags: [Client Server Management]
+      summary: Register client server for logged-in user
+      description: Register a new client application for the authenticated user (creates owner relationship)
+      security:
+        - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                app_name:
+                  type: string
+                  description: Human-readable application name
+                allowed_return_urls:
+                  type: array
+                  items:
+                    type: string
+                    format: uri
+                  description: URLs allowed for authentication redirects
+                client_mode:
+                  type: string
+                  enum: [frontend-login-proxy, api-auth-server]
+                  default: frontend-login-proxy
+              required: [app_name, allowed_return_urls]
+      responses:
+        '201':
+          description: Client server registered successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          client_id:
+                            type: string
+                          client_secret:
+                            type: string
+                            description: Only returned during registration
+                          app_name:
+                            type: string
+                          assigned_schema_name:
+                            type: string
+                          allowed_return_urls:
+                            type: array
+                            items:
+                              type: string
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /clientServer/user/clients:
+    get:
+      tags: [Client Server Management]
+      summary: Get all client servers for user
+      description: Retrieve all client applications owned by the authenticated user
+      security:
+        - sessionAuth: []
+      responses:
+        '200':
+          description: Client servers retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          clients:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/ClientServer'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /clientServer/user/clients/{client_id}:
+    get:
+      tags: [Client Server Management]
+      summary: Get specific client server for user
+      description: Retrieve a specific client application owned by the authenticated user
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Client server ID
+      responses:
+        '200':
+          description: Client server retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ClientServer'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Client server not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags: [Client Server Management]
+      summary: Update client server for user
+      description: Update a client application owned by the authenticated user (owner/admin only)
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Client server ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                app_name:
+                  type: string
+                  description: Human-readable application name
+                allowed_return_urls:
+                  type: array
+                  items:
+                    type: string
+                    format: uri
+                  description: URLs allowed for authentication redirects
+                client_mode:
+                  type: string
+                  enum: [frontend-login-proxy, api-auth-server]
+      responses:
+        '200':
+          description: Client server updated successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ClientServer'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - not owner or admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Client server not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Client Server Management]
+      summary: Delete client server for user
+      description: Delete a client application owned by the authenticated user (owner/admin only)
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Client server ID
+      responses:
+        '200':
+          description: Client server deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - not owner or admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Client server not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /clientServer/{client_id}:
+    get:
+      tags: [Client Server Management]
+      summary: Get client server by ID
+      description: Retrieve any client server by ID (admin only)
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Client server ID
+      responses:
+        '200':
+          description: Client server retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ClientServer'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - not admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Client server not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Client Server Management]
+      summary: Delete client server
+      description: Delete any client server (admin only)
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Client server ID
+      responses:
+        '200':
+          description: Client server deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - not admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Client server not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # Owner Management Endpoints
+  /owner/stats:
+    get:
+      tags: [Owner Management]
+      summary: Get owner statistics
+      description: Get analytics and statistics for the authenticated owner's client applications
+      security:
+        - sessionAuth: []
+      responses:
+        '200':
+          description: Statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          total_clients:
+                            type: integer
+                          total_users:
+                            type: integer
+                          active_sessions:
+                            type: integer
+                          clients:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                client_id:
+                                  type: string
+                                app_name:
+                                  type: string
+                                user_count:
+                                  type: integer
+                                session_count:
+                                  type: integer
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - not owner or admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /owner/clients/{clientId}/users:
+    get:
+      tags: [Owner Management]
+      summary: Get users in client schema
+      description: Retrieve all users in a specific client application's schema
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Client server ID
+      responses:
+        '200':
+          description: Users retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/User'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - not owner or admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Client server not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags: [Owner Management]
+      summary: Create user in client schema
+      description: Create a new user in a specific client application's schema
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Client server ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - not owner or admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /owner/clients/{clientId}/users/{userId}:
+    get:
+      tags: [Owner Management]
+      summary: Get specific user in client schema
+      description: Retrieve a specific user from a client application's schema
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Client server ID
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User ID
+      responses:
+        '200':
+          description: User retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - not owner or admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User or client not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags: [Owner Management]
+      summary: Update user in client schema
+      description: Update a user in a specific client application's schema
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Client server ID
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+                  pattern: '^(?=.*[A-Z])(?=.*[a-z])(?=.*\d).{8,}$'
+                  description: |
+                    Password must be at least 8 characters and contain:
+                    - At least one uppercase letter
+                    - At least one lowercase letter
+                    - At least one digit
+                  example: "Password123"
+                role:
+                  type: string
+                  enum: [user, admin]
+      responses:
+        '200':
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - not owner or admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User or client not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Owner Management]
+      summary: Delete user from client schema
+      description: Delete a user from a specific client application's schema
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Client server ID
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User ID
+      responses:
+        '200':
+          description: User deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - not owner or admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User or client not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /owner/clients/{clientId}/analytics:
+    get:
+      tags: [Owner Management]
+      summary: Get client analytics
+      description: Retrieve analytics for a specific client application
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Client server ID
+      responses:
+        '200':
+          description: Analytics retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          user_count:
+                            type: integer
+                          session_count:
+                            type: integer
+                          active_users_today:
+                            type: integer
+                          active_users_week:
+                            type: integer
+                          active_users_month:
+                            type: integer
+                          registrations_today:
+                            type: integer
+                          registrations_week:
+                            type: integer
+                          registrations_month:
+                            type: integer
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - not owner or admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Client server not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # Schema Management Endpoints
+  /schema:
+    get:
+      tags: [Schema Management]
+      summary: List all schemas
+      description: List all database schemas (admin/owner only)
+      security:
+        - sessionAuth: []
+      responses:
+        '200':
+          description: Schemas retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            schema_name:
+                              type: string
+                            client_id:
+                              type: string
+                            app_name:
+                              type: string
+                            created_at:
+                              type: string
+                              format: date-time
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - not admin or owner
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags: [Schema Management]
+      summary: Create new schema
+      description: Create a new database schema (admin/owner only)
+      security:
+        - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                schema_name:
+                  type: string
+                  pattern: "^client_[a-z0-9_]+$"
+                  description: Schema name (must start with 'client_')
+              required: [schema_name]
+      responses:
+        '201':
+          description: Schema created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '400':
+          description: Validation error or schema already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - not admin or owner
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /schema/{schemaId}:
+    put:
+      tags: [Schema Management]
+      summary: Update schema
+      description: Update a database schema (admin/owner only)
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: schemaId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Schema ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                schema_name:
+                  type: string
+                  pattern: "^client_[a-z0-9_]+$"
+      responses:
+        '200':
+          description: Schema updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - not admin or owner
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Schema not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Schema Management]
+      summary: Delete schema
+      description: Delete a database schema (admin/owner only). This will remove all data in the schema.
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: schemaId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Schema ID
+      responses:
+        '200':
+          description: Schema deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - not admin or owner
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Schema not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 tags:
   - name: Authentication
     description: User authentication and session management
@@ -531,3 +1681,7 @@ tags:
     description: User CRUD operations (admin only)
   - name: Client Server Management
     description: Client application registration and management
+  - name: Owner Management
+    description: Owner operations (admin only)
+  - name: Schema Management
+    description: Schema CRUD operations (admin/owner only)

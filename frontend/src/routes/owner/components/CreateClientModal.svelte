@@ -386,7 +386,6 @@
     margin-bottom: 0;
   }
 
-  .credential-item label,
   .credential-item .credential-label {
     display: block;
     font-weight: var(--font-weight-medium);

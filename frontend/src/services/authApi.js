@@ -7,10 +7,9 @@ const BACKEND_URL_AUTH = `${BACKEND_URL}/auth`;
 /**
  * Register a new user
  * @param {Object} credentials - User credentials with name, email, password, and userType
- * @param {string} [refererUrl] - effective URL for schema identification and role detection
  * @returns {Promise<Object>} Registration result with success status
  */
-const register = async (credentials, refererUrl = null) => {
+const register = async (credentials) => {
    try {
       // Input validation
       if (!credentials.name || !credentials.email || !credentials.password) {
@@ -31,9 +30,16 @@ const register = async (credentials, refererUrl = null) => {
          role: role,
       };
 
+      // Add X-Schema-Context header for auth system registrations
+      const headers = {};
+      if (credentials.userType === "auth") {
+         headers["X-Schema-Context"] = "auth_internal";
+      }
+
       const response = await fetchPost(
          `${BACKEND_URL_AUTH}/register`,
-         requestBody
+         requestBody,
+         { headers }
       );
 
       if (!response.data && !response.success) {
@@ -57,7 +63,7 @@ const register = async (credentials, refererUrl = null) => {
 /**
  * Login a user with credentials
  * @param {Object} credentials - User credentials with email and password
- * @param {string} [refererUrl] - URL for schema detection and role assignment
+ * @param {string} [clientRefererUrl] - Optional URL that might be used by the backend if provided in the body as returnUrl.
  * @returns {Promise<Object>} Login result with success status and session data
  * - invalid input (credentials):
  *    {
@@ -88,7 +94,7 @@ const register = async (credentials, refererUrl = null) => {
  *       success: false,
  *    }
  */
-const login = async (credentials, refererUrl = null) => {
+const login = async (credentials, clientRefererUrl = null) => {
    // console.log("🔍 [AUTH API] login function called");
    // console.log("🔍 [AUTH API] credentials:", {
    //    email: credentials.email,
@@ -113,7 +119,7 @@ const login = async (credentials, refererUrl = null) => {
 
       const requestBody = {
          credentials,
-         returnUrl: refererUrl,
+         returnUrl: clientRefererUrl,
       };
 
       // console.log("🔍 [AUTH API] Request body:", requestBody);

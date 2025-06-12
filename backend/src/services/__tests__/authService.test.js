@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import authService from "../../services/auth.js";
-import { AuthError, ValidationError } from "../../middleware/errorHandler.js";
+import { AuthError, ValidationError } from "../../utils/customErrors.js";
 import { v4 as uuidv4 } from "uuid";
 
 // Mock dependencies

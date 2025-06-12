@@ -13,14 +13,30 @@ export const detectSchema = async (req, res, next) => {
    );
    try {
       const apiToken = requestUtils.header.getApiToken(req);
+      const schemaContextHeader = req.headers["x-schema-context"];
       const explicitRefererUrl = req.body?.refererUrl || req.query?.refererUrl;
       const headerRefererUrl = req.headers.referer;
+
+      let schemaContextRefererUrl = null;
+      if (schemaContextHeader) {
+         try {
+            const parsedContext = JSON.parse(schemaContextHeader);
+            schemaContextRefererUrl = parsedContext.refererUrl;
+         } catch (parseError) {
+            schemaContextRefererUrl = schemaContextHeader;
+         }
+      }
 
       if (apiToken) {
          console.log(
             "[DETECT_SCHEMA_V3_MAIN] API token found, attempting schema detection from token."
          );
          await detectSchemaFromApiToken(req, res, () => {});
+      } else if (schemaContextRefererUrl) {
+         console.log(
+            `[DETECT_SCHEMA_V3_MAIN] X-Schema-Context Referer URL found: \"${schemaContextRefererUrl}\", attempting schema detection from URL.`
+         );
+         await detectSchemaFromUrl(req, res, () => {}, schemaContextRefererUrl);
       } else if (explicitRefererUrl) {
          console.log(
             `[DETECT_SCHEMA_V3_MAIN] Explicit Referer URL found: \"${explicitRefererUrl}\", attempting schema detection from URL.`
@@ -35,6 +51,27 @@ export const detectSchema = async (req, res, next) => {
          console.log(
             "[DETECT_SCHEMA_V3_MAIN] No API token or any Referer URL found in this request."
          );
+      }
+
+      // If we already have a session with a user logged in, preserve their schema for auth endpoints
+      if (req.session?.userId && req.session?.schema && !req.schema) {
+         const authPaths = [
+            "/api/auth/session",
+            "/api/auth/me",
+            "/api/auth/admin",
+            "/api/auth/sessions",
+            "/api/auth/logout",
+         ];
+         const isAuthPath =
+            authPaths.some((p) => req.path === p) ||
+            req.path.startsWith("/api/auth/");
+
+         if (isAuthPath) {
+            req.schema = req.session.schema;
+            console.log(
+               `[DETECT_SCHEMA_V3_PRESERVE] Preserving user's session schema '${req.session.schema}' for auth path: ${req.path}`
+            );
+         }
       }
 
       if (!req.session?.schema) {
@@ -53,6 +90,8 @@ export const detectSchema = async (req, res, next) => {
                "/api/auth/", // Covers other /api/auth/* routes like /session, /logout if they need auth_internal
                "/api/owner/",
                "/api/clientServer/user/", // Example: an admin managing users for a client
+               "/api/users",
+               "/api/schema",
             ];
             const requiresAuthInternal = internalApiPaths.some((p) =>
                req.path.startsWith(p)
@@ -71,12 +110,19 @@ export const detectSchema = async (req, res, next) => {
          }
       }
 
-      if (req.session?.schema) {
+      // Set req.schema based on priority:
+      // 1. If req.schema is already set (e.g., from preserving session schema for auth endpoints)
+      // 2. Otherwise use req.session.schema
+      if (!req.schema && req.session?.schema) {
          req.schema = req.session.schema;
          console.log(
             `[DETECT_SCHEMA_V3_FINAL_SET] Set req.schema to \"${req.schema}\" from session for path: ${req.path}`
          );
-      } else if (!req.schema) {
+      } else if (req.schema) {
+         console.log(
+            `[DETECT_SCHEMA_V3_FINAL_SET] req.schema already set to \"${req.schema}\" for path: ${req.path}`
+         );
+      } else {
          console.log(
             `[DETECT_SCHEMA_V3_WARN] req.schema is NOT set after all detection attempts for path: ${req.path}. Some operations might fail if schema is required.`
          );
@@ -131,6 +177,24 @@ export const detectSchemaFromUrl = async (req, res, next, urlToDetect) => {
       console.log("[DETECT_SCHEMA_FROM_URL_V3] No urlToDetect provided.");
       return next();
    }
+
+   // Check if URL is from local auth-system frontend
+   try {
+      const url = new URL(urlToDetect);
+      if (url.hostname === "localhost" && url.port === "3000") {
+         console.log(
+            "[DETECT_SCHEMA_FROM_URL_V3] Detected localhost:3000 (auth-system frontend). Using auth_internal schema."
+         );
+         req.session.schema = "auth_internal";
+         // For auth_internal, we should preserve the existing session data
+         return next();
+      }
+   } catch (urlError) {
+      console.log(
+         `[DETECT_SCHEMA_FROM_URL_V3] Invalid URL format: ${urlToDetect}`
+      );
+   }
+
    try {
       const clientServerDetails = await clientServerService.getByUrl({
          url: urlToDetect,
@@ -148,14 +212,17 @@ export const detectSchemaFromUrl = async (req, res, next, urlToDetect) => {
             csData.authorized_urls || req.session.allowedUrls;
       } else {
          console.log(
-            `[DETECT_SCHEMA_FROM_URL_V3] No client server found for URL: \"${urlToDetect}\"`
+            `[DETECT_SCHEMA_FROM_URL_V3] No client server found for URL: \"${urlToDetect}\". Falling back to auth_internal.`
          );
+         req.session.schema = "auth_internal"; // Fallback to auth_internal
       }
    } catch (error) {
       console.error(
          `❌ Error in detectSchemaFromUrl_V3 for referer \"${urlToDetect}\":`,
-         error.message
+         error.message,
+         "Falling back to auth_internal."
       );
+      req.session.schema = "auth_internal"; // Fallback to auth_internal on error
    }
    next();
 };

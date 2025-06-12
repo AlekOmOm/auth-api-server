@@ -33,7 +33,23 @@ async function initSchemaAndPool() {
 
    // Set search_path for every new connection from this pool
    tempPool.on("connect", (client) => {
-      return client.query("SET search_path TO auth_internal, public");
+      console.log(
+         "[AuthPool_ON_CONNECT_V5] New client connected from auth pool. Setting search_path to auth_internal, public."
+      );
+      return client
+         .query("SET search_path TO auth_internal, public")
+         .then(() => {
+            console.log(
+               "[AuthPool_ON_CONNECT_V5] search_path SET successfully for new client."
+            );
+         })
+         .catch((err) => {
+            console.error(
+               "[AuthPool_ON_CONNECT_V5_ERROR] FAILED to set search_path for new client:",
+               err
+            );
+            // Optionally, re-throw or handle more gracefully depending on desired behavior
+         });
    });
 
    console.log("[AuthPool_INIT_V5_CONNECT] Connecting to database...");
@@ -66,15 +82,26 @@ async function initSchemaAndPool() {
             `[AuthPool_INIT_V5_DDL] Executing: ${stmt.substring(0, 120)}...`
          );
          await client.query(stmt);
+         console.log(
+            `[AuthPool_INIT_V5_DDL_SUCCESS] Successfully executed: ${stmt.substring(
+               0,
+               120
+            )}...`
+         );
       }
 
       const verificationQuery = `SELECT table_name FROM information_schema.tables WHERE table_schema = 'auth_internal' AND table_name = 'users';`;
       console.log(
-         "[AuthPool_INIT_V5_VERIFY] Verifying auth_internal.users table..."
+         `[AuthPool_INIT_V5_VERIFY] Verifying auth_internal.users table with query: ${verificationQuery}`
       );
-      const { rows } = await client.query(verificationQuery);
+      const { rows, rowCount } = await client.query(verificationQuery);
+      console.log(
+         `[AuthPool_INIT_V5_VERIFY_RESULT] Verification query result: ${rowCount} row(s) returned. Rows: ${JSON.stringify(
+            rows
+         )}`
+      );
 
-      if (rows.length > 0) {
+      if (rowCount > 0 && rows[0].table_name === "users") {
          console.log(
             "[AuthPool_INIT_V5_VERIFY_SUCCESS] ✅ Table 'auth_internal.users' verified."
          );
@@ -84,7 +111,9 @@ async function initSchemaAndPool() {
          return pool; // Initialization successful, return the pool
       } else {
          console.error(
-            "[AuthPool_INIT_V5_VERIFY_FAIL] ❌ Table 'auth_internal.users' NOT FOUND after DDL."
+            `[AuthPool_INIT_V5_VERIFY_FAIL] ❌ Table 'auth_internal.users' NOT FOUND after DDL. RowCount: ${rowCount}, Rows: ${JSON.stringify(
+               rows
+            )}`
          );
          await client.query("ROLLBACK");
          console.log(

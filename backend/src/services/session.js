@@ -188,10 +188,13 @@ export async function update({ sessionId, expiresAt = null, schema }) {
  * @returns {Object} Deleted session
  */
 export async function deleteSession({ sessionId, userId, schema }) {
-   if (sessionId !== null) {
+   if (sessionId !== null && sessionId !== undefined) {
       return await deleteById({ sessionId, schema });
    }
-   return await deleteByUserId({ userId, schema });
+   if (userId !== null && userId !== undefined) {
+      return await deleteByUserId({ userId, schema });
+   }
+   throw new Error("Either sessionId or userId must be provided");
 }
 
 /**

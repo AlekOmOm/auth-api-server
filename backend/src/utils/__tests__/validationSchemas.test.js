@@ -6,15 +6,15 @@ import {
    // otherwise, test them implicitly via validateUserForContext.
    // For this setup, we assume they are not directly exported and test through the main function.
 } from "../validationSchemas.js";
-import { ValidationError } from "../../middleware/errorHandler.js";
-import User from "../../models/User.js"; // We need to mock static methods from User
+import { ValidationError } from "../../utils/customErrors.js";
+import { User } from "../../models/User.js"; // We need to mock static methods from User
 
 // Mock static methods from User model used by validation rules
 vi.mock("../../models/User.js", async (importOriginal) => {
    const actual = await importOriginal(); // Import actual to get the class structure if needed for complex mocks
    return {
-      default: {
-         // Mock static methods directly on the default export if User is the default export
+      User: {
+         // Mock static methods directly on the User export
          validateStringLength: vi.fn(),
          isValidEmail: vi.fn(),
          validatePasswordStrength: vi.fn(),

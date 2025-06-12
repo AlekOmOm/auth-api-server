@@ -3,11 +3,11 @@ import { getUserId } from "../utils/request/session.js";
 import { standardizeResponse } from "../utils/responseUtils.js";
 import asyncErrorHandler from "../utils/asyncErrorHandler.js";
 import {
-   ValidationError,
    NotFoundError,
-   // AuthError, // If needed for specific auth issues within this controller
-   // ConflictError, // If needed for resource conflicts
-} from "../middleware/errorHandler.js";
+   ValidationError,
+   AuthError,
+   ConflictError,
+} from "../utils/customErrors.js";
 
 /**
  * Handshake with client server
@@ -26,21 +26,42 @@ const handshakeController = async (req, res, next) => {
 };
 
 /**
- * Register a new client server
+ * Register a new client server (public endpoint - no auth required)
  * @param {Object} req - Request object
  * @param {Object} res - Response object
  * @param {Function} next - Next function
  */
 const registerClientServerController = async (req, res, next) => {
-   const userId = getUserId(req.session); // Can throw if session is invalid, caught by asyncErrorHandler
    if (!req.body || Object.keys(req.body).length === 0) {
       throw new ValidationError(
          "Request body is required for client server registration."
       );
    }
+
+   // Ensure required fields are present
+   const processedData = { ...req.body };
+
+   // Set default values for missing fields
+   if (
+      !processedData.identifier_url &&
+      processedData.allowed_return_urls &&
+      processedData.allowed_return_urls.length > 0
+   ) {
+      processedData.identifier_url = processedData.allowed_return_urls[0];
+   }
+
+   if (
+      !processedData.entry_point_url &&
+      processedData.allowed_return_urls &&
+      processedData.allowed_return_urls.length > 0
+   ) {
+      processedData.entry_point_url = processedData.allowed_return_urls[0];
+   }
+
    const serviceResult = await service.register({
-      clientServerData: req.body,
-      userId: userId,
+      clientServerData: processedData,
+      userId: null,
+      schema: "auth_internal", // Public registration always uses auth_internal
    });
    res.status(201).json(
       standardizeResponse({

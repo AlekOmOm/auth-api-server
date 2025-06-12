@@ -1,69 +1,75 @@
-# Auth-System Documentation
+# Auth System Documentation
 
-## Overview
+Welcome to the Auth System documentation. This guide provides comprehensive information about the multi-tenant authentication and authorization system.
 
-The Auth-System is a comprehensive authentication and authorization system designed to secure and manage user access across multiple applications. It provides a robust multi-tenant architecture where:
+## 📚 Documentation Structure
 
-- **Owners** create and manage client applications (tenants)
-- **Users** can register and authenticate within client applications
-- Each tenant operates with its own isolated database schema
-- URL-based authorization controls access across the system
+### Core Documentation
+- [Product Requirements Document (PRD)](./PRD.md) - High-level product specifications
+- [Backend PRD](./backend-prd.md) - Detailed backend implementation requirements
+- [Database Schema](./database-schema.md) - Complete database structure and relationships
+- [Multi-Tenant Architecture](./multi-tenant.md) - Schema-based isolation approach
+- [Environment Variables](./environment-variables.md) - Configuration reference
 
-### Multi-Tenant Authentication Flow Example
-```
-1. Owner registers client-app → schema created
-2. User signs up to client-app → user record in tenant schema  
-3. User authenticates → session created in tenant context
-4. User accesses client-app resources securely
-```
+### Analysis & Current State
+- [Current API State Analysis](./analysis/current-api-state-analysis.md) - **NEW**: Detailed analysis of test failures and API implementation status
+- [API Quick Reference](./analysis/api-quick-reference.md) - **NEW**: Quick guide to working vs documented endpoints
+- [Core Components Analysis](./analysis/core-components/) - System architecture deep dives
 
-## Glossary
+### Implementation Guides
+- [Deployment Guide](./deployment-guide.md) - Production deployment instructions
+- [Component Documentation](./components/) - UI component specifications
+- [Usage Examples](./usage/) - Integration and usage patterns
 
-### **Client-App**
-Single deployed instance of a customer's application that delegates authentication to the auth-system.
+### Issues & Troubleshooting
+- [Known Issues](./issues/) - Current bugs and limitations
+- [EXAM Thinking](./EXAM.thinking.md) - Development thought process
 
-### **Schema** 
-PostgreSQL namespace created per client-app.  
-**Lifecycle:** `CREATE SCHEMA <tenant_id>` on registration → dropped on delete.  
-**Linking:** Connected via `poolMetadata` in configuration.
+## 🚀 Quick Start
 
-### **Role (Auth-System)**
-| Role    | Scope        | Powers                                    |
-|---------|--------------|-------------------------------------------|
-| `admin` | global       | Full access; one hard-coded instance     |
-| `owner` | per client-app | CRUD client-apps + users within that app |
+1. **Development Setup**: See the deployment guide for local development setup
+2. **API Integration**: Check the API Quick Reference for endpoint status
+3. **Database Setup**: Follow the database schema guide for initialization
+4. **Testing**: Use the test suite documentation in `/backend/test-backend-api-structures.md`
 
-### **Role (Client-App)**
-| Role   | Scope          | Powers                                  |
-|--------|----------------|-----------------------------------------|
-| `user` | per client-app | CRUD own resources, permission-gated    |
+## 📊 System Overview
 
-### **Multi-Tenant Architecture**
-System design where each client-app operates as an isolated tenant with:
-- Dedicated database schema
-- Independent user management
-- Secure tenant isolation
+The Auth System is a multi-tenant authentication service that provides:
+- User authentication (login/logout/register)
+- Session management
+- Client application registration
+- Schema-based data isolation
+- Role-based access control (user/admin/owner)
 
-## Documentation Index
+## 🔍 Current Status
 
-### Core Components
-- [`components/session.md`](components/session.md) - Session management architecture
-- [`components/session_architecture_summary.md`](components/session_architecture_summary.md) - Session system overview
-- [`components/modular-database.md`](components/modular-database.md) - Database modularity design
-- [`components/owner/`](components/owner/) - Owner panel documentation
+As of June 12, 2025:
+- **Backend API**: Partially implemented (see [Current API State Analysis](./analysis/current-api-state-analysis.md))
+- **Frontend**: In development
+- **Database**: Schema defined, needs seed data updates
+- **Tests**: 0/18 passing (fixable issues documented)
 
-### Usage & Implementation
-- [`usage/USAGE.md`](usage/USAGE.md) - General usage guide
-- [`usage/API_EXAMPLES.md`](usage/API_EXAMPLES.md) - API endpoint examples
-- [`usage/IMPLEMENTATION_SUMMARY.md`](usage/IMPLEMENTATION_SUMMARY.md) - Implementation details
-- [`usage/URL-MIGRATION.md`](usage/URL-MIGRATION.md) - URL migration guide
-- [`usage/modes/`](usage/modes/) - Different operation modes
+## 📝 Recent Updates
 
-### Project-Specific
-- [`PRD.trading-sim.using.AUTH-System.md`](PRD.trading-sim.using.AUTH-System.md) - Trading simulator integration
-- [`EXAM.thinking.md`](EXAM.thinking.md) - Exam considerations and thinking
+- Added comprehensive API state analysis
+- Created quick reference guide for developers
+- Documented all test failures and solutions
+- Identified missing route configurations
 
-### Flow Documentation
-- [`flow-indexing/`](flow-indexing/) - System flow documentation
-- [`for_trading-sim/`](for_trading-sim/) - Trading simulator specific flows
-- [`from_data-server/`](from_data-server/) - Data server integration flows
+## 🤝 Contributing
+
+When updating the system:
+1. Update relevant documentation
+2. Keep the OpenAPI spec synchronized
+3. Update test data to match implementation
+4. Document any breaking changes
+
+## 📞 Support
+
+For questions or issues:
+- Check the [Current API State Analysis](./analysis/current-api-state-analysis.md) for known issues
+- Review the [API Quick Reference](./analysis/api-quick-reference.md) for working endpoints
+- Consult the component-specific documentation
+
+---
+*Last Updated: June 12, 2025*

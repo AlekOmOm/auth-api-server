@@ -12,7 +12,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Users table for auth-system (owners, admins)
 CREATE TABLE IF NOT EXISTS users (
-    id              BIGSERIAL PRIMARY KEY,
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name            VARCHAR(255) NOT NULL,
     role            VARCHAR(100) NOT NULL DEFAULT 'owner', -- 'owner', 'admin'
     email           VARCHAR(255) UNIQUE NOT NULL,
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS users (
 -- Sessions table for auth-system
 CREATE TABLE IF NOT EXISTS sessions (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id         BIGINT REFERENCES users(id) ON DELETE CASCADE,
+    user_id         UUID REFERENCES users(id) ON DELETE CASCADE,
     session_id      UUID UNIQUE NOT NULL DEFAULT uuid_generate_v4(),
     ip_address      INET,
     user_agent      TEXT,
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS client_servers (
     identifier_url VARCHAR(255) NOT NULL,
     entry_point_url VARCHAR(255) NOT NULL,
     authorized_urls TEXT[] NOT NULL,
-    user_id BIGINT REFERENCES users(id) ON DELETE CASCADE, -- Links to owner
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE, -- Links to owner
     client_mode VARCHAR(50) DEFAULT 'frontend-login-proxy',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -75,6 +75,7 @@ ON CONFLICT (email) DO NOTHING;
 -- Note: To make 'Owner Test User' truly an owner of a client_server for testing,
 -- you would also need to insert a corresponding record into the client_servers table
 -- and link it via user_id, for example:
--- INSERT INTO client_servers (client_id, client_secret_hash, app_name, assigned_schema_name, identifier_url, entry_point_url, authorized_urls, user_id, client_mode)
--- VALUES
--- ('owner-test-client', 'some_hash', 'Owner\'s Test App', 'owner_test_app_schema', 'https://owner.app.com', 'https://owner.app.com/auth', '{"https://owner.app.com"}', (SELECT id FROM users WHERE email = 'owner@example.com'), 'frontend-login-proxy'); 
+INSERT INTO client_servers (client_id, client_secret_hash, app_name, assigned_schema_name, identifier_url, entry_point_url, authorized_urls, user_id, client_mode)
+VALUES
+('owner-test-app-client-id', '$2b$10$DUMMYHASHFORTESTINGCLIENTSERVEROWNERXXXXXXXZXXXXXXX', 'Owner Test App', 'client_owner_test_app', 'http://owner-app.test', 'http://owner-app.test/start', ARRAY['http://owner-app.test/callback', 'http://owner-app.test/dashboard'], (SELECT id FROM users WHERE email = 'owner@example.com'), 'frontend-login-proxy')
+ON CONFLICT (client_id) DO NOTHING; 

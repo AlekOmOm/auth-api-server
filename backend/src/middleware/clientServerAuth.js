@@ -1,4 +1,4 @@
-import { AuthError } from "./errorHandler.js";
+import { AuthError } from "../utils/customErrors.js";
 import { verifyApiToken } from "../services/clientServer.js";
 
 /**
@@ -29,9 +29,9 @@ export const authenticateClientServer = async (req, res, next) => {
 
 /**
  * Middleware to check if return URL is allowed for client
- * 
- * @context frontend sends url data 
- * 
+ *
+ * @context frontend sends url data
+ *
  */
 export const validateUrl = (req, res, next) => {
    try {

@@ -4,11 +4,11 @@ import { getSchema } from "../utils/request/session.js";
 import { standardizeResponse } from "../utils/responseUtils.js";
 import asyncErrorHandler from "../utils/asyncErrorHandler.js";
 import {
-   ValidationError,
    NotFoundError,
-   // AuthError, // If needed
-   // ConflictError, // If needed
-} from "../middleware/errorHandler.js";
+   ValidationError,
+   AuthError,
+   ConflictError,
+} from "../utils/customErrors.js";
 
 // --- User Controller ---
 

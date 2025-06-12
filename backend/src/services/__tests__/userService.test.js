@@ -3,7 +3,8 @@ import userService from "../../services/user.js";
 import {
    NotFoundError,
    ValidationError,
-} from "../../middleware/errorHandler.js";
+   AuthError,
+} from "../../utils/customErrors.js";
 import hashing from "../../utils/hashing.js";
 import { generateUuidV4 } from "../../utils/uuid.js";
 

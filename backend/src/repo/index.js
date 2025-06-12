@@ -104,19 +104,14 @@ class Repo {
             typeof params === "object" &&
             Object.keys(params).length === 0
          ) {
-            // If no extractor, and params is an empty object (e.g., for getAll invoked with {}),
-            // assume no query values are needed for the SQL execution.
             values = [];
          } else if (params !== undefined && params !== null) {
-            // For single primitive values or non-empty objects that are effectively a single parameter.
             values = [params];
          } else {
-            // Default to no parameters if params is undefined or null and not handled above.
             values = [];
          }
       }
 
-      // Further Enhanced DEBUG LOGGING for getByUserId on client_servers
       if (this.table === "client_servers" && operationName === "getByUserId") {
          console.log(
             `[REPO_DEBUG] Extracted values for SQL query:`,
@@ -126,7 +121,6 @@ class Repo {
             `[REPO_DEBUG] Full SQL query string for ${this.table}.${operationName}: ${sqlQueryString}`
          );
       }
-      // END Further Enhanced DEBUG LOGGING
 
       try {
          // console.log(
@@ -138,18 +132,15 @@ class Repo {
          // Added for debugging user creation ID issue
          if (this.table === "users" && operationName === "create") {
             console.log(`[Repo:users:create] Operation: ${operationName}`);
-            // Log the raw params object (should be User instance)
             console.log(
                "[Repo:users:create] Received params (User instance):",
                params
             );
-            // Log critical properties of the User instance if it exists
             if (params && typeof params === "object") {
                console.log(`[Repo:users:create] params.id: ${params.id}`);
                console.log(`[Repo:users:create] params.name: ${params.name}`);
                console.log(`[Repo:users:create] params.email: ${params.email}`);
             }
-            // Log the extracted values for the SQL query
             console.log(
                "[Repo:users:create] Extracted SQL values for query:",
                values

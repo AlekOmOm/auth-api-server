@@ -12,10 +12,11 @@ import { User } from "../../models/index.js";
 import Repo from "../../repo/index.js";
 import hashing from "../../utils/hashing.js";
 import {
-   ValidationError,
+   AuthError,
    ConflictError,
    NotFoundError,
-} from "../../middleware/errorHandler.js";
+   ValidationError,
+} from "../../utils/customErrors.js";
 
 // Mock dependencies
 vi.mock("../../models/index.js", async (importOriginal) => {

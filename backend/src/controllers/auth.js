@@ -3,11 +3,12 @@ import * as authService from "../services/auth.js";
 import * as userService from "../services/user.js";
 import * as sessionService from "../services/session.js";
 import * as clientServerService from "../services/clientServer.js";
+import config from "../config/env.js"; // Added to access SCHEMAS constants
 
 // --- utils ---
 import * as sessionUtils from "../utils/request/session.js";
 import { standardizeResponse } from "../utils/responseUtils.js";
-import { ValidationError, AuthError } from "../middleware/errorHandler.js"; // Import custom error classes
+import { ValidationError, AuthError } from "../utils/customErrors.js"; // Import custom error classes
 import asyncErrorHandler from "../utils/asyncErrorHandler.js"; // Import the async handler
 import {
    validateUserForContext,
@@ -30,41 +31,61 @@ import {
  * Extracts user data and schema, then calls authService.register
  */
 const registerController = async (req, res, next) => {
-   const userData = req.body;
-   const schema = req.schema;
+   const { userType, ...actualUserData } = req.body; // Separate userType from the rest of user data
+   let schema;
+
+   if (userType === "auth") {
+      schema = config.SCHEMAS.AUTH_NAME;
+      console.log(
+         `[REGISTER_CTRL] userType is 'auth', setting schema to: ${schema}`
+      );
+   } else if (userType === "client") {
+      schema = req.schema; // This should be set by detectSchema middleware from Referer
+      console.log(
+         `[REGISTER_CTRL] userType is 'client', using schema from middleware (Referer): ${schema}`
+      );
+      if (!schema) {
+         // If userType is 'client' but middleware didn't find a schema from Referer
+         console.error(
+            "[REGISTER_CTRL] userType is 'client' but req.schema is undefined. This indicates an issue with Referer-based detection."
+         );
+         throw new ValidationError(
+            "Schema for 'client' user type could not be determined from Referer. Ensure a valid 'Referer' header was present."
+         );
+      }
+   } else {
+      schema = req.schema || req.body.schema;
+      req.body.userType = "owner";
+      console.log(
+         `[REGISTER_CTRL] userType is '${userType}' (unexpected or missing). Falling back to req.schema ('${req.schema}') or req.body.schema ('${req.body.schema}'). Resulting schema: ${schema}`
+      );
+      // If schema resolves to auth_internal for an ambiguous userType, ensure role is 'owner'
+      if (schema === config.SCHEMAS.AUTH_NAME) {
+         if (
+            !actualUserData.role ||
+            !["owner", "admin"].includes(actualUserData.role)
+         ) {
+            actualUserData.role = "owner";
+            console.log(
+               `[REGISTER_CTRL] Original userType ambiguous and schema is '${config.SCHEMAS.AUTH_NAME}'. Set actualUserData.role to 'owner'.`
+            );
+         }
+      }
+   }
 
    if (!schema) {
+      console.error(
+         `[REGISTER_CTRL] Schema could not be determined. userType: '${userType}', req.schema: '${req.schema}', req.body.schema: '${req.body.schema}'.`
+      );
       throw new ValidationError(
-         "Schema could not be determined for the request."
+         "Schema could not be determined for the registration request. Please specify userType ('auth' for system owners/admins, 'client' for regular users) or ensure a valid Referer header is present."
       );
    }
 
-   // Perform context-aware validation first
-   const validatedUserData = validateUserForContext(schema, userData);
-
-   // The specific checks below are now largely handled by validateUserForContext.
-   // Kept for review, but can be removed if validateUserForContext is comprehensive.
-   // if (!validatedUserData.name || !validatedUserData.email || !validatedUserData.password) {
-   //    throw new ValidationError("Name, email, and password are required", [
-   //       !validatedUserData.name && { field: "name", message: "Name is required" },
-   //       !validatedUserData.email && { field: "email", message: "Email is required" },
-   //       !validatedUserData.password && { field: "password", message: "Password is required" },
-   //    ].filter(Boolean));
-   // }
-
-   // Default role setting might still be relevant if not handled by validateUserForContext for all cases
-   // However, validateUserForContext is designed to enforce role based on context.
-   // if (!validatedUserData.role) {
-   //    validatedUserData.role = "user"; // This default might conflict with context rules.
-   // }
-
-   // Role value check is also handled by validateUserForContext based on schema.
-   // if (!["user", "admin", "owner"].includes(validatedUserData.role)) {
-   //    throw new ValidationError("Role must be 'user', 'admin', or 'owner'", [{ field: "role", message: "Invalid role value." }]);
-   // }
+   const validatedUserData = validateUserForContext(schema, actualUserData);
 
    const serviceResult = await authService.register({
-      userData: validatedUserData, // Use the data returned by the validator
+      userData: validatedUserData,
       schema,
       req,
    });
@@ -84,13 +105,17 @@ const registerController = async (req, res, next) => {
  */
 const loginController = async (req, res, next) => {
    const { credentials } = req.body;
-   const schema = req.schema;
+   let schema = req.body.schema || req.schema;
    const ipAddress = req.ip;
    const userAgent = req.headers["user-agent"];
 
    if (!schema) {
+      schema = config.SCHEMAS.AUTH_NAME;
+   }
+
+   if (!schema) {
       throw new ValidationError(
-         "Schema could not be determined for the request."
+         "Schema could not be determined for the request, and default schema is invalid or not configured."
       );
    }
 
@@ -138,10 +163,12 @@ const loginController = async (req, res, next) => {
  */
 const logoutController = async (req, res, next) => {
    const userId = sessionUtils.getUserId(req.session);
+   const sessionId = sessionUtils.getSessionId(req.session);
    const schema = sessionUtils.getSchema(req.session);
 
    const serviceResult = await authService.logout({
       userId,
+      sessionId,
       schema,
    });
    if (serviceResult.success) {

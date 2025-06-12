@@ -95,9 +95,18 @@ export async function setupTestSchemas() {
       for (const schema of Object.values(TEST_SCHEMAS)) {
          await pool.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`);
 
+         // Drop tables first to ensure a clean state
+         await pool.query(`DROP TABLE IF EXISTS "${schema}".sessions CASCADE`);
+         await pool.query(`DROP TABLE IF EXISTS "${schema}".users CASCADE`);
+         if (schema === TEST_SCHEMAS.AUTH_INTERNAL) {
+            await pool.query(
+               `DROP TABLE IF EXISTS "${schema}".client_servers CASCADE`
+            );
+         }
+
          // Create users table in each schema
          await pool.query(`
-            CREATE TABLE IF NOT EXISTS "${schema}".users (
+            CREATE TABLE "${schema}".users (
                id UUID PRIMARY KEY,
                name VARCHAR(255) NOT NULL,
                email VARCHAR(255) UNIQUE NOT NULL,
@@ -110,7 +119,7 @@ export async function setupTestSchemas() {
 
          // Create sessions table in each schema
          await pool.query(`
-            CREATE TABLE IF NOT EXISTS "${schema}".sessions (
+            CREATE TABLE "${schema}".sessions (
                id UUID PRIMARY KEY,
                user_id UUID NOT NULL,
                session_id UUID UNIQUE NOT NULL,
@@ -124,8 +133,9 @@ export async function setupTestSchemas() {
       }
 
       // Create client_servers table in auth_internal schema only
+      // Already dropped if schema was auth_internal
       await pool.query(`
-         CREATE TABLE IF NOT EXISTS "${TEST_SCHEMAS.AUTH_INTERNAL}".client_servers (
+         CREATE TABLE "${TEST_SCHEMAS.AUTH_INTERNAL}".client_servers (
             client_id VARCHAR(255) PRIMARY KEY,
             client_secret_hash VARCHAR(255) NOT NULL,
             app_name VARCHAR(255) NOT NULL,

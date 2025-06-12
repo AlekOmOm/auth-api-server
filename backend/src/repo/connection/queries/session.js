@@ -25,7 +25,7 @@ import format from "pg-format";
 // Sessions
 export const create = (schema) =>
    format(
-      "INSERT INTO %I.sessions (user_id, session_id, ip_address, user_agent, expires_at) VALUES ($1, $2, $3, $4, $5) RETURNING *;",
+      "INSERT INTO %I.sessions (id, user_id, session_id, ip_address, user_agent, expires_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *;",
       schema
    );
 

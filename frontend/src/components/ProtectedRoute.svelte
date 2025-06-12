@@ -33,14 +33,8 @@
           sessionStorage.setItem('auth_return_url', currentFullPath);
           console.log("🔍 [ProtectedRoute $effect] Storing return URL:", currentFullPath, "for active protected path:", path);
           
-          setTimeout(() => {
-            if (location.pathname === path && !isAuthenticated && !loading) {
-                 console.log(`🔍 [ProtectedRoute $effect path="${path}"] Navigating to /login (deferred).`);
-                 navigate('/login', { replace: true });
-            } else {
-                 console.log(`🔍 [ProtectedRoute $effect path="${path}"] Deferred navigation to /login aborted, state changed:`, {isAuth: isAuthenticated, isLoading: loading});
-            }
-          }, 0);
+          console.log(`🔍 [ProtectedRoute $effect path="${path}"] Navigating to /login immediately.`);
+          navigate('/login', { replace: true });
         } else {
           console.log(`🔍 [ProtectedRoute $effect path="${path}"] User not authenticated, but redirect already attempted or in progress.`);
         }

@@ -19,7 +19,7 @@ import {
    ConflictError,
    NotFoundError,
    ValidationError,
-} from "../../middleware/errorHandler.js";
+} from "../../utils/customErrors.js";
 
 // Mock entire modules
 vi.mock("../user.js");

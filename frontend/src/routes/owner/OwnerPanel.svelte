@@ -39,47 +39,43 @@
   });
 
   async function loadOwnerData() {
-    let localError = '';
-    loading = true;
-    error = '';
+    loading = true; // Show loading for the overall process initially
+    error = '';     // Clear previous errors
 
     try {
       const currentStoreState = $authStore;
-      // console.log('🔍 [OWNER PANEL] Current store state:', currentStoreState);
 
       if (!currentStoreState.isAuthenticated || !currentStoreState.session) {
-        // console.log('🔍 [OWNER PANEL] Authentication check failed:', { 
-        //   isAuthenticated: currentStoreState.isAuthenticated, 
-        //   hasSession: !!currentStoreState.session 
-        // });
-        localError = 'Authentication required to access owner panel.';
-        return;
+         console.log('🔍 [OWNER PANEL] Authentication check failed:', { 
+          isAuthenticated: currentStoreState.isAuthenticated, 
+          hasSession: !!currentStoreState.session 
+        });
+        throw new Error('Authentication required to access owner panel.');
       }
 
       const userRoleFromSession = currentStoreState.session?.role || 'user';
-      // console.log('🔍 [OWNER PANEL] User role from session:', userRoleFromSession);
+      console.log('🔍 [OWNER PANEL] User role from session:', userRoleFromSession);
       
       if (userRoleFromSession !== 'owner' && userRoleFromSession !== 'admin') {
-        localError = `Owner or Admin privileges required to access this panel. Detected role: ${userRoleFromSession}`;
-        return;
+        throw new Error(`Owner or Admin privileges required to access this panel. Detected role: ${userRoleFromSession}`);
       }
 
       userRole = userRoleFromSession;
 
       await loadClientServers();
       
+      loading = false; 
+
       try {
         await loadOwnerStats();
       } catch (statsError) {
-        console.warn('Owner stats failed to load, continuing without stats:', statsError);
+        console.warn('[OwnerPanel] Further error during background load of owner stats:', statsError);
       }
 
-    } catch (err) {
-      console.error('Error loading owner data:', err);
-      localError = 'Failed to load owner panel data: ' + (err.message || 'Unknown error');
-    } finally {
-      error = localError;
-      loading = false;
+    } catch (err) { // Catches errors from auth checks or loadClientServers
+      console.error('[OwnerPanel] Failed to load primary owner panel data:', err);
+      error = err.message || 'Unknown error loading owner panel.'; // Set $error
+      loading = false; // Ensure loading is false to display the error message
     }
   }
 
@@ -180,7 +176,7 @@
 
 <div class="owner-panel">
   <header class="panel-header">
-    <h1>🏢 Owner Panel</h1>
+    <h2>🏢 Owner Panel</h2>
     <p class="subtitle">Manage your client servers and users</p>
     
     {#if userRole === 'admin'}

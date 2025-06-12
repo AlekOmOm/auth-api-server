@@ -1,5 +1,5 @@
 import { POOL_CONTEXTS } from "../pool.js";
-import { ValidationError } from "../../middleware/errorHandler.js";
+import { ValidationError } from "../../utils/customErrors.js";
 import { USER_ROLES } from "../roles.js";
 /**
  * setObj()

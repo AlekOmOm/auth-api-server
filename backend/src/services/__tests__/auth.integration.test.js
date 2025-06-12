@@ -51,6 +51,20 @@ describe("Auth Service Integration Tests", () => {
       console.log("✅ Integration test cleanup complete");
    });
 
+   it("should connect to the database and execute a simple query", async () => {
+      let pool;
+      try {
+         pool = await testSetup.getTestDbConnection();
+         const result = await pool.query("SELECT 1 AS connection_test;");
+         expect(result.rows).toHaveLength(1);
+         expect(result.rows[0].connection_test).toBe(1);
+      } finally {
+         if (pool) {
+            await pool.end();
+         }
+      }
+   });
+
    describe("POST /api/auth/login", () => {
       it("TC-AUTH-LOGIN-001: Valid credentials - regular user in client schema", async () => {
          const response = await request(BASE_URL)

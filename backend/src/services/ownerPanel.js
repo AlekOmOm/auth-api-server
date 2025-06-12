@@ -7,6 +7,12 @@
  * - Analytics and reporting
  */
 
+import { ValidationError, AuthError } from "../utils/customErrors.js";
+import getAuthPool from "../repo/connection/pools/auth.js";
+import getPoolForSchema from "../repo/connection/pools/clientServers.js";
+import Repo from "../repo/index.js";
+import * as userService from "./user.js";
+
 /**
  * Create a new schema for a client application
  * @param {Object} params - Parameters object
@@ -31,10 +37,11 @@ export async function createClientSchema({ schemaName, clientId, ownerId }) {
       }
 
       // Check if owner owns this client
-      const client = await clientServerRepo.getClientServerByUserIdAndClientId(
-         ownerId,
-         clientId
-      );
+      const clientServerRepo = new Repo("auth_internal", "client_servers");
+      const client = await clientServerRepo.query("getByUserIdAndClientId", {
+         user_id: ownerId,
+         client_id: clientId,
+      });
       if (!client) {
          throw new AuthError(
             "You don't have permission to create schemas for this client"
@@ -84,7 +91,7 @@ export async function createClientSchema({ schemaName, clientId, ownerId }) {
       await authPool.query(createSchemaQuery);
 
       // Update client record with assigned schema
-      const updatedClient = await clientServerRepo.updateClientServer({
+      const updatedClient = await clientServerRepo.query("update", {
          ...client,
          assigned_schema_name: schemaName,
       });
@@ -137,10 +144,11 @@ export async function deleteClientSchema({
       }
 
       // Check if owner owns this client
-      const client = await clientServerRepo.getClientServerByUserIdAndClientId(
-         ownerId,
-         clientId
-      );
+      const clientServerRepo = new Repo("auth_internal", "client_servers");
+      const client = await clientServerRepo.query("getByUserIdAndClientId", {
+         user_id: ownerId,
+         client_id: clientId,
+      });
       if (!client || client.assigned_schema_name !== schemaName) {
          throw new AuthError("You don't have permission to delete this schema");
       }
@@ -152,7 +160,7 @@ export async function deleteClientSchema({
       await authPool.query(dropSchemaQuery);
 
       // Update client record to remove assigned schema
-      const updatedClient = await clientServerRepo.updateClientServer({
+      const updatedClient = await clientServerRepo.query("update", {
          ...client,
          assigned_schema_name: null,
       });
@@ -184,7 +192,10 @@ export async function getAllUsersAcrossTenants({ ownerId, schemaFilter }) {
       }
 
       // Get all clients owned by this user
-      const clients = await clientServerRepo.getClientServersByUserId(ownerId);
+      const clientServerRepo = new Repo("auth_internal", "client_servers");
+      const clients = await clientServerRepo.query("getByUserId", {
+         user_id: ownerId,
+      });
 
       const usersBySchema = {};
 
@@ -248,7 +259,10 @@ export async function getOwnerAnalytics({ ownerId }) {
       const authPool = await getAuthPool();
 
       // Get all clients owned by this user
-      const clients = await clientServerRepo.getClientServersByUserId(ownerId);
+      const clientServerRepo = new Repo("auth_internal", "client_servers");
+      const clients = await clientServerRepo.query("getByUserId", {
+         user_id: ownerId,
+      });
 
       const analytics = {
          totalClients: clients.length,
@@ -349,7 +363,10 @@ export async function manageTenantUser({
       }
 
       // Verify owner has access to this schema
-      const clients = await clientServerRepo.getClientServersByUserId(ownerId);
+      const clientServerRepo = new Repo("auth_internal", "client_servers");
+      const clients = await clientServerRepo.query("getByUserId", {
+         user_id: ownerId,
+      });
       const hasAccess = clients.some(
          (c) => c.assigned_schema_name === schemaName
       );

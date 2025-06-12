@@ -2,7 +2,8 @@ import {
    ValidationError,
    ConflictError,
    NotFoundError,
-} from "../middleware/errorHandler.js";
+   AuthError,
+} from "../utils/customErrors.js";
 import hashing from "../utils/hashing.js";
 import Repo from "../repo/index.js";
 import { User, UserOperations } from "../models/index.js"; // Import the User model
@@ -144,11 +145,44 @@ const pipeline = async (model, executor, successMessage, ...args) => {
  * @returns {Promise<Object>} Formatted response with users or error
  */
 export async function getUsers(schema) {
-   return await pipeline(
-      User,
-      repoQuery(schema, "getAll"),
-      "Users retrieved successfully"
-   );
+   try {
+      const result = await repo(schema).query("getAll", {});
+
+      if (result === null) {
+         throw new NotFoundError("No users found.");
+      }
+
+      if (
+         typeof result === "object" &&
+         result.error &&
+         !(result instanceof Error)
+      ) {
+         throw new Error("Repository operation failed for User.");
+      }
+
+      if (result instanceof Error) {
+         throw result;
+      }
+
+      return {
+         success: true,
+         data: result,
+         message: "Users retrieved successfully",
+      };
+   } catch (error) {
+      if (
+         error instanceof NotFoundError ||
+         error instanceof ConflictError ||
+         error instanceof ValidationError
+      ) {
+         throw error;
+      }
+
+      console.error("Service error for getUsers:", error);
+      throw new Error(
+         "Service operation failed for User. Please try again later."
+      );
+   }
 }
 
 /**
@@ -209,6 +243,24 @@ export async function get({
    }
 
    const userFromDb = userResult.data;
+
+   // Debug logging to understand password validation issue
+   console.log(
+      "[USER SERVICE GET] userFromDb object:",
+      JSON.stringify(userFromDb, null, 2)
+   );
+   console.log(
+      "[USER SERVICE GET] userFromDb.passwordHash:",
+      userFromDb.passwordHash
+   );
+   console.log(
+      "[USER SERVICE GET] userFromDb.password_hash:",
+      userFromDb.password_hash
+   );
+   console.log(
+      "[USER SERVICE GET] password provided:",
+      password ? "yes" : "no"
+   );
 
    // Login specific logic: Check password if provided
    if (password) {

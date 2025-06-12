@@ -1,6 +1,6 @@
 // models/base/BaseModel.js
 
-import { NotFoundError } from "../../middleware/errorHandler.js";
+import { NotFoundError } from "../../utils/customErrors.js";
 import ValidationMixin from "./ValidationMixin.js";
 
 /**
@@ -184,13 +184,11 @@ class BaseModel {
    }
 }
 
-// Temporarily comment out the ValidationMixin application for diagnostics
-/*
+// Apply ValidationMixin static methods to BaseModel
 Object.getOwnPropertyNames(ValidationMixin).forEach((name) => {
    if (name !== "prototype" && name !== "length" && name !== "name") {
       BaseModel[name] = ValidationMixin[name];
    }
 });
-*/
 
 export default BaseModel;

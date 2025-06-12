@@ -158,6 +158,7 @@ export const operations = {
          sql: session.create,
          type: "entity",
          paramExtractor: (data) => [
+            data.id,
             data.user_id || data.userId,
             data.session_id || data.sessionId,
             data.ip_address || data.ipAddress,
@@ -336,7 +337,8 @@ const getOperationConfig = (logicalTableName, operation) => {
 /**
  * Gets the processed parameters for a given operation
  * @param {string} operation - Operation name
- * @param {...any} params - Parameters for the operation
+ * @param {any[]} params - Parameters for the operation
+ * @param {string} logicalTableName - Logical table name
  * @returns {any} Processed parameters
  */
 const getProcessedParams = (operation, params, logicalTableName) => {

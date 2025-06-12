@@ -25,21 +25,24 @@ import {
 } from "../controllers/auth.js";
 
 // --- middleware ---
-import { hasRole, isAuthenticated, isNotAdmin } from "../middleware/auth.js";
-// --- utils ---
-import validation from "../utils/validation.js"; // types and XSS
+import {
+   hasRole,
+   isAuthenticated,
+   isNotAdmin,
+   isAdminOrOwner,
+} from "../middleware/auth.js";
 
 // --- routes ---
 
-router.post("/register", validation.register, register);
-router.post("/login", validation.login, login);
-router.post("/logout", validation.logout, isAuthenticated, logout);
+router.post("/register", register);
+router.post("/login", login);
+router.post("/logout", isAuthenticated, logout);
 
 /** very protected routes
  *   - only for current user (password protection)
  */
 router.get("/me", isAuthenticated, isNotAdmin, getCurrentUser);
-router.get("/admin", isAuthenticated, hasRole("admin"), getCurrentUser);
+router.get("/admin", isAuthenticated, isAdminOrOwner, getCurrentUser);
 
 // --- session ---
 router.get("/session", isAuthenticated, getSession);
