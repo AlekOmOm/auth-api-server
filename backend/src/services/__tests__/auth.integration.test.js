@@ -56,8 +56,10 @@ describe("Auth Service Integration Tests", () => {
          const response = await request(BASE_URL)
             .post("/api/auth/login")
             .send({
-               email: TEST_USERS.REGULAR_USER.email,
-               password: TEST_USERS.REGULAR_USER.password,
+               credentials: {
+                  email: TEST_USERS.REGULAR_USER.email,
+                  password: TEST_USERS.REGULAR_USER.password,
+               },
                schema: TEST_SCHEMAS.CLIENT_TEST,
             })
             .expect(200);
@@ -87,8 +89,10 @@ describe("Auth Service Integration Tests", () => {
          const response = await request(BASE_URL)
             .post("/api/auth/login")
             .send({
-               email: TEST_USERS.OWNER_USER.email,
-               password: TEST_USERS.OWNER_USER.password,
+               credentials: {
+                  email: TEST_USERS.OWNER_USER.email,
+                  password: TEST_USERS.OWNER_USER.password,
+               },
                schema: TEST_SCHEMAS.AUTH_INTERNAL,
             })
             .expect(200);
@@ -127,8 +131,10 @@ describe("Auth Service Integration Tests", () => {
          const response = await request(BASE_URL)
             .post("/api/auth/login")
             .send({
-               email: "nonexistent@example.com",
-               password: "anypassword",
+               credentials: {
+                  email: "nonexistent@example.com",
+                  password: "anypassword",
+               },
                schema: TEST_SCHEMAS.CLIENT_TEST,
             })
             .expect(401);
@@ -140,8 +146,10 @@ describe("Auth Service Integration Tests", () => {
          const response = await request(BASE_URL)
             .post("/api/auth/login")
             .send({
-               email: TEST_USERS.REGULAR_USER.email,
-               password: "wrongpassword",
+               credentials: {
+                  email: TEST_USERS.REGULAR_USER.email,
+                  password: "wrongpassword",
+               },
                schema: TEST_SCHEMAS.CLIENT_TEST,
             })
             .expect(401);
@@ -158,8 +166,10 @@ describe("Auth Service Integration Tests", () => {
          const loginResponse = await request(BASE_URL)
             .post("/api/auth/login")
             .send({
-               email: TEST_USERS.REGULAR_USER.email,
-               password: TEST_USERS.REGULAR_USER.password,
+               credentials: {
+                  email: TEST_USERS.REGULAR_USER.email,
+                  password: TEST_USERS.REGULAR_USER.password,
+               },
                schema: TEST_SCHEMAS.CLIENT_TEST,
             })
             .expect(200);
@@ -306,8 +316,10 @@ describe("Auth Service Integration Tests", () => {
          const loginResponse = await request(BASE_URL)
             .post("/api/auth/login")
             .send({
-               email: TEST_USERS.OWNER_USER.email,
-               password: TEST_USERS.OWNER_USER.password,
+               credentials: {
+                  email: TEST_USERS.OWNER_USER.email,
+                  password: TEST_USERS.OWNER_USER.password,
+               },
                schema: TEST_SCHEMAS.AUTH_INTERNAL,
             })
             .expect(200);
@@ -350,8 +362,10 @@ describe("Auth Service Integration Tests", () => {
          const response = await request(BASE_URL)
             .post("/api/auth/login")
             .send({
-               email: "test@example.com",
-               password: "password",
+               credentials: {
+                  email: "test@example.com",
+                  password: "password",
+               },
                schema: "non_existent_schema",
             })
             .expect(500);

@@ -1,15 +1,16 @@
 // backend/src/models/session.js
 
 import crypto from "crypto";
-import { v4 as uuidv4 } from "uuid";
+// import { v4 as uuidv4 } from "uuid"; // Replaced by custom util
 import BaseModel from "./base/BaseModel.js";
 import { pipe, compose, curry } from "../utils/functional.js";
+import { generateUuidV4 } from "../utils/uuid.js"; // Import the UUID generator
 
 /**
  * Session Model - Functional + OOP Hybrid
  * Combines OOP structure with functional programming principles
  */
-class Session extends BaseModel {
+export class Session extends BaseModel {
    constructor(
       userId,
       id = null,
@@ -24,8 +25,8 @@ class Session extends BaseModel {
       // Immutable properties after creation
       Object.assign(this, {
          userId,
-         id: id || uuidv4(),
-         sessionId: sessionId || uuidv4(),
+         id: id || generateUuidV4(), // Use custom UUID generator
+         sessionId: sessionId || generateUuidV4(), // Use custom UUID generator
          ipAddress,
          userAgent,
          createdAt: createdAt || new Date(),
@@ -238,6 +239,7 @@ class Session extends BaseModel {
          user_agent,
          expiresAt,
          expires_at,
+         schema,
          id,
       } = requestBody || {};
 
@@ -247,7 +249,7 @@ class Session extends BaseModel {
       const resolvedUa = userAgent || user_agent || null;
       const resolvedExpires = expiresAt || expires_at || null;
 
-      return new Session(
+      const session = new Session(
          resolvedUserId,
          id || null,
          resolvedSessionId,
@@ -256,6 +258,13 @@ class Session extends BaseModel {
          null,
          resolvedExpires
       );
+
+      // Set schema on the instance if provided
+      if (schema) {
+         session.schema = schema;
+      }
+
+      return session;
    };
 
    // --- PURE PREDICATES ---
@@ -282,57 +291,28 @@ class Session extends BaseModel {
     * Check if session is complete - Pure predicate
     */
    isComplete = () => this.hasUser() && this.hasSchema() && !this.isExpired();
+
+   // --- STATIC UTILITY METHODS ---
+
+   /**
+    * Get expiry timestamp for sessions
+    * @param {number} hours - Hours from now (default: 24)
+    * @returns {Date} Expiry timestamp
+    */
+   static getExpiryTimestamp(hours = 24) {
+      const expiryDate = new Date();
+      expiryDate.setHours(expiryDate.getHours() + hours);
+      return expiryDate;
+   }
+
+   /**
+    * Validate UUID format
+    * @param {string} uuid - UUID to validate
+    * @returns {boolean} True if valid UUID
+    */
+   static isValidUUID(uuid) {
+      const uuidRegex =
+         /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      return uuidRegex.test(uuid);
+   }
 }
-
-// --- FUNCTIONAL OPERATIONS FOR SESSION ---
-
-/**
- * Functional operations that work with Session instances
- */
-export const SessionOperations = {
-   // for repo pipelines
-   toDB: (session) => session.toDatabaseObject(),
-   fromDB: (dbRow) => Session.fromDb(dbRow),
-   fromRequestBody: (...args) => Session.fromRequestBody(...args),
-
-   // Curried enrichment functions
-   enrichWithUser: curry((user, session) => session.withUser(user)),
-   enrichWithSchema: curry((schema, session) => session.withSchema(schema)),
-   extendExpiry: curry((hours, session) => session.withExtendedExpiry(hours)),
-
-   // Transformation pipelines
-   prepareForDatabase: (session) => session.toDatabaseObject(),
-   prepareForApi: curry((authorizedUrls, session) =>
-      session.toApiResponse(authorizedUrls)
-   ),
-   prepareForExpress: (session) => session.toExpressSession(),
-
-   // Predicates
-   isValid: (session) => session.isValid() && !session.isExpired(),
-   isExpired: (session) => session.isExpired(),
-   hasRequiredData: (session) => session.hasUser() && session.hasSchema(),
-
-   // Composite operations
-   createAndEnrich: pipe(Session.forLogin, (session) =>
-      session.isValid() ? session : null
-   ),
-
-   // Filter operations
-   filterExpired: (sessions) =>
-      sessions.filter((session) => !session.isExpired()),
-   filterValid: (sessions) =>
-      sessions.filter((session) => SessionOperations.isValid(session)),
-
-   // Sorting operations
-   sortByCreatedAt: (sessions) =>
-      [...sessions].sort(
-         (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
-      ),
-
-   sortByExpiresAt: (sessions) =>
-      [...sessions].sort(
-         (a, b) => new Date(a.expiresAt) - new Date(b.expiresAt)
-      ),
-};
-
-export default Session;

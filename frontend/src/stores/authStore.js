@@ -137,10 +137,18 @@ function createAuthStore() {
    async function checkSession() {
       update((state) => ({ ...state, loading: true }));
       try {
-         const res = await fetchGet(`${BACKEND_URL_AUTH}/session`);
-         setStore(res, res.data.id !== null, null, set);
+         const res = await fetchGet(`${BACKEND_URL_AUTH}/session`); // res is the direct JSON from backend
+         // For fetchGet, success is implied if no error is thrown.
+         // Authentication is confirmed if res.data, res.data.user, and res.data.user.id exist.
+         setStore(
+            res,
+            res.data && res.data.user && res.data.user.id != null,
+            null,
+            set
+         );
       } catch (error) {
-         setStore(null, true, null, set);
+         // If checkSession fails (e.g., network error or API error from fetchGet), user is not authenticated.
+         setStore(null, false, null, set);
       }
    }
 
@@ -151,6 +159,7 @@ function createAuthStore() {
 
    return {
       subscribe,
+      set,
       //
       login,
       register,
@@ -164,21 +173,21 @@ function createAuthStore() {
 // ------------- helper functions -------------
 
 function setStore(response, check = true, url = null, set) {
-   const { data } = response || {}; // Ensure response is not null
+   const { data } = response || {}; // Destructure data directly, remove sessionUpdate
 
    if (check && data) {
-      // Ensure data exists before accessing its properties
+      // Session data is now directly from response.data (expected to be User schema)
       set({
-         isAuthenticated: true,
-         session: data,
-         refererUrl: url,
+         isAuthenticated: true, // Determined by the 'check' parameter
+         session: data, // Store the User object
+         refererUrl: url, // The URL used for login context
          loading: false,
       });
    } else {
       set({
          isAuthenticated: false,
          session: null,
-         refererUrl: url, // default to null
+         refererUrl: url,
          loading: false,
       });
    }

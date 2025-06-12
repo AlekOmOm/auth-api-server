@@ -1,7 +1,6 @@
 <script>
   import { onMount } from 'svelte';
   import { authStore } from '../../stores/authStore.js';
-  import { get } from 'svelte/store';
   import clientServerApi from '../../services/clientServerApi.js';
   import ClientServerCard from './components/ClientServerCard.svelte';
   import CreateClientModal from './components/CreateClientModal.svelte';
@@ -20,8 +19,23 @@
   let userRole = $state('');
   let ownerStats = $state(null);
 
-  onMount(async () => {
-    await loadOwnerData();
+  // Operation specific feedback messages
+  let actionError = $state('');
+  let actionSuccessMessage = $state('');
+
+  // Make component reactive to authStore changes
+  $effect(() => {
+    const currentStoreState = $authStore;
+    // console.log('🔍 [OWNER PANEL] AuthStore changed:', currentStoreState);
+    
+    if (!currentStoreState.loading) {
+      // Always reload data when auth state changes and is not loading
+      loadOwnerData();
+    }
+  });
+
+  onMount(() => {
+    // console.log('🔍 [OWNER PANEL] Component mounted');
   });
 
   async function loadOwnerData() {
@@ -30,21 +44,27 @@
     error = '';
 
     try {
-      const currentStoreState = get(authStore);
+      const currentStoreState = $authStore;
+      // console.log('🔍 [OWNER PANEL] Current store state:', currentStoreState);
 
-      if (!currentStoreState.isAuthenticated || !currentStoreState.user) {
+      if (!currentStoreState.isAuthenticated || !currentStoreState.session) {
+        // console.log('🔍 [OWNER PANEL] Authentication check failed:', { 
+        //   isAuthenticated: currentStoreState.isAuthenticated, 
+        //   hasSession: !!currentStoreState.session 
+        // });
         localError = 'Authentication required to access owner panel.';
         return;
       }
 
-      const userRoleFromMeta = currentStoreState.user?.poolMetadata?.user_role || 'user';
+      const userRoleFromSession = currentStoreState.session?.role || 'user';
+      // console.log('🔍 [OWNER PANEL] User role from session:', userRoleFromSession);
       
-      if (userRoleFromMeta !== 'owner' && userRoleFromMeta !== 'admin') {
-        localError = `Owner or Admin privileges required to access this panel. Detected role: ${userRoleFromMeta}`;
+      if (userRoleFromSession !== 'owner' && userRoleFromSession !== 'admin') {
+        localError = `Owner or Admin privileges required to access this panel. Detected role: ${userRoleFromSession}`;
         return;
       }
 
-      userRole = userRoleFromMeta;
+      userRole = userRoleFromSession;
 
       await loadClientServers();
       
@@ -111,6 +131,10 @@
       return;
     }
 
+    actionError = '';
+    actionSuccessMessage = '';
+    loading = true; // Indicate an operation is in progress
+
     try {
       const response = await clientServerApi.deleteClientServer(clientServer.client_id);
 
@@ -118,20 +142,33 @@
         throw new Error(response.message || 'Failed to delete client server via API.');
       }
 
+      actionSuccessMessage = `Successfully deleted client server: ${clientServer.app_name}`;
       await loadClientServers();
       await loadOwnerStats();
       
     } catch (err) {
       console.error('Error deleting client server:', err);
-      alert('Failed to delete client server: ' + (err.message || 'Unknown error'));
+      actionError = 'Failed to delete client server: ' + (err.message || 'Unknown error');
+    } finally {
+      loading = false;
+      // Optional: Clear messages after a delay
+      setTimeout(() => {
+        actionError = '';
+        actionSuccessMessage = '';
+      }, 5000);
     }
   }
 
   async function handleClientCreated() {
     showCreateModal = false;
     selectedClientServer = null;
+    actionError = ''; // Clear previous action errors
+    actionSuccessMessage = 'Client server operation successful!'; // Generic success for create/update
     await loadClientServers();
     await loadOwnerStats();
+    setTimeout(() => {
+        actionSuccessMessage = '';
+      }, 5000);
   }
 
   function handleModalClose() {
@@ -174,6 +211,18 @@
     <!-- Owner Statistics -->
     {#if ownerStats}
       <OwnerStats stats={ownerStats} />
+    {/if}
+
+    <!-- Action Feedback Messages -->
+    {#if actionError}
+      <div class="error-message inline-feedback">
+        <p>❌ {actionError}</p>
+      </div>
+    {/if}
+    {#if actionSuccessMessage}
+      <div class="success-message inline-feedback">
+        <p>✅ {actionSuccessMessage}</p>
+      </div>
     {/if}
 
     <!-- Client Servers Section -->
@@ -281,20 +330,9 @@
     padding: 4rem 2rem;
   }
 
-  .spinner {
-    width: 40px;
-    height: 40px;
-    border: 4px solid rgba(255, 255, 255, 0.1);
-    border-top: 4px solid #646cff;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin: 0 auto 1rem;
-  }
-
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
+  /* Spinner styles below are now handled by global app.css */
+  /* .spinner { ... } */
+  /* @keyframes spin { ... } */
 
   .error {
     text-align: center;
@@ -351,41 +389,6 @@
     text-align: left;
   }
 
-  /* Use consistent button styling from app.css */
-  .btn {
-    border-radius: 8px;
-    border: 1px solid transparent;
-    padding: 0.6em 1.2em;
-    font-size: 1em;
-    font-weight: 500;
-    font-family: inherit;
-    background-color: #1a1a1a;
-    color: rgba(255, 255, 255, 0.87);
-    cursor: pointer;
-    transition: border-color 0.25s;
-    text-decoration: none;
-    display: inline-block;
-    text-align: center;
-  }
-
-  .btn:hover {
-    border-color: #646cff;
-  }
-
-  .btn:focus,
-  .btn:focus-visible {
-    outline: 4px auto -webkit-focus-ring-color;
-  }
-
-  .btn-primary {
-    background-color: #646cff;
-    color: white;
-  }
-
-  .btn-primary:hover {
-    background-color: #535bf2;
-  }
-
   .client-servers-section {
     margin-top: 2rem;
   }
@@ -400,20 +403,6 @@
       background-color: #747bff;
     }
 
-    .btn {
-      background-color: #f9f9f9;
-      color: #213547;
-    }
-
-    .btn-primary {
-      background-color: #747bff;
-      color: white;
-    }
-
-    .btn-primary:hover {
-      background-color: #646cff;
-    }
-
     .empty-state {
       background-color: rgba(0, 0, 0, 0.05);
       border-color: rgba(0, 0, 0, 0.2);
@@ -424,10 +413,7 @@
       border-color: rgba(255, 0, 0, 0.3);
     }
 
-    .spinner {
-      border-color: rgba(0, 0, 0, 0.1);
-      border-top-color: #747bff;
-    }
+    /* .spinner { ... } -- Handled globally */
   }
 
   @media (max-width: 768px) {
@@ -448,5 +434,25 @@
     .client-servers-grid {
       grid-template-columns: 1fr;
     }
+  }
+
+  /* Inline feedback messages */
+  .inline-feedback {
+    padding: 1rem;
+    margin: 1rem 0;
+    border-radius: 8px;
+    text-align: center;
+  }
+
+  .error-message.inline-feedback {
+    background-color: rgba(255, 0, 0, 0.1);
+    border: 1px solid rgba(255, 0, 0, 0.3);
+    color: #ff6b6b; /* Or a darker red for better contrast */
+  }
+
+  .success-message.inline-feedback {
+    background-color: rgba(0, 255, 0, 0.1);
+    border: 1px solid rgba(0, 255, 0, 0.3);
+    color: #27ae60; /* Or a darker green */
   }
 </style> 

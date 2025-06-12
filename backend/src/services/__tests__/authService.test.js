@@ -47,16 +47,19 @@ vi.mock("../../repo/clientAppRepository.js", () => ({
    },
 }));
 
+// Define mocks for pools/auth.js BEFORE they are used in vi.mock
+const mockAuthPoolQueryFn = vi.fn();
+const mockGetAuthPoolFn = vi.fn(() =>
+   Promise.resolve({ query: mockAuthPoolQueryFn })
+);
+
 vi.mock("../../repo/connection/pools/auth.js", () => ({
-   getAuthPool: vi.fn(() => ({
-      query: vi.fn(),
-   })),
+   default: (...args) => mockGetAuthPoolFn(...args),
 }));
 
 // Import mocked modules
 import { userRepo as userAuthInternalRepo } from "../../repo/repositories/userRepository.js";
 import { userRepo as userClientAppRepo } from "../../repo/clientAppRepository.js";
-import { getAuthPool } from "../../repo/connection/pools/auth.js";
 
 describe("authService", () => {
    beforeEach(() => {
@@ -81,10 +84,8 @@ describe("authService", () => {
          userAuthInternalRepo.getUserByEmail.mockResolvedValue(mockUser);
          userAuthInternalRepo.createSession.mockResolvedValue(true);
 
-         const mockPool = {
-            query: vi.fn().mockResolvedValue({ rows: [{ client_count: 0 }] }),
-         };
-         getAuthPool.mockResolvedValue(mockPool);
+         // Configure the mock query function for this test case
+         mockAuthPoolQueryFn.mockResolvedValue({ rows: [{ client_count: 0 }] });
 
          const result = await authService.login({
             credentials: mockCredentials,
@@ -135,10 +136,8 @@ describe("authService", () => {
          userAuthInternalRepo.getUserByEmail.mockResolvedValue(mockUser);
          userAuthInternalRepo.createSession.mockResolvedValue(true);
 
-         const mockPool = {
-            query: vi.fn().mockResolvedValue({ rows: [{ client_count: 3 }] }),
-         };
-         getAuthPool.mockResolvedValue(mockPool);
+         // Configure the mock query function for this test case
+         mockAuthPoolQueryFn.mockResolvedValue({ rows: [{ client_count: 3 }] });
 
          const result = await authService.login({
             credentials: { email: "owner@test.com", password: "password123" },
@@ -149,7 +148,7 @@ describe("authService", () => {
             session: {},
          });
 
-         expect(mockPool.query).toHaveBeenCalledWith(
+         expect(mockAuthPoolQueryFn).toHaveBeenCalledWith(
             "SELECT COUNT(*) as client_count FROM client_servers WHERE user_id = $1",
             [1]
          );

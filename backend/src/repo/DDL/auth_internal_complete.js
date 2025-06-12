@@ -1,3 +1,7 @@
+console.log(
+   "[DDL_FILE_LOAD_CONFIRM_V1] Loading auth_internal_complete.js - DDL for auth_internal schema. UUIDs should be auto-generated."
+);
+
 /**
  * Complete DDL for auth_internal schema
  *
@@ -61,46 +65,36 @@ export const ddl = (tenant = "auth_internal") => [
    );`,
 
    // Indexes for users table
-   `create index if not exists ${ident(tenant)}.idx_users_email on ${ident(
+   `create index if not exists idx_users_email on ${ident(
       tenant
    )}.users(email);`,
-   `create index if not exists ${ident(tenant)}.idx_users_role on ${ident(
-      tenant
-   )}.users(role);`,
+   `create index if not exists idx_users_role on ${ident(tenant)}.users(role);`,
 
    // Indexes for sessions table
-   `create index if not exists ${ident(
+   `create index if not exists idx_sessions_session_id on ${ident(
       tenant
-   )}.idx_sessions_session_id on ${ident(tenant)}.sessions(session_id);`,
-   `create index if not exists ${ident(tenant)}.idx_sessions_user_id on ${ident(
+   )}.sessions(session_id);`,
+   `create index if not exists idx_sessions_user_id on ${ident(
       tenant
    )}.sessions(user_id);`,
-   `create index if not exists ${ident(
+   `create index if not exists idx_sessions_expires_at on ${ident(
       tenant
-   )}.idx_sessions_expires_at on ${ident(tenant)}.sessions(expires_at);`,
+   )}.sessions(expires_at);`,
 
    // Indexes for client_servers table
-   `create index if not exists ${ident(
-      tenant
-   )}.idx_client_servers_client_id on ${ident(
+   `create index if not exists idx_client_servers_client_id on ${ident(
       tenant
    )}.client_servers(client_id);`,
-   `create index if not exists ${ident(
+   `create index if not exists idx_client_servers_user_id on ${ident(
       tenant
-   )}.idx_client_servers_user_id on ${ident(tenant)}.client_servers(user_id);`,
-   `create index if not exists ${ident(
-      tenant
-   )}.idx_client_servers_identifier_url on ${ident(
+   )}.client_servers(user_id);`,
+   `create index if not exists idx_client_servers_identifier_url on ${ident(
       tenant
    )}.client_servers(identifier_url);`,
-   `create index if not exists ${ident(
-      tenant
-   )}.idx_client_servers_entry_point_url on ${ident(
+   `create index if not exists idx_client_servers_entry_point_url on ${ident(
       tenant
    )}.client_servers(entry_point_url);`,
-   `create index if not exists ${ident(
-      tenant
-   )}.idx_client_servers_assigned_schema on ${ident(
+   `create index if not exists idx_client_servers_assigned_schema on ${ident(
       tenant
    )}.client_servers(assigned_schema_name);`,
 

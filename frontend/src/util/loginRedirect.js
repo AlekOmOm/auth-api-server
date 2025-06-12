@@ -48,7 +48,10 @@ import { navigate } from "svelte-routing";
 export async function loginRedirect(response, returnUrlFromSession) {
    console.log("🔄 [LOGIN REDIRECT UTIL] Starting redirect logic");
    const responseData = response?.data;
-   console.log("🔄 [LOGIN REDIRECT UTIL] Response data:", responseData);
+   console.log(
+      "🔄 [LOGIN REDIRECT UTIL] Response data (User object):",
+      responseData
+   );
    console.log(
       "🔄 [LOGIN REDIRECT UTIL] returnUrlFromSession:",
       returnUrlFromSession
@@ -56,23 +59,17 @@ export async function loginRedirect(response, returnUrlFromSession) {
 
    let finalReturnUrl = null;
 
-   // Priority 1: poolMetadata.target_page from login response (set by backend for specific validated redirects)
-   if (responseData?.poolMetadata?.target_page) {
-      finalReturnUrl = responseData.poolMetadata.target_page;
-      console.log(
-         `🔄 [LOGIN REDIRECT UTIL] Using target_page from poolMetadata: ${finalReturnUrl}`
-      );
-   }
-   // Priority 2: returnUrlFromSession (captured from original URL query param or client interaction)
-   else if (returnUrlFromSession) {
+   // Priority 1: returnUrlFromSession (captured from original URL query param or client interaction)
+   if (returnUrlFromSession) {
       finalReturnUrl = returnUrlFromSession;
       console.log(
-         `🔄 [LOGIN REDIRECT UTIL] Using returnUrlFromSession (priority 2): ${finalReturnUrl}`
+         `🔄 [LOGIN REDIRECT UTIL] Using returnUrlFromSession: ${finalReturnUrl}`
       );
    }
-   // Priority 3: Fallback based on user role if no specific target or session URL
+   // Priority 2: Fallback based on user role if no specific session URL
    else {
-      if (responseData?.poolMetadata?.user_role === "owner") {
+      // Access role directly from responseData (User object)
+      if (responseData?.role === "owner") {
          finalReturnUrl = "/owner";
          console.log(
             `🔄 [LOGIN REDIRECT UTIL] Fallback for owner: ${finalReturnUrl}`

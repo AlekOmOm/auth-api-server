@@ -13,7 +13,7 @@
   let isLoading = $state(false);
 
   // Debug: Check URL on component load
-  console.log("🔍 Register component loaded - URL:", window.location.href, "Search:", window.location.search);
+  // console.log("🔍 Register component loaded - URL:", window.location.href, "Search:", window.location.search);
   
   // Store return_url in sessionStorage if present in URL
   let storedReturnUrl = extractAndStoreReturnUrl();
@@ -76,7 +76,7 @@
 
 <div>
 
-  <h2> ___ </h2>
+  <h2>Create Account</h2>
 
   <form onsubmit={register}>
       <!-- User Type Selector -->

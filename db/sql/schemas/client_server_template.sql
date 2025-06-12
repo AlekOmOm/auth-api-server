@@ -7,17 +7,17 @@
 -- 1) Ensure the schema exists
 CREATE SCHEMA IF NOT EXISTS client_template;
 
--- 2) Use the newly-created schema for the rest of this script
-SET search_path TO client_template;
+-- 2) Enable extension(s) globally first (if not already enabled)
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" SCHEMA public;
 
--- 3) Enable extension(s)
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- 3) Use the newly-created schema for the rest of this script
+SET search_path TO client_template, public;
 
 -- 4) Core tables
 
 -- Users table (auth & profile)
 CREATE TABLE IF NOT EXISTS users (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id              UUID PRIMARY KEY DEFAULT public.uuid_generate_v4(),
     name            VARCHAR(255) NOT NULL,
     role            VARCHAR(100) NOT NULL DEFAULT 'user',
     email           VARCHAR(255) UNIQUE NOT NULL,
@@ -28,9 +28,9 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- Sessions table (cookie / token mapping)
 CREATE TABLE IF NOT EXISTS sessions (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id              UUID PRIMARY KEY DEFAULT public.uuid_generate_v4(),
     user_id         UUID REFERENCES users(id) ON DELETE CASCADE,
-    session_id      UUID UNIQUE NOT NULL DEFAULT uuid_generate_v4(),
+    session_id      UUID UNIQUE NOT NULL DEFAULT public.uuid_generate_v4(),
     ip_address      INET,
     user_agent      TEXT,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),

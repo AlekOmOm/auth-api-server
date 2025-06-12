@@ -18,19 +18,13 @@
   <Header />
   <div class="content">
     <Router {url} let:location>
-        
-      <div>
-                
-        <Route path="/"><Card /></Route>
-        <Route path="/register"><Card /></Route>
-        <Route path="/login"><Card /></Route>
-
-        <ProtectedRoute path="/home" {location}><Home /></ProtectedRoute>
-        <ProtectedRoute path="/owner" {location}><OwnerPanel /></ProtectedRoute>
-      </div>
-      
-      <Footer />
+      <Route path="/"><Card /></Route>
+      <Route path="/register"><Card /></Route>
+      <Route path="/login"><Card /></Route>
+      <ProtectedRoute path="/home" {location}><Home /></ProtectedRoute>
+      <ProtectedRoute path="/owner" {location}><OwnerPanel /></ProtectedRoute>
     </Router>
+    <Footer />
   </div>
 </div>
 

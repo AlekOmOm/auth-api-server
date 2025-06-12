@@ -25,7 +25,8 @@ export function isAdminOrOwner(req, res, next) {
       return next();
    }
 
-   next();
+   // Neither admin nor owner - deny access
+   return res.status(401).json({ message: "Insufficient permissions" });
 }
 
 /**
@@ -57,6 +58,15 @@ export function isNotAdmin(req, res, next) {
  */
 export function isAdmin(req) {
    return req.session.role === "admin";
+}
+
+/**
+ * @description middleware to check if user is owner
+ * @param {*} req
+ * @returns {boolean} - true if user is owner, false otherwise
+ */
+export function isOwner(req) {
+   return req.session.role === "owner";
 }
 
 /**

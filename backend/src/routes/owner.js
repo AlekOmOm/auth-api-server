@@ -1,5 +1,6 @@
 import express from "express";
-import { isAuthenticated } from "../middleware/auth.js";
+import { isAuthenticated, isAdminOrOwner } from "../middleware/auth.js";
+import { detectSchema } from "../middleware/detection.js";
 import * as ownerPanelService from "../services/ownerPanel.js";
 
 const router = express.Router();
@@ -11,6 +12,7 @@ const router = express.Router();
  * and users within their client schemas.
  *
  * All routes require authentication and owner/admin privileges.
+ * Uses the enhanced role detection system for proper authorization.
  */
 
 // --- Statistics Routes ---
@@ -19,26 +21,33 @@ const router = express.Router();
  * Get owner statistics and analytics
  * GET /api/owner/stats
  */
-router.get("/stats", isAuthenticated, async (req, res, next) => {
-   try {
-      // Check if user has owner or admin privileges
-      const userRole = req.session?.poolMetadata?.user_role;
-      if (userRole !== "owner" && userRole !== "admin") {
-         return res.status(403).json({
-            success: false,
-            message: "Owner or admin privileges required",
+router.get(
+   "/stats",
+   isAuthenticated,
+   detectSchema,
+   isAdminOrOwner,
+   async (req, res, next) => {
+      try {
+         const ownerId = req.session?.userId || req.user?.id;
+         if (!ownerId) {
+            return res
+               .status(401)
+               .json({
+                  success: false,
+                  message:
+                     "User not authenticated or ownerId not found in session.",
+               });
+         }
+         const stats = await ownerPanelService.getOwnerAnalytics({ ownerId });
+         res.json({
+            success: true,
+            data: stats.data,
          });
+      } catch (error) {
+         next(error);
       }
-
-      const stats = await ownerPanelService.getOwnerStatistics(req);
-      res.json({
-         success: true,
-         data: stats,
-      });
-   } catch (error) {
-      next(error);
    }
-});
+);
 
 // --- User Management Routes ---
 
@@ -49,6 +58,8 @@ router.get("/stats", isAuthenticated, async (req, res, next) => {
 router.get(
    "/clients/:clientId/users",
    isAuthenticated,
+   detectSchema,
+   isAdminOrOwner,
    async (req, res, next) => {
       try {
          const { clientId } = req.params;
@@ -71,6 +82,8 @@ router.get(
 router.post(
    "/clients/:clientId/users",
    isAuthenticated,
+   detectSchema,
+   isAdminOrOwner,
    async (req, res, next) => {
       try {
          const { clientId } = req.params;
@@ -100,6 +113,8 @@ router.post(
 router.put(
    "/clients/:clientId/users/:userId",
    isAuthenticated,
+   detectSchema,
+   isAdminOrOwner,
    async (req, res, next) => {
       try {
          const { clientId, userId } = req.params;
@@ -130,6 +145,8 @@ router.put(
 router.delete(
    "/clients/:clientId/users/:userId",
    isAuthenticated,
+   detectSchema,
+   isAdminOrOwner,
    async (req, res, next) => {
       try {
          const { clientId, userId } = req.params;
@@ -153,6 +170,8 @@ router.delete(
 router.get(
    "/clients/:clientId/users/:userId",
    isAuthenticated,
+   detectSchema,
+   isAdminOrOwner,
    async (req, res, next) => {
       try {
          const { clientId, userId } = req.params;
@@ -182,6 +201,8 @@ router.get(
 router.get(
    "/clients/:clientId/analytics",
    isAuthenticated,
+   detectSchema,
+   isAdminOrOwner,
    async (req, res, next) => {
       try {
          const { clientId } = req.params;

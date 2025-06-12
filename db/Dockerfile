@@ -17,10 +17,6 @@ RUN apt-get update && apt-get install -y postgresql-contrib
 # System schema (owners, admins, client management)
 COPY ./sql/schemas/auth_internal_complete.sql /docker-entrypoint-initdb.d/
 
-# Tenant template (users + sessions) 
-# – kept for reference, executed once to create client_template
-COPY ./sql/schemas/client_server_template.sql /docker-entrypoint-initdb.d/
-
 EXPOSE ${POSTGRES_PORT}
 
 

@@ -2,10 +2,17 @@
 import * as authService from "../services/auth.js";
 import * as userService from "../services/user.js";
 import * as sessionService from "../services/session.js";
+import * as clientServerService from "../services/clientServer.js";
 
 // --- utils ---
 import * as sessionUtils from "../utils/request/session.js";
-import { standardizeResponse } from "../utils/responseUtils.js"; // Import the new utility
+import { standardizeResponse } from "../utils/responseUtils.js";
+import { ValidationError, AuthError } from "../middleware/errorHandler.js"; // Import custom error classes
+import asyncErrorHandler from "../utils/asyncErrorHandler.js"; // Import the async handler
+import {
+   validateUserForContext,
+   getRequiredFieldsForSchema,
+} from "../utils/validationSchemas.js"; // Import context-aware validator and new utility
 
 // --- controller ---
 /**
@@ -22,110 +29,127 @@ import { standardizeResponse } from "../utils/responseUtils.js"; // Import the n
  * @description logic for registering a new user
  * Extracts user data and schema, then calls authService.register
  */
-const register = async (req, res, next) => {
-   try {
-      const userData = req.body;
-      const schema = sessionUtils.getSchema(req.session);
-      const poolContext = sessionUtils.getPoolContext(req.session);
-      const poolMetadata = sessionUtils.getPoolMetadata(req.session);
-      const refererUrl = req.body.refererUrl;
+const registerController = async (req, res, next) => {
+   const userData = req.body;
+   const schema = req.schema;
 
-      // Service now returns { message: string, data: object } or throws error
-      const serviceResult = await authService.register({
-         userData,
-         schema,
-         poolContext,
-         poolMetadata,
-         refererUrl,
-      });
-
-      // Controller formats the response
-      res.status(201).json(
-         standardizeResponse({
-            data: serviceResult.data,
-            message: serviceResult.message,
-         })
+   if (!schema) {
+      throw new ValidationError(
+         "Schema could not be determined for the request."
       );
-   } catch (error) {
-      next(error); // Pass error to global error handler
    }
+
+   // Perform context-aware validation first
+   const validatedUserData = validateUserForContext(schema, userData);
+
+   // The specific checks below are now largely handled by validateUserForContext.
+   // Kept for review, but can be removed if validateUserForContext is comprehensive.
+   // if (!validatedUserData.name || !validatedUserData.email || !validatedUserData.password) {
+   //    throw new ValidationError("Name, email, and password are required", [
+   //       !validatedUserData.name && { field: "name", message: "Name is required" },
+   //       !validatedUserData.email && { field: "email", message: "Email is required" },
+   //       !validatedUserData.password && { field: "password", message: "Password is required" },
+   //    ].filter(Boolean));
+   // }
+
+   // Default role setting might still be relevant if not handled by validateUserForContext for all cases
+   // However, validateUserForContext is designed to enforce role based on context.
+   // if (!validatedUserData.role) {
+   //    validatedUserData.role = "user"; // This default might conflict with context rules.
+   // }
+
+   // Role value check is also handled by validateUserForContext based on schema.
+   // if (!["user", "admin", "owner"].includes(validatedUserData.role)) {
+   //    throw new ValidationError("Role must be 'user', 'admin', or 'owner'", [{ field: "role", message: "Invalid role value." }]);
+   // }
+
+   const serviceResult = await authService.register({
+      userData: validatedUserData, // Use the data returned by the validator
+      schema,
+      req,
+   });
+
+   res.status(201).json(
+      standardizeResponse({
+         data: serviceResult.data,
+         message: serviceResult.message,
+         sessionUpdate: serviceResult.sessionUpdate,
+      })
+   );
 };
 
 /**
  * @description logic for logging in
  * Extracts credentials and session data, then calls authService.login
  */
-const login = async (req, res, next) => {
-   try {
-      const { credentials } = req.body;
-      const schema = sessionUtils.getSchema(req.session);
+const loginController = async (req, res, next) => {
+   const { credentials } = req.body;
+   const schema = req.schema;
+   const ipAddress = req.ip;
+   const userAgent = req.headers["user-agent"];
 
-      // check required fields
-      if (!schema) {
-         return res.status(400).json(
-            standardizeResponse({
-               error: new Error("Schema not found in session"),
-               statusCode: 400,
-            })
-         );
-      }
-      if (!credentials) {
-         return res.status(400).json(
-            standardizeResponse({
-               error: new Error("Credentials are required"),
-               statusCode: 400,
-            })
-         );
-      }
-
-      // login
-      const { success, data, message } = await authService.login({
-         credentials,
-         schema,
-      });
-
-      // return
-      if (!success) {
-         return res.status(400).json(
-            standardizeResponse({
-               error: new Error(message),
-               statusCode: 400,
-            })
-         );
-      }
-      res.status(200).json(
-         standardizeResponse({
-            data,
-            message,
-         })
+   if (!schema) {
+      throw new ValidationError(
+         "Schema could not be determined for the request."
       );
-   } catch (error) {
-      next(error);
    }
+
+   if (!credentials || !credentials.email || !credentials.password) {
+      throw new ValidationError(
+         "Email and password are required in credentials.",
+         [
+            !credentials?.email && {
+               field: "email",
+               message: "Email is required",
+            },
+            !credentials?.password && {
+               field: "password",
+               message: "Password is required",
+            },
+         ].filter(Boolean)
+      );
+   }
+
+   const { success, data, message, sessionUpdate } = await authService.login({
+      credentials,
+      schema,
+      req,
+      ipAddress,
+      userAgent,
+   });
+
+   if (!success) {
+      throw new AuthError(
+         message || "Login failed due to invalid credentials or other issue."
+      );
+   }
+   res.status(200).json(
+      standardizeResponse({
+         data,
+         message,
+         sessionUpdate,
+      })
+   );
 };
 
 /**
  * @description logic for logging out
  * Extracts session data and calls authService.logout
  */
-const logout = async (req, res, next) => {
-   try {
-      const userId = sessionUtils.getUserId(req.session);
-      const schema = sessionUtils.getSchema(req.session);
+const logoutController = async (req, res, next) => {
+   const userId = sessionUtils.getUserId(req.session);
+   const schema = sessionUtils.getSchema(req.session);
 
-      const serviceResult = await authService.logout({
-         userId,
-         schema,
-      });
-      if (serviceResult.success) {
-         req.session.destroy();
-      }
-      res.status(200).json(
-         standardizeResponse({ message: serviceResult.message })
-      );
-   } catch (error) {
-      next(error);
+   const serviceResult = await authService.logout({
+      userId,
+      schema,
+   });
+   if (serviceResult.success) {
+      req.session.destroy();
    }
+   res.status(200).json(
+      standardizeResponse({ message: serviceResult.message })
+   );
 };
 
 // --- session ---
@@ -134,45 +158,61 @@ const logout = async (req, res, next) => {
  * @description Get all sessions for the current user
  * Extracts userId and schema, then calls authService.getSessions
  */
-const getSessions = async (req, res, next) => {
-   try {
-      const userId = sessionUtils.getUserId(req.session);
-      const schema = sessionUtils.getSchema(req.session);
+const getSessionsController = async (req, res, next) => {
+   const userId = sessionUtils.getUserId(req.session);
+   const schema = sessionUtils.getSchema(req.session);
 
-      const serviceResult = await sessionService.getAll({ userId, schema });
-      res.status(200).json(
-         standardizeResponse({
-            data: serviceResult.data,
-            message: serviceResult.message,
-         })
-      );
-   } catch (error) {
-      next(error);
-   }
+   const serviceResult = await sessionService.getAll({ userId, schema });
+   res.status(200).json(
+      standardizeResponse({
+         data: serviceResult.data,
+         message: serviceResult.message,
+      })
+   );
 };
 
 /**
  * @description Get a specific session by ID
  * Extracts session data and calls authService.getSession
  */
-const getSession = async (req, res, next) => {
-   try {
-      const userId = sessionUtils.getUserId(req.session);
-      const sessionData = req.session;
+const getSessionController = async (req, res, next) => {
+   console.log(
+      "[GET SESSION DEBUG] Full req.session:",
+      JSON.stringify(req.session, null, 2)
+   );
 
-      const serviceResult = await sessionService.get({
-         userId,
-         sessionData,
-      });
-      res.status(200).json(
-         standardizeResponse({
-            data: serviceResult.data,
-            message: serviceResult.message,
-         })
-      );
-   } catch (error) {
-      next(error);
+   const userId = sessionUtils.getUserId(req.session);
+   const sessionId = sessionUtils.getSessionId(req.session);
+   const schema = sessionUtils.getSchema(req.session);
+
+   const sessionData = {
+      isAuthenticated: req.session.isAuthenticated,
+      user: {
+         id: userId,
+         name: req.session.name,
+         email: req.session.email,
+         role: req.session.role,
+      },
+      schema: schema,
+      sessionId: sessionId,
+      allowedUrls: req.session.allowedUrls || [],
+      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+   };
+
+   // Add validation_context if schema is available
+   if (sessionData.schema) {
+      sessionData.validation_context = {
+         schema: sessionData.schema,
+         required_fields: getRequiredFieldsForSchema(sessionData.schema),
+      };
    }
+
+   res.status(200).json(
+      standardizeResponse({
+         data: sessionData,
+         message: "Session retrieved successfully",
+      })
+   );
 };
 
 // ---- getCurrentUser ---
@@ -192,43 +232,51 @@ const getSession = async (req, res, next) => {
  *    schema: string,
  *    urls: string[]
  */
-const getCurrentUser = async (req, res, next) => {
-   try {
-      const userId = sessionUtils.getUserId(req.session);
-      const name = sessionUtils.getUserName(req.session);
-      const email = sessionUtils.getUserEmail(req.session);
+const getCurrentUserController = async (req, res, next) => {
+   const userId = sessionUtils.getUserId(req.session);
+   const name = sessionUtils.getUserName(req.session);
+   const email = sessionUtils.getUserEmail(req.session);
+   const schema = sessionUtils.getSchema(req.session);
 
-      const schema = sessionUtils.getSchema(req.session);
-      const { data: user, message } = await userService.get({
-         userId,
-         name,
-         email,
-         schema,
-         withPassword: true,
-      });
-      const { identifierUrl, entryPointUrl, authorizedUrls } =
-         await clientServerService.get({ userId: user.id, schema });
+   const { data: user, message: userServiceMessage } = await userService.get({
+      userId,
+      name,
+      email,
+      schema,
+      withPassword: true,
+   });
 
-      const data = {
-         id: user.id,
-         name: user.name,
-         role: user.role,
-         email: user.email,
-         password: user.password,
-         schema,
-         urls: [identifierUrl, entryPointUrl, ...authorizedUrls],
-      };
+   const clientServerInfo = await clientServerService.get({
+      userId: user.id,
+      schema,
+   });
 
-      res.status(200).json(
-         standardizeResponse({
-            data,
-            message,
-         })
-      );
-   } catch (error) {
-      next(error);
-   }
+   const data = {
+      id: user.id,
+      name: user.name,
+      role: user.role,
+      email: user.email,
+      password: user.password,
+      schema,
+      urls: [
+         clientServerInfo?.identifierUrl,
+         clientServerInfo?.entryPointUrl,
+         ...(clientServerInfo?.authorizedUrls || []),
+      ].filter(Boolean),
+   };
+
+   res.status(200).json(
+      standardizeResponse({
+         data,
+         message: userServiceMessage,
+      })
+   );
 };
 
-// --- export ---
-export { register, login, logout, getCurrentUser, getSessions, getSession };
+// --- export wrapped controllers ---
+export const register = asyncErrorHandler(registerController);
+export const login = asyncErrorHandler(loginController);
+export const logout = asyncErrorHandler(logoutController);
+export const getCurrentUser = asyncErrorHandler(getCurrentUserController);
+export const getSessions = asyncErrorHandler(getSessionsController);
+export const getSession = asyncErrorHandler(getSessionController);

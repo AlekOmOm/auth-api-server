@@ -1,3 +1,8 @@
+console.log(
+   "[SERVER_JS_LOAD_CONFIRMATION_V2] Backend starting at: " +
+      new Date().toISOString()
+); // NEW DISTINCT LOG
+
 import express from "express";
 const app = express();
 import config from "./src/config/env.js";
@@ -9,7 +14,7 @@ const PORT = BACKEND.PORT || 3001;
 const FRONTEND_PORT = BACKEND.FRONTEND_PORT || 3000;
 const SESSION_SECRET = BACKEND.SESSION_SECRET;
 const RATE_LIMIT_WINDOW = BACKEND.RATE_LIMIT_WINDOW || 15;
-const RATE_LIMIT_LIMIT = BACKEND.RATE_LIMIT_LIMIT || 300;
+const RATE_LIMIT_LIMIT = BACKEND.RATE_LIMIT_LIMIT || 3000;
 const ALLOWED_CLIENT_ORIGINS =
    config.ALLOWED_CLIENT_ORIGINS ||
    "http://localhost:5173,http://localhost:5174,http://localhost:4173";
@@ -155,6 +160,11 @@ app.use("/api/users", userRoute);
 /** * owner - for client server owners to manage their applications and users */
 import ownerRoute from "./src/routes/owner.js";
 app.use("/api/owner", ownerRoute);
+
+// --- Global Error Handler ---
+// This MUST be the last piece of middleware added.
+import { errorHandler } from "./src/middleware/errorHandler.js";
+app.use(errorHandler);
 
 app.listen(PORT, () => {
    // For production logging

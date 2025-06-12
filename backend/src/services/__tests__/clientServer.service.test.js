@@ -1,41 +1,40 @@
-const mockFromRequestBody = jest.fn();
-const mockClientServerUpdate = jest.fn();
-const mockToDB = jest.fn((instance) => instance); // Simple pass-through
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
-jest.mock("../../models/ClientServer.js", () => ({
-   __esModule: true,
-   default: {
-      fromRequestBody: mockFromRequestBody,
-      update: mockClientServerUpdate,
-   },
-}));
+// Top-level mocks for other modules (not used inside ClientServer.js mock factory)
+const mockToDB = vi.fn((instance) => instance);
+const mockRepoInternalQueryFn = vi.fn();
+const mockGetPoolForClientSchema = vi.fn();
+const mockRepoQueryFn = vi.fn();
 
-// Add this mock for User.js
-jest.mock("../models/User.js", () => ({
-   __esModule: true,
-   default: jest.fn().mockImplementation(() => ({
-      // Mock any instance methods if needed later
-   })),
-   UserOperations: {
-      // Mock UserOperations if they are indirectly used
-      toDB: jest.fn((userInstance) => ({
-         ...userInstance,
-         preparedForDb: true,
-      })),
-      fromDB: jest.fn((dbRow) => ({ ...dbRow, hydratedFromDb: true })),
-   },
-}));
+vi.mock("../../models/ClientServer.js", () => {
+   // Define mock functions for ClientServer's static methods *inside* this factory
+   const factoryMockCSFromRequestBody = vi.fn();
+   const factoryMockCSUpdate = vi.fn();
+   return {
+      __esModule: true,
+      ClientServer: {
+         // Named export 'ClientServer'
+         fromRequestBody: factoryMockCSFromRequestBody,
+         update: factoryMockCSUpdate,
+      },
+   };
+});
 
-// Mock for repo/connection/queries/index.js
-const mockRepoInternalQueryFn = jest.fn();
-jest.mock("../repo/connection/queries/index.js", () => ({
+vi.mock("../../models/User.js", () => {
+   const MockUser = vi.fn().mockImplementation(() => ({}));
+   return {
+      __esModule: true,
+      User: MockUser, // Provide named User export
+   };
+});
+
+vi.mock("../../repo/connection/queries/index.js", () => ({
    __esModule: true,
    default: mockRepoInternalQueryFn,
    operations: {},
 }));
 
-// Mock for DDL/client_servers.js (now virtual)
-jest.mock(
+vi.mock(
    "virtual-ddl-client-servers",
    () => ({
       __esModule: true,
@@ -45,8 +44,7 @@ jest.mock(
    { virtual: true }
 );
 
-// Mock for DDL/users_sessions.js (now virtual)
-jest.mock(
+vi.mock(
    "virtual-ddl-users-sessions",
    () => ({
       __esModule: true,
@@ -57,49 +55,62 @@ jest.mock(
    { virtual: true }
 );
 
-// Mock for pools/clientServers.js
-const mockGetPoolForClientSchema = jest.fn();
-jest.mock("../repo/connection/pools/clientServers.js", () => ({
+vi.mock("../../repo/connection/pools/clientServers.js", () => ({
    __esModule: true,
    getPoolForSchema: mockGetPoolForClientSchema,
-   // default: mockGetPoolForClientSchema, // If it's a default export
 }));
 
-const mockRepoQueryFn = jest.fn();
-jest.mock("../repo/index.js", () => {
-   return jest.fn().mockImplementation(() => ({
+vi.mock("../../repo/index.js", () => {
+   return vi.fn().mockImplementation(() => ({
       query: mockRepoQueryFn,
    }));
 });
 
-jest.mock("../models/functional/index.js", () => ({
-   __esModule: true,
-   toDB: mockToDB,
-}));
+vi.mock("../../models/functional/index.js", async (importOriginal) => {
+   try {
+      const actual = await importOriginal();
+      return {
+         ...actual,
+         __esModule: true,
+         toDB: mockToDB,
+      };
+   } catch (e) {
+      return {
+         __esModule: true,
+         toDB: mockToDB,
+         fromDB: vi.fn(),
+         operations: {},
+         prepareInstance: vi.fn(),
+      };
+   }
+});
 
 import clientServerService from "../clientServer.js";
-import ClientServer from "../models/ClientServer.js"; // Mocked
-import Repo from "../repo/index.js"; // Mocked
-import { toDB } from "../models/functional/index.js"; // Mocked
+import { ClientServer } from "../models/index.js";
+import Repo from "../../repo/index.js";
 
 describe("clientServerService", () => {
    const mockSchema = "test_schema";
 
    beforeEach(() => {
-      jest.clearAllMocks();
+      vi.clearAllMocks();
    });
 
    describe("register", () => {
       const clientServerData = { name: "Test App" };
       const userId = "user123";
-      const mockInstance = { id: "client1", ...clientServerData, userId };
+      const mockResolvedInstance = {
+         id: "client1",
+         ...clientServerData,
+         userId,
+      };
       const mockRepoResult = {
-         ...mockInstance,
+         ...mockResolvedInstance,
          created_at: new Date().toISOString(),
       };
 
       it("should register a new client server successfully", async () => {
-         ClientServer.fromRequestBody.mockResolvedValue(mockInstance);
+         ClientServer.fromRequestBody.mockResolvedValue(mockResolvedInstance);
          mockRepoQueryFn.mockResolvedValue(mockRepoResult);
 
          const result = await clientServerService.register({
@@ -112,9 +123,12 @@ describe("clientServerService", () => {
             clientServerData,
             userId
          );
-         expect(toDB).toHaveBeenCalledWith(mockInstance);
+         expect(mockToDB).toHaveBeenCalledWith(mockResolvedInstance);
          expect(Repo).toHaveBeenCalledWith(mockSchema, "client_servers");
-         expect(mockRepoQueryFn).toHaveBeenCalledWith("create", mockInstance);
+         expect(mockRepoQueryFn).toHaveBeenCalledWith(
+            "create",
+            mockResolvedInstance
+         );
          expect(result).toEqual({
             message: "Client server registered successfully",
             data: mockRepoResult,
@@ -137,7 +151,7 @@ describe("clientServerService", () => {
 
       it("should throw an error if repo query fails", async () => {
          const error = new Error("DB error");
-         ClientServer.fromRequestBody.mockResolvedValue(mockInstance);
+         ClientServer.fromRequestBody.mockResolvedValue(mockResolvedInstance);
          mockRepoQueryFn.mockRejectedValue(error);
 
          await expect(
@@ -152,11 +166,11 @@ describe("clientServerService", () => {
 
    describe("getUserClientServers", () => {
       const userId = "user123";
-      const mockInstance = { userId }; // Simplified instance for this context
+      const mockInstance = { userId };
       const mockRepoResult = [{ id: "client1" }, { id: "client2" }];
 
       it("should get user client servers successfully", async () => {
-         ClientServer.fromRequestBody.mockResolvedValue(mockInstance); // fromRequestBody expects userId
+         ClientServer.fromRequestBody.mockResolvedValue(mockInstance);
          mockRepoQueryFn.mockResolvedValue(mockRepoResult);
 
          const result = await clientServerService.getUserClientServers({
@@ -165,7 +179,7 @@ describe("clientServerService", () => {
          });
 
          expect(ClientServer.fromRequestBody).toHaveBeenCalledWith(userId);
-         expect(toDB).toHaveBeenCalledWith(mockInstance);
+         expect(mockToDB).toHaveBeenCalledWith(mockInstance);
          expect(Repo).toHaveBeenCalledWith(mockSchema, "client_servers");
          expect(mockRepoQueryFn).toHaveBeenCalledWith(
             "getByUserId",
@@ -210,7 +224,7 @@ describe("clientServerService", () => {
             userId,
             clientId
          );
-         expect(toDB).toHaveBeenCalledWith(mockInstance);
+         expect(mockToDB).toHaveBeenCalledWith(mockInstance);
          expect(Repo).toHaveBeenCalledWith(mockSchema, "client_servers");
          expect(mockRepoQueryFn).toHaveBeenCalledWith(
             "getByUserIdAndClientId",
@@ -236,32 +250,28 @@ describe("clientServerService", () => {
       const updatedInstanceDataFromModel = {
          ...existingClientServerData,
          ...updateData,
-      }; // Mock return of ClientServer.update
-      const instanceForFirstCall = { userId, clientId }; // Used for fromRequestBody in first pipeline
-      const instanceForSecondCall = updatedInstanceDataFromModel; // Used for fromRequestBody in second pipeline
+      };
+      const instanceForFirstCall = { userId, clientId };
+      const instanceForSecondCall = updatedInstanceDataFromModel;
       const mockRepoResultUpdate = {
          ...updatedInstanceDataFromModel,
          updated_at: new Date().toISOString(),
       };
 
       it("should update client server successfully", async () => {
-         // Mocking sequence for the two pipeline calls within updateUserClientServer
-         // 1. First pipeline call (get existing)
          ClientServer.fromRequestBody.mockResolvedValueOnce(
             instanceForFirstCall
-         ); // For getByUserIdAndClientId
-         toDB.mockReturnValueOnce(instanceForFirstCall); // Transformed instance for get
-         mockRepoQueryFn.mockResolvedValueOnce(existingClientServerData); // Repo result for get
+         );
+         mockToDB.mockReturnValueOnce(instanceForFirstCall);
+         mockRepoQueryFn.mockResolvedValueOnce(existingClientServerData);
 
-         // Mock ClientServer.update static method
          ClientServer.update.mockReturnValue(updatedInstanceDataFromModel);
 
-         // 2. Second pipeline call (update)
          ClientServer.fromRequestBody.mockResolvedValueOnce(
             instanceForSecondCall
-         ); // For update, arg is result of ClientServer.update
-         toDB.mockReturnValueOnce(instanceForSecondCall); // Transformed instance for update
-         mockRepoQueryFn.mockResolvedValueOnce(mockRepoResultUpdate); // Repo result for update
+         );
+         mockToDB.mockReturnValueOnce(instanceForSecondCall);
+         mockRepoQueryFn.mockResolvedValueOnce(mockRepoResultUpdate);
 
          const result = await clientServerService.updateUserClientServer({
             userId,
@@ -270,13 +280,12 @@ describe("clientServerService", () => {
             schema: mockSchema,
          });
 
-         // Assertions for first pipeline call (implicit)
          expect(ClientServer.fromRequestBody).toHaveBeenNthCalledWith(
             1,
             userId,
             clientId
          );
-         expect(toDB).toHaveBeenNthCalledWith(1, instanceForFirstCall);
+         expect(mockToDB).toHaveBeenNthCalledWith(1, instanceForFirstCall);
          expect(Repo).toHaveBeenNthCalledWith(1, mockSchema, "client_servers");
          expect(mockRepoQueryFn).toHaveBeenNthCalledWith(
             1,
@@ -284,18 +293,16 @@ describe("clientServerService", () => {
             instanceForFirstCall
          );
 
-         // Assertion for ClientServer.update
          expect(ClientServer.update).toHaveBeenCalledWith(
             updateData,
             existingClientServerData
          );
 
-         // Assertions for second pipeline call
          expect(ClientServer.fromRequestBody).toHaveBeenNthCalledWith(
             2,
             updatedInstanceDataFromModel
          );
-         expect(toDB).toHaveBeenNthCalledWith(2, instanceForSecondCall); // instanceForSecondCall is updatedInstanceDataFromModel
+         expect(mockToDB).toHaveBeenNthCalledWith(2, instanceForSecondCall);
          expect(Repo).toHaveBeenNthCalledWith(2, mockSchema, "client_servers");
          expect(mockRepoQueryFn).toHaveBeenNthCalledWith(
             2,
@@ -313,9 +320,9 @@ describe("clientServerService", () => {
          const error = new Error("Get existing failed");
          ClientServer.fromRequestBody.mockResolvedValueOnce(
             instanceForFirstCall
-         ); // For getByUserIdAndClientId args
-         toDB.mockReturnValueOnce(instanceForFirstCall);
-         mockRepoQueryFn.mockRejectedValueOnce(error); // Fail the first repo call
+         );
+         mockToDB.mockReturnValueOnce(instanceForFirstCall);
+         mockRepoQueryFn.mockRejectedValueOnce(error);
 
          await expect(
             clientServerService.updateUserClientServer({
@@ -327,23 +334,20 @@ describe("clientServerService", () => {
          ).rejects.toThrow("Get existing failed");
 
          expect(ClientServer.update).not.toHaveBeenCalled();
-         expect(mockRepoQueryFn).toHaveBeenCalledTimes(1); // Only the first call
+         expect(mockRepoQueryFn).toHaveBeenCalledTimes(1);
       });
 
       it("should throw if ClientServer.update fails (conceptually, if it threw, pipeline would catch if fromRequestBody fails with its result)", async () => {
-         // This tests if the second pipeline fails due to fromRequestBody.
-         // If ClientServer.update itself throws, it's not caught by pipeline directly but would bubble up.
-         // Assuming ClientServer.update returns data that makes fromRequestBody fail.
          ClientServer.fromRequestBody.mockResolvedValueOnce(
             instanceForFirstCall
          );
-         toDB.mockReturnValueOnce(instanceForFirstCall);
+         mockToDB.mockReturnValueOnce(instanceForFirstCall);
          mockRepoQueryFn.mockResolvedValueOnce(existingClientServerData);
 
          ClientServer.update.mockReturnValue(updatedInstanceDataFromModel);
 
          const updateError = new Error("Update validation failed");
-         ClientServer.fromRequestBody.mockRejectedValueOnce(updateError); // Fail on second fromRequestBody
+         ClientServer.fromRequestBody.mockRejectedValueOnce(updateError);
 
          await expect(
             clientServerService.updateUserClientServer({
@@ -358,7 +362,7 @@ describe("clientServerService", () => {
             updateData,
             existingClientServerData
          );
-         expect(mockRepoQueryFn).toHaveBeenCalledTimes(1); // Only the first repo call for get succeeded.
+         expect(mockRepoQueryFn).toHaveBeenCalledTimes(1);
          expect(mockRepoQueryFn).not.toHaveBeenNthCalledWith(
             2,
             "update",
@@ -370,7 +374,7 @@ describe("clientServerService", () => {
          ClientServer.fromRequestBody.mockResolvedValueOnce(
             instanceForFirstCall
          );
-         toDB.mockReturnValueOnce(instanceForFirstCall);
+         mockToDB.mockReturnValueOnce(instanceForFirstCall);
          mockRepoQueryFn.mockResolvedValueOnce(existingClientServerData);
 
          ClientServer.update.mockReturnValue(updatedInstanceDataFromModel);
@@ -378,9 +382,9 @@ describe("clientServerService", () => {
          ClientServer.fromRequestBody.mockResolvedValueOnce(
             instanceForSecondCall
          );
-         toDB.mockReturnValueOnce(instanceForSecondCall);
+         mockToDB.mockReturnValueOnce(instanceForSecondCall);
          const updateDbError = new Error("Update DB error");
-         mockRepoQueryFn.mockRejectedValueOnce(updateDbError); // Fail the second repo call
+         mockRepoQueryFn.mockRejectedValueOnce(updateDbError);
 
          await expect(
             clientServerService.updateUserClientServer({
@@ -415,7 +419,7 @@ describe("clientServerService", () => {
             userId,
             clientId
          );
-         expect(toDB).toHaveBeenCalledWith(mockInstance);
+         expect(mockToDB).toHaveBeenCalledWith(mockInstance);
          expect(Repo).toHaveBeenCalledWith(mockSchema, "client_servers");
          expect(mockRepoQueryFn).toHaveBeenCalledWith(
             "deleteByUserIdAndClientId",
@@ -443,7 +447,7 @@ describe("clientServerService", () => {
          });
 
          expect(ClientServer.fromRequestBody).toHaveBeenCalledWith(secretHash);
-         expect(toDB).toHaveBeenCalledWith(mockInstance);
+         expect(mockToDB).toHaveBeenCalledWith(mockInstance);
          expect(Repo).toHaveBeenCalledWith(mockSchema, "client_servers");
          expect(mockRepoQueryFn).toHaveBeenCalledWith(
             "getBySecretHash",
@@ -471,7 +475,7 @@ describe("clientServerService", () => {
          });
 
          expect(ClientServer.fromRequestBody).toHaveBeenCalledWith(refererUrl);
-         expect(toDB).toHaveBeenCalledWith(mockInstance);
+         expect(mockToDB).toHaveBeenCalledWith(mockInstance);
          expect(Repo).toHaveBeenCalledWith(mockSchema, "client_servers");
          expect(mockRepoQueryFn).toHaveBeenCalledWith(
             "getByReferer",
@@ -486,11 +490,11 @@ describe("clientServerService", () => {
 
    describe("getByUrl", () => {
       const url = "https://example.com/some/path";
-      const mockInstance = { url }; // Argument to fromRequestBody will be the url
+      const mockInstance = { url };
       const mockRepoResult = { id: "client1", identifier_url: url };
 
       it("should get client server by URL successfully", async () => {
-         ClientServer.fromRequestBody.mockResolvedValue(mockInstance); // Simulating fromRequestBody takes the url
+         ClientServer.fromRequestBody.mockResolvedValue(mockInstance);
          mockRepoQueryFn.mockResolvedValue(mockRepoResult);
 
          const result = await clientServerService.getByUrl({
@@ -499,9 +503,8 @@ describe("clientServerService", () => {
          });
 
          expect(ClientServer.fromRequestBody).toHaveBeenCalledWith(url);
-         expect(toDB).toHaveBeenCalledWith(mockInstance);
+         expect(mockToDB).toHaveBeenCalledWith(mockInstance);
          expect(Repo).toHaveBeenCalledWith(mockSchema, "client_servers");
-         // The service uses "getByReferer" query for getByUrl as well
          expect(mockRepoQueryFn).toHaveBeenCalledWith(
             "getByReferer",
             mockInstance

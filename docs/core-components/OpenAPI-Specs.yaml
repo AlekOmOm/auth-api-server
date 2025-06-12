@@ -93,7 +93,7 @@ components:
           type: string
           minLength: 3
           maxLength: 50
-          pattern: "^[a-zA-Z]+$"
+          pattern: "^[a-zA-Z ]+$"
         email:
           type: string
           format: email
@@ -102,12 +102,12 @@ components:
           type: string
           minLength: 8
           maxLength: 100
-          description: Must contain uppercase, lowercase, and digit
+          description: "Must contain an uppercase letter, a lowercase letter, a digit, and be 8-100 characters long."
         role:
           type: string
-          enum: [user, admin]
-          default: user
-      required: [name, email, password]
+          enum: [user, admin, owner]
+          description: "The role to assign to the new user. The validity of the role depends on the registration context (e.g., 'owner'/'admin' for auth_internal, 'user' for client schemas). Backend validation enforces context-specific role assignment."
+      required: [name, email, password, role]
 
     ClientServer:
       type: object

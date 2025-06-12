@@ -1,7 +1,12 @@
 import express from "express";
 import * as service from "../services/clientServer.js";
 import { authenticateClientServer } from "../middleware/clientServerAuth.js";
-import { isAuthenticated, hasRole } from "../middleware/auth.js";
+import {
+   isAuthenticated,
+   hasRole,
+   isAdminOrOwner,
+} from "../middleware/auth.js";
+import { detectSchema } from "../middleware/detection.js";
 import * as controller from "../controllers/clientServer.js";
 const router = express.Router();
 
@@ -16,12 +21,12 @@ const router = express.Router();
  * - GET /me - Get current client server info
  * - PUT /me - Update current client server info
  *
- * User routes (require session authentication):
+ * User routes (require session authentication + role detection):
  * - POST /user/register - Register client server for logged-in user
  * - GET /user/clients - Get all client servers for user
  * - GET /user/clients/:client_id - Get specific client server for user
- * - PUT /user/clients/:client_id - Update client server for user
- * - DELETE /user/clients/:client_id - Delete client server for user
+ * - PUT /user/clients/:client_id - Update client server for user (owner only)
+ * - DELETE /user/clients/:client_id - Delete client server for user (owner only)
  *
  * Admin routes (require admin role):
  * - GET /:client_id - Get client server by ID
@@ -53,19 +58,28 @@ router.get("/me", authenticateClientServer, controller.getClientServerInfo);
  * PUT /api/clientServer/me
  */
 router.put("/me", authenticateClientServer, controller.updateClientServerInfo);
-// --- User Routes (require session authentication) ---
+// --- User Routes (require session authentication + role detection) ---
 
 /**
  * Register client server for logged-in user
  * POST /api/clientServer/user/register
  */
-router.post("/user/register", isAuthenticated, controller.registerClientServerForUser);
+router.post(
+   "/user/register",
+   isAuthenticated,
+   controller.registerClientServerForUser
+);
 
 /**
  * Get all client servers for authenticated user
  * GET /api/clientServer/user/clients
  */
-router.get("/user/clients", isAuthenticated, controller.getUserClientServers);
+router.get(
+   "/user/clients",
+   isAuthenticated,
+   detectSchema,
+   controller.getUserClientServers
+);
 /**
  * Get specific client server for authenticated user
  * GET /api/clientServer/user/clients/:client_id
@@ -73,27 +87,31 @@ router.get("/user/clients", isAuthenticated, controller.getUserClientServers);
 router.get(
    "/user/clients/:client_id",
    isAuthenticated,
+   detectSchema,
    controller.getUserClientServerById
 );
 
 /**
- * Update client server for authenticated user
+ * Update client server for authenticated user (owner only)
  * PUT /api/clientServer/user/clients/:client_id
  */
 router.put(
    "/user/clients/:client_id",
    isAuthenticated,
+   detectSchema,
+   isAdminOrOwner,
    controller.updateUserClientServerById
 );
 
 /**
- * Delete client server for authenticated user
- * - owner only
+ * Delete client server for authenticated user (owner only)
  * DELETE /api/clientServer/user/clients/:client_id
  */
 router.delete(
    "/user/clients/:client_id",
    isAuthenticated,
+   detectSchema,
+   isAdminOrOwner,
    controller.deleteUserClientServerById
 );
 

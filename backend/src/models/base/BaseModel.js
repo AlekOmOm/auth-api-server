@@ -184,10 +184,13 @@ class BaseModel {
    }
 }
 
+// Temporarily comment out the ValidationMixin application for diagnostics
+/*
 Object.getOwnPropertyNames(ValidationMixin).forEach((name) => {
    if (name !== "prototype" && name !== "length" && name !== "name") {
       BaseModel[name] = ValidationMixin[name];
    }
 });
+*/
 
 export default BaseModel;

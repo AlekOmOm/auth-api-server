@@ -27,3 +27,7 @@ npm run build
 - Svelte
 - Svelte-routing for navigation
 - Vite for build tooling
+
+## Login Flow
+
+![Login Flow](docs/login.svg)

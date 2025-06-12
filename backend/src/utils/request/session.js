@@ -1,10 +1,13 @@
-import { POOL_CONTEXTS } from "./pool.js";
-import { ValidationError } from "../middleware/errorHandler.js";
+import { POOL_CONTEXTS } from "../pool.js";
+import { ValidationError } from "../../middleware/errorHandler.js";
+import { USER_ROLES } from "../roles.js";
 /**
  * setObj()
  *
  * @param {Object} req - Express request object
  * @param {string} (opt) userId - Authenticated user ID
+ * @param {string} (opt) name - User name
+ * @param {string} (opt) email - User email
  * @param {string} (opt) role - User role/permissions
  * @param {string} schema - Database schema (tenant)
  * @param {string} (opt) sessionId - Unique session identifier
@@ -17,35 +20,31 @@ export const setObj = (
    req,
    {
       userId = null,
+      name = null,
+      email = null,
       role = null,
-      schema,
+      schema = null,
       ownerId = null,
       sessionId = null,
       isAuthenticated = undefined,
       allowedUrls = null,
    }
 ) => {
-   if (!req.session) {
-      req.session = {};
-   }
-
    /**
     * update
     * - each property if provided (i.e. if !== null)
-    * - otherwise use existing value
+    * - otherwise preserve existing value
     */
-   req.session.userId = userId !== null ? userId : req.session.userId;
-   req.session.role = role !== null ? role : req.session.role;
-   req.session.schema = schema !== null ? schema : req.session.schema;
-   req.session.ownerId = ownerId !== null ? ownerId : req.session.ownerId;
-   req.session.sessionId =
-      sessionId !== null ? sessionId : req.session.sessionId;
-   req.session.isAuthenticated =
-      isAuthenticated !== undefined
-         ? isAuthenticated
-         : req.session.isAuthenticated;
-   req.session.allowedUrls =
-      allowedUrls !== null ? allowedUrls : req.session.allowedUrls;
+   if (userId !== null) req.session.userId = userId;
+   if (name !== null) req.session.name = name;
+   if (email !== null) req.session.email = email;
+   if (role !== null) req.session.role = role;
+   if (schema !== null) req.session.schema = schema;
+   if (ownerId !== null) req.session.ownerId = ownerId;
+   if (sessionId !== null) req.session.sessionId = sessionId;
+   if (isAuthenticated !== undefined)
+      req.session.isAuthenticated = isAuthenticated;
+   if (allowedUrls !== null) req.session.allowedUrls = allowedUrls;
 };
 
 /**
@@ -164,6 +163,36 @@ export const isTenantUser = (req) => {
    return getUserRole(req) === USER_ROLES.USER;
 };
 
+/**
+ * set role in session
+ */
+export function setRole(session, role) {
+   check(session, "Session is required");
+   check(role, "Role is required");
+   session.role = role;
+}
+
+/**
+ * Check if session is authenticated
+ */
+export function isAuthenticated(session) {
+   return session?.isAuthenticated === true && session?.userId;
+}
+
+/**
+ * retrieve userName from session
+ */
+export function getUserName(session) {
+   return session?.name;
+}
+
+/**
+ * retrieve userEmail from session
+ */
+export function getUserEmail(session) {
+   return session?.email;
+}
+
 // ---- helper functions ----
 
 /**
@@ -185,6 +214,7 @@ const sessionUtils = {
    setSchema,
    getSessionId,
    setOwnerId,
+   setRole,
    getUserId,
    getClientId,
    getClientSecretHash,
@@ -194,5 +224,8 @@ const sessionUtils = {
    isSystemAdmin,
    isClientOwner,
    isTenantUser,
+   isAuthenticated,
+   getUserName,
+   getUserEmail,
 };
 export default sessionUtils;

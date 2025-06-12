@@ -88,6 +88,9 @@ export async function setupTestSchemas() {
    const pool = await getTestDbConnection();
 
    try {
+      // Ensure uuid-ossp extension is available (consistent with app DDL)
+      await pool.query('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"');
+
       // Create test schemas
       for (const schema of Object.values(TEST_SCHEMAS)) {
          await pool.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`);
@@ -95,26 +98,26 @@ export async function setupTestSchemas() {
          // Create users table in each schema
          await pool.query(`
             CREATE TABLE IF NOT EXISTS "${schema}".users (
-               id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+               id UUID PRIMARY KEY,
                name VARCHAR(255) NOT NULL,
                email VARCHAR(255) UNIQUE NOT NULL,
                password_hash VARCHAR(255) NOT NULL,
-               role VARCHAR(50) DEFAULT 'user',
-               created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-               updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+               role VARCHAR(100) DEFAULT 'user',
+               created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+               updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
             )
          `);
 
          // Create sessions table in each schema
          await pool.query(`
             CREATE TABLE IF NOT EXISTS "${schema}".sessions (
-               id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+               id UUID PRIMARY KEY,
                user_id UUID NOT NULL,
                session_id UUID UNIQUE NOT NULL,
                ip_address INET,
                user_agent TEXT,
-               expires_at TIMESTAMP NOT NULL,
-               created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+               expires_at TIMESTAMPTZ,
+               created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
                FOREIGN KEY (user_id) REFERENCES "${schema}".users(id) ON DELETE CASCADE
             )
          `);
@@ -123,18 +126,17 @@ export async function setupTestSchemas() {
       // Create client_servers table in auth_internal schema only
       await pool.query(`
          CREATE TABLE IF NOT EXISTS "${TEST_SCHEMAS.AUTH_INTERNAL}".client_servers (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            client_id UUID UNIQUE NOT NULL,
+            client_id VARCHAR(255) PRIMARY KEY,
             client_secret_hash VARCHAR(255) NOT NULL,
             app_name VARCHAR(255) NOT NULL,
-            assigned_schema_name VARCHAR(100) NOT NULL,
-            identifier_url TEXT NOT NULL,
-            entry_point_url TEXT NOT NULL,
+            assigned_schema_name VARCHAR(255) UNIQUE NOT NULL,
+            identifier_url VARCHAR(255) NOT NULL,
+            entry_point_url VARCHAR(255) NOT NULL,
             authorized_urls TEXT[] NOT NULL,
             user_id UUID NOT NULL,
-            client_mode VARCHAR(50) DEFAULT 'development',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            client_mode VARCHAR(50) DEFAULT 'frontend-login-proxy',
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW(),
             FOREIGN KEY (user_id) REFERENCES "${TEST_SCHEMAS.AUTH_INTERNAL}".users(id) ON DELETE CASCADE
          )
       `);
@@ -153,7 +155,7 @@ export async function seedTestData() {
       // Hash passwords
       const hashedPasswords = {};
       for (const [key, user] of Object.entries(TEST_USERS)) {
-         hashedPasswords[key] = await bcrypt.hash(user.password, 12);
+         hashedPasswords[key] = await bcrypt.hash(user.password, 10);
       }
 
       // Insert test users into auth_internal schema
@@ -202,7 +204,7 @@ export async function seedTestData() {
 
       // Insert test client servers (only in auth_internal)
       for (const [key, client] of Object.entries(TEST_CLIENT_SERVERS)) {
-         const clientSecretHash = await bcrypt.hash("test-secret-" + key, 12);
+         const clientSecretHash = await bcrypt.hash("test-secret-" + key, 10);
          await pool.query(
             `
             INSERT INTO "${TEST_SCHEMAS.AUTH_INTERNAL}".client_servers

@@ -11,18 +11,49 @@ const repoQuery = (schema, operationName) => (instance) =>
 
 /**
  * Pipeline function for service operations.
- * @param {class} model - The model class (e.g., User).
+ * @param {class} model - The model class (e.g., Session).
  * @param {function} executor - The repoQuery function prepared for execution.
- * @param {string} message - Success message.
+ * @param {string} successMessage - Success message.
  * @param  {...any} args - Arguments for model.fromRequestBody.
  */
-const pipeline = async (model, executor, message, ...args) => {
-   const instance = await model.fromRequestBody(...args);
-   const result = await executor(instance);
-   return {
-      message: message,
-      data: result,
-   };
+const pipeline = async (model, executor, successMessage, ...args) => {
+   try {
+      const instance = await model.fromRequestBody(...args);
+      const data = await executor(instance);
+      // Check if repo query indicated an error or returned null for "not found"
+      // For session creation, null data might not be an error if the query doesn't return the created session for some reason, but usually it should.
+      // However, if data.error is present, it's definitely an error from the repo layer.
+      if (data === null || (typeof data === "object" && data.error)) {
+         return {
+            success: false,
+            error:
+               data?.error ||
+               new Error("Session operation failed or resource not found."),
+            message:
+               data?.message ||
+               "Failed to execute repository operation for session or resource not found.",
+         };
+      }
+      return {
+         success: true,
+         data: data,
+         message: successMessage,
+      };
+   } catch (error) {
+      // Log the error with more context if possible
+      const operationName = executor.operationName || "unknown"; // Assuming executor can have an operationName for logging
+      console.error(
+         `Error in sessionService pipeline for ${model.name} (operation: ${operationName}):`,
+         error
+      );
+      return {
+         success: false,
+         error: error,
+         message:
+            error.message ||
+            `Operation failed in ${model.name} service pipeline.`,
+      };
+   }
 };
 
 // ---- Service Functions ----
@@ -141,13 +172,13 @@ export async function update({ sessionId, expiresAt = null, schema }) {
 }
 
 /**
- * deleteSession 
+ * deleteSession
  * flow:
  * 1. deleteById or deleteByUserId
  * 2. delete session from request
  * 3. return success message
- * 
- * 
+ *
+ *
  * @param {Object} params - Parameters object
  * @param {string} params.sessionId - Session ID
  * @param {string} params.userId - User ID
@@ -247,4 +278,5 @@ export default {
    deleteAll,
    deleteByUserId,
    deleteExpired,
+   deleteSession,
 };

@@ -7,15 +7,19 @@ import fs from "fs";
 // Load .env file from project root - try .env.test first, then .env
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const envTestPath = path.resolve(__dirname, "../.env.test");
-const envPath = path.resolve(__dirname, "../.env");
+const backendEnvTestPath = path.resolve(__dirname, "./.env.test");
+const rootEnvPath = path.resolve(__dirname, "../.env");
 
-if (fs.existsSync(envTestPath)) {
-   dotenv.config({ path: envTestPath });
-   console.log(`🔧 Vitest using: ${envTestPath}`);
+if (fs.existsSync(backendEnvTestPath)) {
+   dotenv.config({ path: backendEnvTestPath });
+   console.log(`🔧 Vitest using: ${backendEnvTestPath}`);
+} else if (fs.existsSync(rootEnvPath)) {
+   dotenv.config({ path: rootEnvPath });
+   console.log(`🔧 Vitest using (fallback from root): ${rootEnvPath}`);
 } else {
-   dotenv.config({ path: envPath });
-   console.log(`🔧 Vitest using: ${envPath}`);
+   console.warn(
+      `⚠️ Vitest WARNING: Neither backend/.env.test nor root .env found. Tests will rely on hardcoded fallbacks or preset environment variables.`
+   );
 }
 
 export default defineConfig({
@@ -33,11 +37,11 @@ export default defineConfig({
       env: {
          NODE_ENV: "test",
          // Use environment variables from .env, with fallbacks for local development
-         POSTGRES_HOST: process.env.POSTGRES_HOST || "localhost",
-         POSTGRES_PORT: process.env.POSTGRES_PORT || "5432",
-         POSTGRES_DB: process.env.POSTGRES_DB || "auth_system",
-         POSTGRES_USER: process.env.POSTGRES_USER || "postgres",
-         POSTGRES_PASSWORD: process.env.POSTGRES_PASSWORD || "password",
+         POSTGRES_HOST: "localhost",
+         POSTGRES_PORT: "5432",
+         POSTGRES_DB: "your_database_name",
+         POSTGRES_USER: "your_username",
+         POSTGRES_PASSWORD: "your_password",
          TEST_BASE_URL: "http://localhost:3001",
       },
       include: [
@@ -55,5 +59,9 @@ export default defineConfig({
             "**/*.config.{js,ts}",
          ],
       },
+   },
+   // Added SSR configuration for bcryptjs
+   ssr: {
+      noExternal: ["bcryptjs"],
    },
 });

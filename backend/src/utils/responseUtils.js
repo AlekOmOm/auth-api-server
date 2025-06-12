@@ -12,6 +12,7 @@
  *                                     If an error is provided and message is empty, error.message will be used.
  * @param {number} [params.statusCode=null] - An optional HTTP status code, primarily for error responses.
  *                                           If an error is provided and has a statusCode, that will be used.
+ * @param {...any} additionalFields - Any additional fields to include in the response.
  * @returns {Object} A standardized response object (e.g., { success: boolean, message: string, data?: any, errors?: any }).
  */
 export function standardizeResponse({
@@ -19,6 +20,7 @@ export function standardizeResponse({
    error = null,
    message = "",
    statusCode = null,
+   ...additionalFields
 }) {
    if (error) {
       const resMessage =
@@ -42,5 +44,6 @@ export function standardizeResponse({
       success: true,
       message: message || "Operation successful.",
       ...(data !== null && { data }), // Conditionally add data if it's not null
+      ...additionalFields, // Include any additional fields like sessionUpdate
    };
 }

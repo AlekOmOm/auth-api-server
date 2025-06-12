@@ -1,5 +1,6 @@
 .env.backup
 .env.schema
+.env.test
 
 # Logs
 logs

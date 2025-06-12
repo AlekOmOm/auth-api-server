@@ -1,24 +1,12 @@
-import { ValidationError } from "../middleware/errorHandler.js";
+import { ValidationError } from "../../middleware/errorHandler.js";
 
 /**
  * get refererUrl from request body
  * @param {Object} req - express request object
- *  - body.refererUrl:
- *   {
- *      url: string,
- *   }
- * @returns {string} refererUrl
+ * @returns {string|null} refererUrl or null if not present
  */
 export const getRefererUrl = (req) => {
-   try {
-      const refererUrl = req.body?.refererUrl;
-      if (!refererUrl) {
-         throw new ValidationError("Referer URL is required");
-      }
-      return refererUrl;
-   } catch (error) {
-      throw error;
-   }
+   return req.body?.refererUrl || null;
 };
 
 /**

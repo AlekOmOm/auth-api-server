@@ -20,6 +20,9 @@
     onClientCreated
   }: Props = $props();
   
+  // Import the API service
+  import clientServerApi from '../../../services/clientServerApi.js';
+  
   let isEditing = !!clientServer;
   let loading = $state(false);
   let error = $state('');
@@ -69,73 +72,71 @@
   }
   
   async function handleSubmit() {
+    error = ''; // Clear previous errors
+    loading = true;
+    clientSecret = ''; // Clear previous secret if any
+
     try {
-      loading = true;
-      error = '';
-      
       validateForm();
       
       const urls = returnUrls.split('\n').map(url => url.trim()).filter(url => url);
       
-      const clientData = {
+      const modalDataPayload = {
         app_name: appName.trim(),
         assigned_schema_name: schemaName.trim(),
         client_mode: clientMode,
         allowed_return_urls: urls
       };
 
-      console.log("clientData", clientData);
+      if (isEditing && clientId) {
+        (modalDataPayload as any).client_id = clientId;
+      }
       
-      let response;
+      let response; // Changed variable name from result to response for clarity
       
       if (isEditing) {
-        // Update existing client
-        response = await fetch(`/api/clientServer/user/clients/${clientId}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include',
-          body: JSON.stringify(clientData)
+        response = await clientServerApi.updateClientServer(clientId, {
+          app_name: modalDataPayload.app_name,
+          client_mode: modalDataPayload.client_mode,
+          allowed_return_urls: modalDataPayload.allowed_return_urls
         });
       } else {
-        // Create new client
-        response = await fetch('/api/clientServer/user/register', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include',
-          body: JSON.stringify(clientData)
+        response = await clientServerApi.createClientServer({
+          app_name: modalDataPayload.app_name,
+          authorized_urls: modalDataPayload.allowed_return_urls,
         });
       }
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+      loading = false; // Set loading to false once API call is done
+
+      if (!response.success) {
+        let errorMsg = 'An unexpected error occurred.';
+        if (response.errors && Array.isArray(response.errors) && response.errors.length > 0) {
+          errorMsg = response.errors.map(e => e.msg || String(e)).join('; ');
+        } else if (response.message) {
+          errorMsg = response.message;
+        }
+        error = errorMsg;
+        return; // Stop further execution on error
       }
       
-      const result = await response.json();
-      
-      // If creating, show the client secret
-      if (!isEditing && result.data?.client_secret) {
-        clientSecret = result.data.client_secret;
-        clientId = result.data.client_id;
+      // Success path
+      if (!isEditing && response.data?.client_secret) {
+        clientSecret = response.data.client_secret;
+        clientId = response.data.client_id; 
+        // Don't call onClientCreated yet, wait for user to acknowledge the secret
+        return; 
       }
       
-      if (clientSecret) {
-        // Show success with secret, don't close yet
-        return;
-      }
-      
-      onClientCreated?.();
+      onClientCreated?.(); // This will close modal and refresh OwnerPanel list
       
     } catch (err: any) {
-      console.error('Error saving client server:', err);
-      error = err.message;
-    } finally {
+      // This catch block now primarily handles errors from validateForm() or other unexpected JS errors
+      console.error('Error during client server operation (validation or unexpected):', err);
+      error = err.message || 'An unexpected client-side error occurred.';
       loading = false;
     }
+    // No finally block needed here for loading, as it's handled in try/catch and after API call
   }
   
   function handleClose() {
@@ -270,7 +271,7 @@
             </button>
             <button type="submit" class="btn btn-primary" disabled={loading}>
               {#if loading}
-                <span class="spinner"></span>
+                <span class="spinner-sm"></span>
                 {isEditing ? 'Updating...' : 'Creating...'}
               {:else}
                 {isEditing ? 'Update Client Server' : 'Create Client Server'}
@@ -515,65 +516,22 @@
     justify-content: flex-end;
   }
 
-  /* General Button Styling (from app.css) */
-  .btn {
-    border-radius: 8px;
-    border: 1px solid transparent;
-    padding: 0.6em 1.2em;
-    font-size: 1em;
-    font-weight: var(--font-weight-medium);
-    font-family: var(--font-family); /* inherit from :root */
-    cursor: pointer;
-    transition: border-color 0.25s, background-color 0.2s ease;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-  .btn:hover:not(:disabled) {
-    border-color: var(--button-hover-border-color);
-  }
-  .btn:focus,
-  .btn:focus-visible {
-    outline: var(--button-focus-outline);
-  }
-  .btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
+  /* General Button Styling (from app.css) -- Comment preserved for context */
+  /* .btn { ... } */
+  /* .btn:hover:not(:disabled) { ... } */
+  /* .btn:focus, .btn:focus-visible { ... } */
+  /* .btn:disabled { ... } */
 
-  /* Specific Button Types */
-  .btn-primary {
-    background-color: var(--button-primary-bg);
-    color: var(--button-primary-text);
-  }
-  .btn-primary:hover:not(:disabled) {
-    background-color: var(--button-primary-hover-bg);
-    border-color: var(--button-primary-hover-bg); /* Or keep transparent/themed border */
-  }
+  /* Specific Button Types -- Comment preserved for context */
+  /* .btn-primary { ... } */
+  /* .btn-primary:hover:not(:disabled) { ... } */
 
-  .btn-secondary {
-    background-color: var(--button-secondary-bg);
-    color: var(--button-secondary-text);
-  }
-  .btn-secondary:hover:not(:disabled) {
-    background-color: var(--button-secondary-hover-bg);
-    /* border-color: var(--button-hover-border-color); /* Optional: if secondary should also get accent border on hover */
-  }
+  /* .btn-secondary { ... } */
+  /* .btn-secondary:hover:not(:disabled) { ... } */
 
-
-  .spinner {
-    width: 16px;
-    height: 16px;
-    border: 2px solid transparent;
-    border-top: 2px solid currentColor; /* Will take button's text color */
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-  }
-
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
+  /* Spinner styles below are now handled by global app.css */
+  /* .spinner { ... } */
+  /* @keyframes spin { ... } */
 
   @media (max-width: 768px) {
     .modal {

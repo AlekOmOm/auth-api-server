@@ -16,14 +16,13 @@ export const ddl = (tenant = "client_template") => [
    `create schema if not exists ${ident(tenant)};`,
    `set local search_path to ${ident(tenant)}, public;`,
 
-   // Enable UUID extension
-   `create extension if not exists "uuid-ossp";`,
+   // UUID extension is no longer used at DB level
 
    // Users table for tenant application users
    `create table if not exists ${ident(tenant)}.users (
-      id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      id              UUID PRIMARY KEY,
       name            VARCHAR(255) NOT NULL,
-      role            VARCHAR(100) NOT NULL DEFAULT 'user', -- Tenant-specific roles
+      role            VARCHAR(100) NOT NULL DEFAULT 'user',
       email           VARCHAR(255) UNIQUE NOT NULL,
       password_hash   VARCHAR(255) NOT NULL,
       created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
@@ -32,11 +31,11 @@ export const ddl = (tenant = "client_template") => [
 
    // Sessions table for tenant user sessions
    `create table if not exists ${ident(tenant)}.sessions (
-      id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      id              UUID PRIMARY KEY,
       user_id         UUID REFERENCES ${ident(
          tenant
       )}.users(id) ON DELETE CASCADE,
-      session_id      UUID UNIQUE NOT NULL DEFAULT uuid_generate_v4(),
+      session_id      UUID UNIQUE NOT NULL,
       ip_address      INET,
       user_agent      TEXT,
       created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -44,23 +43,21 @@ export const ddl = (tenant = "client_template") => [
    );`,
 
    // Indexes for users table
-   `create index if not exists ${ident(tenant)}.idx_users_email on ${ident(
+   `create index if not exists idx_users_email on ${ident(
       tenant
    )}.users(email);`,
-   `create index if not exists ${ident(tenant)}.idx_users_role on ${ident(
-      tenant
-   )}.users(role);`,
+   `create index if not exists idx_users_role on ${ident(tenant)}.users(role);`,
 
    // Indexes for sessions table
-   `create index if not exists ${ident(
+   `create index if not exists idx_sessions_session_id on ${ident(
       tenant
-   )}.idx_sessions_session_id on ${ident(tenant)}.sessions(session_id);`,
-   `create index if not exists ${ident(tenant)}.idx_sessions_user_id on ${ident(
+   )}.sessions(session_id);`,
+   `create index if not exists idx_sessions_user_id on ${ident(
       tenant
    )}.sessions(user_id);`,
-   `create index if not exists ${ident(
+   `create index if not exists idx_sessions_expires_at on ${ident(
       tenant
-   )}.idx_sessions_expires_at on ${ident(tenant)}.sessions(expires_at);`,
+   )}.sessions(expires_at);`,
 
    `commit;`,
 ];

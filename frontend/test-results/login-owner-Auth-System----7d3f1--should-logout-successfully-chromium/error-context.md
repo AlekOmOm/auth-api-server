@@ -1,0 +1,241 @@
+# Test info
+
+- Name: Auth System - Complete Registration & Authentication Tests >> should logout successfully
+- Location: D:\devdrive\0._GitHub\03._Uni\.electives\NodeJS\auth-system\frontend\test\playwright-tests\login-owner.spec.js:153:4
+
+# Error details
+
+```
+Error: page.click: Test timeout of 30000ms exceeded.
+Call log:
+  - waiting for locator('button:has-text("logout")')
+
+    at D:\devdrive\0._GitHub\03._Uni\.electives\NodeJS\auth-system\frontend\test\playwright-tests\login-owner.spec.js:163:18
+```
+
+# Page snapshot
+
+```yaml
+- heading "Auth System" [level=2]
+- heading "___" [level=2]
+- textbox "email": testowner@example.com
+- textbox "password": TestPassword123!
+- paragraph: Login failed.
+- button "login"
+- navigation:
+  - paragraph: don't have an account?
+  - link "register":
+    - /url: /register
+- navigation:
+  - link "login":
+    - /url: /login
+  - link "register":
+    - /url: /register
+```
+
+# Test source
+
+```ts
+   63 |       await page.fill('input[name="password"]', "TestPassword123!");
+   64 |
+   65 |       // Submit login
+   66 |       await page.click('button[type="submit"]');
+   67 |
+   68 |       // Should redirect to home page
+   69 |       await page.waitForTimeout(3000);
+   70 |
+   71 |       // Check for successful login indicators
+   72 |       await expect(page).toHaveURL(`${baseUrl}/home`);
+   73 |       await expect(page.locator("h1")).toContainText("Home");
+   74 |       await expect(page.locator("button")).toContainText("logout");
+   75 |    });
+   76 |
+   77 |    test("should register client app user successfully", async ({ page }) => {
+   78 |       // Navigate to registration
+   79 |       await page.goto(`${baseUrl}/register`);
+   80 |
+   81 |       // Client App User is selected by default, so no need to click
+   82 |
+   83 |       // Fill out registration form
+   84 |       await page.fill('input[name="name"]', "PlaywrightUser");
+   85 |       await page.fill('input[name="email"]', "playwrightuser@example.com");
+   86 |       await page.fill('input[name="password"]', "TestPassword123!");
+   87 |
+   88 |       // Submit registration
+   89 |       await page.click('button[type="submit"]');
+   90 |
+   91 |       // Should show success message
+   92 |       await page.waitForTimeout(3000);
+   93 |       await expect(page.locator("body")).toContainText(
+   94 |          "Registration successful"
+   95 |       );
+   96 |    });
+   97 |
+   98 |    test("should login existing owner", async ({ page }) => {
+   99 |       // Navigate to login page
+  100 |       await page.goto(`${baseUrl}/login`);
+  101 |
+  102 |       // Fill login form with existing owner credentials
+  103 |       await page.fill('input[name="email"]', "owner@example.com");
+  104 |       await page.fill('input[name="password"]', "password123");
+  105 |
+  106 |       // Submit login
+  107 |       await page.click('button[type="submit"]');
+  108 |
+  109 |       // Should redirect to owner panel
+  110 |       await page.waitForTimeout(3000);
+  111 |
+  112 |       const url = page.url();
+  113 |       expect(url).toBe(`${baseUrl}/owner`);
+  114 |    });
+  115 |
+  116 |    test("should show validation errors for invalid registration", async ({
+  117 |       page,
+  118 |    }) => {
+  119 |       await page.goto(`${baseUrl}/register`);
+  120 |
+  121 |       // Try to submit form with invalid data
+  122 |       await page.fill('input[name="name"]', "123"); // Numbers not allowed
+  123 |       await page.fill('input[name="email"]', "invalid-email");
+  124 |       await page.fill('input[name="password"]', "123"); // Too short
+  125 |
+  126 |       await page.click('button[type="submit"]');
+  127 |
+  128 |       // Should show validation errors
+  129 |       await page.waitForTimeout(2000);
+  130 |       const bodyText = await page.textContent("body");
+  131 |       expect(
+  132 |          bodyText.includes("failed") || bodyText.includes("error")
+  133 |       ).toBeTruthy();
+  134 |    });
+  135 |
+  136 |    test("should show error for invalid login", async ({ page }) => {
+  137 |       await page.goto(`${baseUrl}/login`);
+  138 |
+  139 |       // Try invalid credentials
+  140 |       await page.fill('input[name="email"]', "nonexistent@example.com");
+  141 |       await page.fill('input[name="password"]', "wrongpassword");
+  142 |       await page.click('button[type="submit"]');
+  143 |
+  144 |       await page.waitForTimeout(2000);
+  145 |       const bodyText = await page.textContent("body");
+  146 |       expect(
+  147 |          bodyText.includes("failed") ||
+  148 |             bodyText.includes("error") ||
+  149 |             bodyText.includes("invalid")
+  150 |       ).toBeTruthy();
+  151 |    });
+  152 |
+  153 |    test("should logout successfully", async ({ page }) => {
+  154 |       // First login
+  155 |       await page.goto(`${baseUrl}/login`);
+  156 |       await page.fill('input[name="email"]', "testowner@example.com");
+  157 |       await page.fill('input[name="password"]', "TestPassword123!");
+  158 |       await page.click('button[type="submit"]');
+  159 |
+  160 |       await page.waitForTimeout(2000);
+  161 |
+  162 |       // Then logout
+> 163 |       await page.click('button:has-text("logout")');
+      |                  ^ Error: page.click: Test timeout of 30000ms exceeded.
+  164 |
+  165 |       await page.waitForTimeout(2000);
+  166 |
+  167 |       // Should redirect to login or home page without authentication
+  168 |       const bodyText = await page.textContent("body");
+  169 |       expect(
+  170 |          bodyText.includes("login") || bodyText.includes("register")
+  171 |       ).toBeTruthy();
+  172 |    });
+  173 |
+  174 |    test("should test backend registration API directly", async ({
+  175 |       request,
+  176 |    }) => {
+  177 |       // Test registration endpoint directly with valid data
+  178 |       const response = await request.post(`${backendUrl}/api/auth/register`, {
+  179 |          data: {
+  180 |             name: "DirectTestUser",
+  181 |             email: "directtest@example.com",
+  182 |             password: "TestPassword123!",
+  183 |             role: "user",
+  184 |          },
+  185 |       });
+  186 |
+  187 |       const responseData = await response.text();
+  188 |       console.log("Registration API Response Status:", response.status());
+  189 |       console.log("Registration API Response:", responseData);
+  190 |
+  191 |       // Should be success (201) or user already exists (400)
+  192 |       expect([201, 400].includes(response.status())).toBeTruthy();
+  193 |    });
+  194 |
+  195 |    test("should test backend login API directly", async ({ request }) => {
+  196 |       // Test login endpoint directly
+  197 |       const response = await request.post(`${backendUrl}/api/auth/login`, {
+  198 |          data: {
+  199 |             credentials: {
+  200 |                email: "owner@example.com",
+  201 |                password: "password123",
+  202 |             },
+  203 |          },
+  204 |       });
+  205 |
+  206 |       const responseData = await response.text();
+  207 |       console.log("Login API Response Status:", response.status());
+  208 |       console.log("Login API Response:", responseData);
+  209 |
+  210 |       expect([200, 401].includes(response.status())).toBeTruthy();
+  211 |    });
+  212 |
+  213 |    test("should access owner panel after owner login", async ({ page }) => {
+  214 |       // Login as existing owner
+  215 |       await page.goto(`${baseUrl}/login`);
+  216 |       await page.fill('input[name="email"]', "owner@example.com");
+  217 |       await page.fill('input[name="password"]', "password123");
+  218 |       await page.click('button[type="submit"]');
+  219 |
+  220 |       await page.waitForTimeout(3000);
+  221 |
+  222 |       // Should be redirected to owner panel
+  223 |       await expect(page).toHaveURL(`${baseUrl}/owner`);
+  224 |
+  225 |       // Should see owner panel content
+  226 |       const bodyText = await page.textContent("body");
+  227 |       expect(
+  228 |          bodyText.includes("Owner") ||
+  229 |             bodyText.includes("manage") ||
+  230 |             bodyText.includes("client")
+  231 |       ).toBeTruthy();
+  232 |    });
+  233 |
+  234 |    test("should handle concurrent registrations", async ({ browser }) => {
+  235 |       // Test multiple concurrent registrations
+  236 |       const context1 = await browser.newContext();
+  237 |       const context2 = await browser.newContext();
+  238 |
+  239 |       const page1 = await context1.newPage();
+  240 |       const page2 = await context2.newPage();
+  241 |
+  242 |       // Register two different users concurrently
+  243 |       const registration1 = (async () => {
+  244 |          await page1.goto(`${baseUrl}/register`);
+  245 |          await page1.fill('input[name="name"]', "ConcurrentUser1");
+  246 |          await page1.fill('input[name="email"]', "concurrent1@example.com");
+  247 |          await page1.fill('input[name="password"]', "TestPassword123!");
+  248 |          await page1.click('button[type="submit"]');
+  249 |          await page1.waitForTimeout(3000);
+  250 |          return page1.textContent("body");
+  251 |       })();
+  252 |
+  253 |       const registration2 = (async () => {
+  254 |          await page2.goto(`${baseUrl}/register`);
+  255 |          await page2.fill('input[name="name"]', "ConcurrentUser2");
+  256 |          await page2.fill('input[name="email"]', "concurrent2@example.com");
+  257 |          await page2.fill('input[name="password"]', "TestPassword123!");
+  258 |          await page2.click('button[type="submit"]');
+  259 |          await page2.waitForTimeout(3000);
+  260 |          return page2.textContent("body");
+  261 |       })();
+  262 |
+  263 |       const [result1, result2] = await Promise.all([
+```

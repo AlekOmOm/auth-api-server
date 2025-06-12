@@ -1,9 +1,20 @@
-import { AuthError, ValidationError } from "../middleware/errorHandler.js";
+console.log(
+   "[AUTH_SERVICE_JS_LOAD_CONFIRM_V7.DEBUG] File loaded at: " +
+      new Date().toISOString()
+); // UNIQUE TOP-LEVEL LOG
+
+import {
+   AuthError,
+   ValidationError,
+   ConflictError,
+   NotFoundError,
+} from "../middleware/errorHandler.js";
 import clientServerService from "./clientServer.js";
 import userService from "./user.js";
 import sessionService from "./session.js";
 import { prepareInstance } from "../models/functional/index.js";
 import { User, ClientServer, Session } from "../models/index.js";
+import sessionUtils from "../utils/request/session.js";
 
 /** ------- auth service ------- */
 
@@ -127,57 +138,118 @@ const execute = async (
 export async function login({
    credentials,
    schema,
-   ipAddress = null, // session.ipAddress (optional)
-   userAgent = null, // session.userAgent (optional)
+   req,
+   ipAddress = null,
+   userAgent = null,
 }) {
-   let requiredFields = ["name", "email", "password", "schema"];
-   const user = await execute(
-      User,
-      "get",
-      requiredFields,
-      null,
-      credentials,
-      schema
+   // Directly call userService.get for user retrieval and password validation
+   const userResult = await userService.get({
+      email: credentials.email,
+      password: credentials.password, // userService.get handles password verification
+      schema: schema,
+      returnPwd: false, // We don't need the hash in the authService response data for the user
+   });
+
+   check(
+      userResult?.success && userResult?.data,
+      userResult?.message ||
+         "Login failed: User not found or credentials incorrect."
    );
+   const user = userResult.data; // This is the user object if login was successful
 
-   check(user, "User not found");
-
-   requiredFields = ["userId", "schema"];
-   const session = await execute(
+   // Proceed to create a database session
+   const sessionResult = await execute(
       Session,
       "create",
-      requiredFields,
-      null,
-      user.id,
-      schema
+      ["userId", "schema", "ipAddress", "userAgent"], // Fields for Session.fromRequestBody
+      null, // messageParam for execute
+      { userId: user.id, schema, ipAddress, userAgent } // Data for Session.fromRequestBody
    );
 
-   check(session, "Session not created");
-
-   requiredFields = ["userId"];
-   const allowedUrls = await execute(
-      ClientServer,
-      "getAllowedUrls",
-      requiredFields,
-      null,
-      user.id,
-      schema
+   check(
+      sessionResult?.success && sessionResult?.data,
+      sessionResult?.message || "Session creation failed."
    );
+   const dbSession = sessionResult.data;
 
-   updateSession(session, {
-      schema,
-      user,
-      allowedUrls,
+   // Debug logging for session creation
+   console.log(
+      "[LOGIN DEBUG] dbSession object:",
+      JSON.stringify(dbSession, null, 2)
+   );
+   console.log("[LOGIN DEBUG] dbSession.sessionId:", dbSession?.sessionId);
+   console.log("[LOGIN DEBUG] dbSession.session_id:", dbSession?.session_id);
+   console.log("[LOGIN DEBUG] dbSession.id:", dbSession?.id);
+
+   // Get allowed URLs (if applicable for this user/schema)
+   let allowedUrls = [];
+   try {
+      const allowedUrlsResult = await clientServerService.getAllowedUrls({
+         userId: user.id,
+         schema: schema,
+      });
+      allowedUrls = allowedUrlsResult?.data || [];
+   } catch (error) {
+      console.warn("Failed to get allowed URLs for user:", error.message);
+      // Continue with empty allowed URLs array
+   }
+
+   // Use the camelCase sessionId from the Session model instance
+   const sessionId = dbSession.sessionId;
+   console.log("[LOGIN DEBUG] Final sessionId to use:", sessionId);
+
+   sessionUtils.setObj(req, {
+      userId: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      schema: schema,
+      sessionId: sessionId,
+      isAuthenticated: true,
+      allowedUrls: allowedUrls,
    });
+
+   // Force session save to ensure persistence
+   await new Promise((resolve, reject) => {
+      req.session.save((err) => {
+         if (err) {
+            console.error("[SESSION SAVE ERROR]", err);
+            reject(err);
+         } else {
+            console.log("[SESSION SAVED] Session data persisted successfully");
+            resolve();
+         }
+      });
+   });
+
+   // Create session data structure that frontend expects
+   const sessionData = {
+      isAuthenticated: true,
+      userId: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      schema: schema,
+      sessionId: sessionId,
+      ownerId: allowedUrls.length > 0 ? user.id : null,
+      allowedUrls: allowedUrls,
+      expires_at: dbSession.expires_at,
+   };
 
    return {
       success: true,
       data: {
          schema,
-         user,
-         session,
-         allowedUrls,
+         user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+         },
+         session: { id: dbSession.id, expires_at: dbSession.expires_at },
+         allowedUrls: allowedUrls,
       },
+      sessionUpdate: sessionData,
       message: "Login successful",
    };
 }
@@ -195,9 +267,8 @@ export async function logout({ userId, sessionId = null, schema }) {
       Session,
       "deleteSession",
       ["userId", "schema"],
-      userId,
-      sessionId,
-      schema
+      null, // messageParam
+      { userId, sessionId, schema } // Data for Session.fromRequestBody
    );
    check(success, message);
    return { success, data, message: "Logout successful" };
@@ -206,37 +277,225 @@ export async function logout({ userId, sessionId = null, schema }) {
 /**
  * Register a new user
  * @param {Object} params - Parameters object
- * @param {Object} params.credentials - User credentials (name, email, password)
+ * @param {Object} params.userData - User data (name, email, password)
  * @param {string} params.schema - Database schema
  * @returns {Object} Registration success response
  *
  * @flow
  * 1. execute createUser
  * 2. execute getUser
- * 3. return success message
+ * 3. create session for new user
+ * 4. update req.session
+ * 5. return success message
  */
-export async function register({ credentials, schema }) {
-   let { success, data, message } = await execute(
-      User,
-      "createUser",
-      ["name", "email", "password", "schema"],
-      credentials,
-      schema
-   );
-   check(success, message);
-   const updatedResult = await execute(
-      User,
-      "getUser",
-      ["userId", "schema"],
-      data.id,
-      schema
-   );
+export async function register({ userData, schema, req }) {
+   // Step 1: Check if email already exists
+   let userExists = false;
+   try {
+      const emailCheckResult = await userService.get({
+         email: userData.email,
+         schema: schema,
+      });
 
-   check(success, message);
+      if (
+         emailCheckResult &&
+         emailCheckResult.success === true &&
+         emailCheckResult.data != null
+      ) {
+         userExists = true;
+      }
+   } catch (error) {
+      console.log(
+         "[AUTH_SERVICE_REGISTER_CATCH] Caught error during email check:",
+         JSON.stringify(
+            {
+               name: error.name,
+               message: error.message,
+               statusCode: error.statusCode,
+               isNotFoundErrorInstance: error instanceof NotFoundError,
+               constructorName: error.constructor?.name,
+               errorObjectKeys: Object.keys(error),
+            },
+            null,
+            2
+         )
+      );
+
+      if (error instanceof NotFoundError || error.name === "NotFoundError") {
+         // User not found by email, which is good for registration.
+         userExists = false;
+      } else {
+         // Different error, re-throw it.
+         console.error(
+            "[AUTH_SERVICE_REGISTER_CATCH] Re-throwing unexpected error:",
+            error
+         );
+         throw error;
+      }
+   }
+
+   if (userExists) {
+      throw new ConflictError(
+         "Email already registered. Please login or use a different email."
+      );
+   }
+
+   // Step 2: Create the user - call userService.createUser directly
+   const userCreationResult = await userService.createUser(userData, schema);
+
+   // Check for success from createUser
+   if (
+      !userCreationResult ||
+      !userCreationResult.success ||
+      !userCreationResult.data
+   ) {
+      // Use a more specific error message if available from userCreationResult
+      throw new AuthError(
+         userCreationResult?.message ||
+            "User creation failed after email check."
+      );
+   }
+   const createdUser = userCreationResult.data;
+
+   // Step 3: Create a database session for the new user
+   const sessionCreationResult = await sessionService.create({
+      userId: createdUser.id,
+      schema: schema,
+   });
+
+   if (
+      !sessionCreationResult ||
+      !sessionCreationResult.success ||
+      !sessionCreationResult.data
+   ) {
+      // For now, assume this is critical.
+      throw new AuthError(
+         sessionCreationResult?.message ||
+            "Session creation failed post-registration."
+      );
+   }
+   const dbSession = sessionCreationResult.data;
+
+   // Step 4: Update Express session object (req.session)
+   sessionUtils.setObj(req, {
+      userId: createdUser.id,
+      name: createdUser.name,
+      email: createdUser.email,
+      role: createdUser.role,
+      schema: schema,
+      sessionId: dbSession.sessionId,
+      isAuthenticated: true,
+      allowedUrls: [],
+   });
+
+   // Force session save to ensure persistence
+   await new Promise((resolve, reject) => {
+      req.session.save((err) => {
+         if (err) {
+            console.error("[SESSION SAVE ERROR]", err);
+            reject(err);
+         } else {
+            console.log("[SESSION SAVED] Session data persisted successfully");
+            resolve();
+         }
+      });
+   });
+
+   // Create session data structure that frontend expects
+   const sessionData = {
+      isAuthenticated: true,
+      userId: createdUser.id,
+      name: createdUser.name,
+      email: createdUser.email,
+      role: createdUser.role,
+      schema: schema,
+      sessionId: dbSession.sessionId,
+      ownerId: null, // New users don't own resources initially
+      allowedUrls: [],
+      expires_at: dbSession.expires_at,
+   };
+
    return {
       success: true,
-      data: updatedResult.data,
-      message: "User registered successfully",
+      data: {
+         user: {
+            id: createdUser.id,
+            name: createdUser.name,
+            email: createdUser.email,
+            role: createdUser.role,
+         },
+         session: { id: dbSession.id, expires_at: dbSession.expires_at },
+      },
+      sessionUpdate: sessionData, // Add the sessionUpdate field that frontend expects
+      message: "User registered and logged in successfully",
+   };
+}
+
+/**
+ * Get all sessions for a user
+ * @param {Object} params - Parameters object
+ * @param {string} params.userId - User ID from session
+ * @param {string} params.schema - Database schema
+ * @returns {Object} { success, data, message }
+ */
+export async function getSessions({ userId, schema }) {
+   check(userId, "User ID is required for getting sessions");
+
+   const { success, data, message } = await execute(
+      Session,
+      "getSessionsByUser",
+      ["userId", "schema"],
+      "Sessions retrieved successfully",
+      { userId, schema }
+   );
+
+   return { success, data, message };
+}
+
+/**
+ * Get current user information
+ * @param {Object} params - Parameters object
+ * @param {string} params.userId - User ID from session
+ * @param {string} params.schema - Database schema
+ * @returns {Object} { success, data, message }
+ */
+export async function getCurrentUser({ userId, schema = "client_app" }) {
+   check(userId, "User ID is required for getting current user");
+
+   const { success, data, message } = await execute(
+      User,
+      "getUser",
+      ["id", "schema"],
+      "Current user retrieved successfully",
+      { id: userId, schema }
+   );
+
+   return { success, data, message };
+}
+
+/**
+ * Get session information
+ * @param {Object} params - Parameters object
+ * @param {string} params.userId - User ID from session
+ * @param {Object} params.sessionData - Session data object
+ * @returns {Object} { success, data, message }
+ */
+export async function getSession({ userId, sessionData }) {
+   check(userId, "User ID is required for getting session");
+
+   // Return formatted session information
+   return {
+      success: true,
+      data: {
+         userId: userId,
+         sessionId: sessionData.sessionId,
+         schema: sessionData.schema,
+         role: sessionData.role,
+         isAuthenticated: sessionData.isAuthenticated,
+         allowedUrls: sessionData.allowedUrls || [],
+         expires_at: sessionData.expires_at,
+      },
+      message: "Session information retrieved successfully",
    };
 }
 
@@ -258,6 +517,75 @@ export async function isOwner({ req }) {
    );
    return;
 }
+
+/**
+ * Validates if a user from a given session schema has access to a target schema.
+ * - Allows if user's session schema matches the target schema.
+ * - Allows if user is 'owner' or 'admin' in 'auth_internal' schema, accessing any target schema.
+ * - Denies in other cross-schema access attempts.
+ * @param {string} userIdFromSession - The ID of the user from their current session.
+ * @param {string} userSchemaFromSession - The schema context of the user's current session.
+ * @param {string} targetSchemaFromRequest - The schema being targeted by the current request.
+ * @throws {AuthError} If access is denied or user cannot be validated.
+ */
+export async function validateUserSchemaAccess(
+   userIdFromSession,
+   userSchemaFromSession,
+   targetSchemaFromRequest
+) {
+   if (
+      !userIdFromSession ||
+      !userSchemaFromSession ||
+      !targetSchemaFromRequest
+   ) {
+      console.warn(
+         "[AUTH_VALIDATE_SCHEMA_ACCESS] Missing required parameters for validation."
+      );
+      throw new AuthError(
+         "Cannot validate schema access: missing session or target schema information."
+      );
+   }
+
+   if (userSchemaFromSession === targetSchemaFromRequest) {
+      console.log(
+         `[AUTH_VALIDATE_SCHEMA_ACCESS] Access granted: User operating within their own schema ('${userSchemaFromSession}').`
+      );
+      return true;
+   }
+
+   const userResult = await userService.get({
+      id: userIdFromSession,
+      schema: userSchemaFromSession,
+   });
+
+   if (!userResult || !userResult.success || !userResult.data) {
+      console.warn(
+         `[AUTH_VALIDATE_SCHEMA_ACCESS] User (ID: ${userIdFromSession}) not found in schema '${userSchemaFromSession}'.`
+      );
+      throw new AuthError(
+         "User session invalid or user not found, cannot validate schema access."
+      );
+   }
+   const user = userResult.data;
+
+   if (
+      (user.role === "owner" || user.role === "admin") &&
+      userSchemaFromSession === "auth_internal"
+   ) {
+      console.log(
+         `[AUTH_VALIDATE_SCHEMA_ACCESS] Privileged user ${user.email} (role: ${user.role} in ${userSchemaFromSession}) accessing target schema '${targetSchemaFromRequest}'. Access granted.`
+      );
+      return true;
+   }
+
+   console.warn(
+      `[AUTH_VALIDATE_SCHEMA_ACCESS] Unauthorized cross-schema access attempt: User ${user.email} (ID: ${user.id}, role: ${user.role} in '${userSchemaFromSession}') trying to access target schema '${targetSchemaFromRequest}'.`
+   );
+   throw new AuthError(
+      `User from schema '${userSchemaFromSession}' is not authorized to access data in schema '${targetSchemaFromRequest}'.`
+   );
+}
+
 // --- helper functions ---
 
 /**
@@ -276,6 +604,11 @@ const authService = {
    login,
    logout,
    register,
+   getSessions,
+   getCurrentUser,
+   getSession,
+   isOwner,
+   validateUserSchemaAccess,
 };
 
 export default authService;

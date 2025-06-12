@@ -88,7 +88,7 @@ export const operations = {
       getBySecretHash: {
          sql: clientServer.getBySecretHash,
          type: "entity",
-         paramExtractor: (instance) => [instance.secret_hash],
+         paramExtractor: (instance) => [instance.client_secret_hash],
       },
       getAllowedUrls: {
          sql: clientServer.getAllowedUrls,
@@ -100,12 +100,17 @@ export const operations = {
       create: {
          sql: user.create,
          type: "entity",
+         /**
+          * Extracts parameters for user creation.
+          * IMPORTANT: `data.id` is included here because UUIDs are generated application-side (`src/utils/uuid.js` via `User` model)
+          * and must be explicitly passed to the database, rather than relying on a database default for UUID generation.
+          */
          paramExtractor: (data) => [
-            data.id,
+            data.id, // Application-generated UUID
             data.name,
             data.role,
             data.email,
-            data.password_hash,
+            data.passwordHash,
          ],
       },
       createUsers: {
@@ -129,7 +134,7 @@ export const operations = {
             data.name,
             data.role,
             data.email,
-            data.password_hash,
+            data.passwordHash,
             data.id,
          ],
       },
@@ -153,11 +158,11 @@ export const operations = {
          sql: session.create,
          type: "entity",
          paramExtractor: (data) => [
-            data.user_id,
-            data.session_id,
-            data.ip_address,
-            data.user_agent,
-            data.expires_at,
+            data.user_id || data.userId,
+            data.session_id || data.sessionId,
+            data.ip_address || data.ipAddress,
+            data.user_agent || data.userAgent,
+            data.expires_at || data.expiresAt,
          ],
       },
       getAll: { sql: session.getAll, type: "array" },
@@ -280,7 +285,11 @@ const configTable = (table, operation, ...params) => {
    const logicalTableName = getTableName(table);
    const operationConfig = getOperationConfig(logicalTableName, operation);
 
-   let processedParams = getProcessedParams(operation, params);
+   let processedParams = getProcessedParams(
+      operation,
+      params,
+      logicalTableName
+   );
 
    return {
       sql: operationConfig.sql,
@@ -330,7 +339,7 @@ const getOperationConfig = (logicalTableName, operation) => {
  * @param {...any} params - Parameters for the operation
  * @returns {any} Processed parameters
  */
-const getProcessedParams = (operation, params) => {
+const getProcessedParams = (operation, params, logicalTableName) => {
    let processedParams = params;
    if (inputOps.includes(operation) && params.length > 0 && params[0]) {
       processedParams = [toDB(logicalTableName, params[0]), ...params.slice(1)];

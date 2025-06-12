@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import clientServerApi from '../../../services/clientServerApi.js'; // Import the API service
   
   let { clientServer, onClose } = $props();
   
@@ -13,7 +14,7 @@
   let userName = $state('');
   let userEmail = $state('');
   let userPassword = $state('');
-  let userRole = $state('user');
+  let userRoleInForm = $state('user'); // Renamed to avoid conflict with user.role in table
   let formLoading = $state(false);
   let formError = $state('');
   
@@ -27,24 +28,26 @@
   });
   
   async function loadUsers() {
+    loading = true;
+    error = '';
+    if (!clientServer || !clientServer.client_id) {
+      error = 'Client server information is not available to load users.';
+      loading = false;
+      users = [];
+      return;
+    }
     try {
-      loading = true;
-      error = '';
-      
-      const response = await fetch(`/api/owner/clients/${clientServer.client_id}/users`, {
-        credentials: 'include'
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      const response = await clientServerApi.getClientUsers(clientServer.client_id);
+      if (response.success) {
+        users = response.data || [];
+      } else {
+        error = response.message || 'Failed to load users.';
+        users = []; // Clear users on error
       }
-      
-      const result = await response.json();
-      users = result.data || [];
-      
     } catch (err) {
-      console.error('Error loading users:', err);
-      error = 'Failed to load users: ' + err.message;
+      console.error('Error loading users (unexpected):', err);
+      error = 'An unexpected error occurred while loading users: ' + (err.message || 'Unknown error');
+      users = [];
     } finally {
       loading = false;
     }
@@ -60,7 +63,8 @@
     userName = user.name;
     userEmail = user.email;
     userPassword = '';
-    userRole = user.role;
+    userRoleInForm = user.role;
+    formError = ''; // Clear previous form errors
     showCreateUser = true;
   }
   
@@ -69,7 +73,7 @@
     userName = '';
     userEmail = '';
     userPassword = '';
-    userRole = 'user';
+    userRoleInForm = 'user';
     formError = '';
   }
   
@@ -79,22 +83,30 @@
   }
   
   async function handleSubmitUser() {
+    formLoading = true;
+    formError = '';
+    if (!clientServer || !clientServer.client_id) {
+      formError = 'Client server information is missing for submitting user data.';
+      formLoading = false;
+      return;
+    }
     try {
-      formLoading = true;
-      formError = '';
-      
       if (!userName.trim() || !userEmail.trim()) {
-        throw new Error('Name and email are required');
+        formError = 'Name and email are required';
+        formLoading = false; // Ensure loading is false
+        return;
       }
       
       if (!editingUser && !userPassword.trim()) {
-        throw new Error('Password is required for new users');
+        formError = 'Password is required for new users';
+        formLoading = false; // Ensure loading is false
+        return;
       }
       
       const userData = {
         name: userName.trim(),
         email: userEmail.trim(),
-        role: userRole
+        role: userRoleInForm
       };
       
       if (userPassword.trim()) {
@@ -102,66 +114,53 @@
       }
       
       let response;
-      
       if (editingUser) {
-        // Update existing user
-        response = await fetch(`/api/owner/clients/${clientServer.client_id}/users/${editingUser.user_id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include',
-          body: JSON.stringify(userData)
-        });
+        if (!editingUser.user_id) {
+          formError = 'User ID is missing for update.';
+          formLoading = false; // Ensure loading is false
+          return;
+        }
+        response = await clientServerApi.updateClientUser(clientServer.client_id, editingUser.user_id, userData);
       } else {
-        // Create new user
-        response = await fetch(`/api/owner/clients/${clientServer.client_id}/users`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include',
-          body: JSON.stringify(userData)
-        });
+        response = await clientServerApi.createClientUser(clientServer.client_id, userData);
       }
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+      if (response.success) {
+        await loadUsers();
+        cancelForm();
+      } else {
+        if (response.errors && Array.isArray(response.errors) && response.errors.length > 0) {
+          formError = response.errors.map(e => e.msg || String(e)).join('; ');
+        } else {
+          formError = response.message || (editingUser ? 'Failed to update user.' : 'Failed to create user.');
+        }
       }
-      
-      // Reload users and close form
-      await loadUsers();
-      cancelForm();
-      
     } catch (err) {
-      console.error('Error saving user:', err);
-      formError = err.message;
+      console.error('Error saving user (unexpected):', err);
+      formError = 'An unexpected error occurred: ' + (err.message || 'Unknown error');
     } finally {
       formLoading = false;
     }
   }
   
   async function handleDeleteUser(user) {
+    if (!clientServer || !clientServer.client_id || !user || !user.user_id) {
+      alert('Cannot delete user: required information is missing.');
+      return;
+    }
     if (!confirm(`Are you sure you want to delete user "${user.name}"? This action cannot be undone.`)) {
       return;
     }
-    
     try {
-      const response = await fetch(`/api/owner/clients/${clientServer.client_id}/users/${user.user_id}`, {
-        method: 'DELETE',
-        credentials: 'include'
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to delete user: ${response.statusText}`);
+      const response = await clientServerApi.deleteClientUser(clientServer.client_id, user.user_id);
+      if (response.success) {
+        await loadUsers();
+      } else {
+        alert(response.message || 'Failed to delete user.');
       }
-      
-      await loadUsers();
-      
     } catch (err) {
-      console.error('Error deleting user:', err);
-      alert('Failed to delete user: ' + err.message);
+      console.error('Error deleting user (unexpected):', err);
+      alert('An unexpected error occurred while deleting user: ' + (err.message || 'Unknown error'));
     }
   }
   
@@ -185,15 +184,16 @@
 <div class="modal-overlay" 
      onclick={() => onClose?.()}
      onkeydown={(e) => { if (e.key === 'Escape') onClose?.(); }}
-     role="dialog"
+     role="dialog" 
+     aria-labelledby="userManagementModalTitle" 
      tabindex="-1">
   <div class="modal" 
        onclick={(e) => e.stopPropagation()}
        onkeydown={(e) => { if (e.key === 'Escape') onClose?.(); }}
-       role="document">
+       aria-modal="true">
     <div class="modal-header">
-      <h2>👥 Manage Users - {clientServer.app_name}</h2>
-      <button class="close-btn" onclick={() => onClose?.()}>✕</button>
+      <h2 id="userManagementModalTitle">👥 Manage Users - {clientServer?.app_name}</h2>
+      <button class="close-btn" onclick={() => onClose?.()} aria-label="Close user management dialog">✕</button>
     </div>
     
     <div class="modal-content">
@@ -213,6 +213,7 @@
                   placeholder="User's full name"
                   required
                   disabled={formLoading}
+                  aria-required="true"
                 />
               </div>
               
@@ -225,6 +226,7 @@
                   placeholder="user@example.com"
                   required
                   disabled={formLoading}
+                  aria-required="true"
                 />
               </div>
             </div>
@@ -239,24 +241,25 @@
                   placeholder={editingUser ? 'Leave blank to keep current password' : 'Enter password'}
                   required={!editingUser}
                   disabled={formLoading}
+                  aria-required={!editingUser}
                 />
               </div>
               
               <div class="form-group">
-                <label for="userRole">Role *</label>
-                <select id="userRole" bind:value={userRole} disabled={formLoading}>
-                  {#each userRoles as role}
-                    <option value={role.value}>{role.label}</option>
+                <label for="userRoleInForm">Role *</label>
+                <select id="userRoleInForm" bind:value={userRoleInForm} disabled={formLoading} aria-required="true">
+                  {#each userRoles as roleOpt}
+                    <option value={roleOpt.value}>{roleOpt.label}</option>
                   {/each}
                 </select>
                 <small class="help-text">
-                  {userRoles.find(r => r.value === userRole)?.description}
+                  {userRoles.find(r => r.value === userRoleInForm)?.description}
                 </small>
               </div>
             </div>
             
             {#if formError}
-              <div class="error-message">
+              <div class="error-message" role="alert">
                 ❌ {formError}
               </div>
             {/if}
@@ -267,7 +270,7 @@
               </button>
               <button type="submit" class="btn btn-primary" disabled={formLoading}>
                 {#if formLoading}
-                  <span class="spinner"></span>
+                  <span class="spinner-sm"></span>
                   {editingUser ? 'Updating...' : 'Creating...'}
                 {:else}
                   {editingUser ? 'Update User' : 'Create User'}
@@ -280,19 +283,19 @@
         <!-- Users List -->
         <div class="users-section">
           <div class="section-header">
-            <h3>Users in {clientServer.assigned_schema_name}</h3>
+            <h3>Users in {clientServer?.assigned_schema_name}</h3>
             <button class="btn btn-primary" onclick={handleCreateUser}>
               ➕ Add User
             </button>
           </div>
           
           {#if loading}
-            <div class="loading">
+            <div class="loading" role="status" aria-live="polite">
               <div class="spinner"></div>
               <p>Loading users...</p>
             </div>
           {:else if error}
-            <div class="error">
+            <div class="error" role="alert">
               <p>{error}</p>
               <button class="btn btn-primary" onclick={loadUsers}>Retry</button>
             </div>
@@ -305,43 +308,45 @@
               </button>
             </div>
           {:else}
-            <div class="users-table">
-              <div class="table-header">
-                <div class="col-name">Name</div>
-                <div class="col-email">Email</div>
-                <div class="col-role">Role</div>
-                <div class="col-created">Created</div>
-                <div class="col-actions">Actions</div>
+            <div class="users-table" role="table" aria-label="Client Server Users">
+              <div class="table-header" role="rowgroup">
+                <div class="col-name" role="columnheader">Name</div>
+                <div class="col-email" role="columnheader">Email</div>
+                <div class="col-role" role="columnheader">Role</div>
+                <div class="col-created" role="columnheader">Created</div>
+                <div class="col-actions" role="columnheader">Actions</div>
               </div>
               
               {#each users as user (user.user_id)}
-                <div class="table-row">
-                  <div class="col-name">
+                <div class="table-row" role="row">
+                  <div class="col-name" role="cell">
                     <div class="user-name">{user.name}</div>
                   </div>
-                  <div class="col-email">
+                  <div class="col-email" role="cell">
                     <div class="user-email">{user.email}</div>
                   </div>
-                  <div class="col-role">
+                  <div class="col-role" role="cell">
                     <span class="role-badge" style="background-color: {getRoleColor(user.role)}">
                       {user.role}
                     </span>
                   </div>
-                  <div class="col-created">
+                  <div class="col-created" role="cell">
                     {formatDate(user.created_at)}
                   </div>
-                  <div class="col-actions">
+                  <div class="col-actions" role="cell">
                     <button 
                       class="btn-icon btn-edit"
                       onclick={() => handleEditUser(user)}
-                      title="Edit user"
+                      title="Edit user {user.name}"
+                      aria-label="Edit user {user.name}"
                     >
                       ✏️
                     </button>
                     <button 
                       class="btn-icon btn-delete"
                       onclick={() => handleDeleteUser(user)}
-                      title="Delete user"
+                      title="Delete user {user.name}"
+                      aria-label="Delete user {user.name}"
                     >
                       🗑️
                     </button>
@@ -357,13 +362,14 @@
 </div>
 
 <style>
+  /* Styles remain largely the same, but ensure they are theme-aware if using CSS vars from CreateClientModal */
   .modal-overlay {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--modal-overlay-bg, rgba(0, 0, 0, 0.5)); /* Added fallback */
     display: flex;
     align-items: center;
     justify-content: center;
@@ -372,7 +378,8 @@
   }
   
   .modal {
-    background: white;
+    background: var(--modal-bg, white); /* Added fallback */
+    color: var(--text-color, #2c3e50); /* Added fallback */
     border-radius: 12px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
     max-width: 900px;
@@ -386,12 +393,12 @@
     justify-content: space-between;
     align-items: center;
     padding: 1.5rem;
-    border-bottom: 1px solid #e1e8ed;
+    border-bottom: 1px solid var(--modal-header-border, #e1e8ed); /* Added fallback */
   }
   
   .modal-header h2 {
     margin: 0;
-    color: #2c3e50;
+    /* color: var(--text-color); Inherited */
   }
   
   .close-btn {
@@ -399,14 +406,15 @@
     border: none;
     font-size: 1.5rem;
     cursor: pointer;
-    color: #7f8c8d;
+    color: var(--help-text-color, #7f8c8d); /* Added fallback */
     padding: 0.25rem;
     border-radius: 4px;
-    transition: background-color 0.2s ease;
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
   
   .close-btn:hover {
-    background: #f8f9fa;
+    background: var(--button-bg-color, #f8f9fa); /* Added fallback */
+    color: var(--link-hover-color, #3498db); /* Added fallback */
   }
   
   .modal-content {
@@ -422,7 +430,7 @@
   
   .section-header h3 {
     margin: 0;
-    color: #2c3e50;
+    /* color: var(--text-color); Inherited */
   }
   
   .loading, .error, .empty-state {
@@ -431,36 +439,40 @@
   }
   
   .loading .spinner {
-    width: 32px;
-    height: 32px;
-    border: 3px solid #f3f3f3;
-    border-top: 3px solid #3498db;
+    /* Basic spinner, can be replaced with global one if available */
+    border: 4px solid var(--spinner-bg-color, rgba(0, 0, 0, 0.1));
+    border-left-color: var(--spinner-color, #3498db);
     border-radius: 50%;
+    width: 40px;
+    height: 40px;
     animation: spin 1s linear infinite;
-    margin: 0 auto 1rem;
+    margin: 0 auto 1rem auto;
   }
-  
+
   @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+    to { transform: rotate(360deg); }
   }
-  
+
   .error {
-    color: #e74c3c;
+    color: var(--error-text-color, #e74c3c); /* Added fallback */
+    background-color: var(--error-bg, #fff5f5); /* Added fallback */
+    border: 1px solid var(--error-border-color, #fed7d7); /* Added fallback */
+    padding: 1rem;
+    border-radius: 8px;
   }
   
   .empty-state h4 {
-    color: #7f8c8d;
+    color: var(--help-text-color, #7f8c8d);
     margin-bottom: 0.5rem;
   }
   
   .empty-state p {
-    color: #95a5a6;
+    color: var(--help-text-color, #95a5a6);
     margin-bottom: 1.5rem;
   }
   
   .users-table {
-    border: 1px solid #e1e8ed;
+    border: 1px solid var(--table-border-color, #e1e8ed); /* Added fallback */
     border-radius: 8px;
     overflow: hidden;
   }
@@ -474,14 +486,14 @@
   }
   
   .table-header {
-    background: #f8f9fa;
+    background: var(--table-header-bg, #f8f9fa); /* Added fallback */
     font-weight: 600;
-    color: #495057;
-    border-bottom: 1px solid #e1e8ed;
+    /* color: var(--text-color); Inherited */
+    border-bottom: 1px solid var(--table-border-color, #e1e8ed);
   }
   
   .table-row {
-    border-bottom: 1px solid #f1f3f4;
+    border-bottom: 1px solid var(--table-row-border-color, #f1f3f4); /* Added fallback */
   }
   
   .table-row:last-child {
@@ -489,16 +501,16 @@
   }
   
   .table-row:hover {
-    background: #f8f9fa;
+    background: var(--table-row-hover-bg, #f8f9fa); /* Added fallback */
   }
   
   .user-name {
     font-weight: 600;
-    color: #2c3e50;
+    /* color: var(--text-color); Inherited */
   }
   
   .user-email {
-    color: #7f8c8d;
+    color: var(--help-text-color, #7f8c8d);
     font-size: 0.9rem;
   }
   
@@ -524,30 +536,31 @@
     border-radius: 4px;
     cursor: pointer;
     transition: background-color 0.2s ease;
+    font-size: 1rem; /* Ensure icons are reasonably sized */
   }
   
   .btn-icon:hover {
-    background: #f8f9fa;
+    background: var(--button-bg-hover, #f0f0f0); /* Added fallback */
   }
   
   .btn-edit:hover {
-    background: #e3f2fd;
+    background: var(--button-edit-hover-bg, #e3f2fd); /* Added fallback */
   }
   
   .btn-delete:hover {
-    background: #ffebee;
+    background: var(--button-delete-hover-bg, #ffebee); /* Added fallback */
   }
   
   /* User Form Styles */
   .user-form {
-    background: #f8f9fa;
+    background: var(--form-bg, #f8f9fa); /* Added fallback */
     border-radius: 8px;
     padding: 1.5rem;
   }
   
   .user-form h3 {
     margin: 0 0 1.5rem 0;
-    color: #2c3e50;
+    /* color: var(--text-color); Inherited */
   }
   
   .form-row {
@@ -564,44 +577,47 @@
   
   .form-group label {
     font-weight: 600;
-    color: #2c3e50;
+    /* color: var(--text-color); Inherited */
     margin-bottom: 0.5rem;
   }
   
   .form-group input,
   .form-group select {
     padding: 0.75rem;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--input-border-color, #dee2e6); /* Added fallback */
     border-radius: 6px;
     font-size: 1rem;
     transition: border-color 0.2s ease;
+    background-color: var(--input-bg, white); /* Added fallback */
+    color: var(--input-text-color, #2c3e50); /* Added fallback */
+    font-family: inherit;
   }
   
   .form-group input:focus,
   .form-group select:focus {
     outline: none;
-    border-color: #3498db;
-    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+    border-color: var(--input-focus-border-color, #3498db); /* Added fallback */
+    box-shadow: 0 0 0 3px var(--input-focus-shadow, rgba(52, 152, 219, 0.1)); /* Added fallback */
   }
   
   .form-group input:disabled,
   .form-group select:disabled {
-    background: #f8f9fa;
-    color: #6c757d;
+    background: var(--input-disabled-bg, #f8f9fa);
+    color: var(--input-disabled-text-color, #6c757d);
   }
   
   .help-text {
     margin-top: 0.25rem;
-    color: #6c757d;
+    color: var(--help-text-color, #6c757d);
     font-size: 0.875rem;
   }
   
   .error-message {
-    background: #fff5f5;
-    border: 1px solid #fed7d7;
+    background: var(--error-bg, #fff5f5);
+    border: 1px solid var(--error-border-color, #fed7d7);
     border-radius: 6px;
     padding: 1rem;
-    color: #c53030;
+    color: var(--error-text-color, #c53030);
     margin-bottom: 1rem;
   }
   
@@ -611,49 +627,54 @@
     justify-content: flex-end;
     margin-top: 1.5rem;
   }
-  
+
+  /* Consistent button styling (can be from global styles) */
   .btn {
-    padding: 0.75rem 1.5rem;
-    border: none;
-    border-radius: 6px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    display: flex;
+    display: inline-flex; /* For aligning spinner and text */
     align-items: center;
-    gap: 0.5rem;
+    justify-content: center;
+    padding: 0.6rem 1.2rem;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+    text-decoration: none;
+    border: 1px solid transparent;
   }
-  
+
+  .btn-primary {
+    background-color: var(--button-primary-bg, #3498db);
+    color: var(--button-primary-text, white);
+    border-color: var(--button-primary-bg, #3498db);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background-color: var(--button-primary-hover-bg, #2980b9);
+    border-color: var(--button-primary-hover-bg, #2980b9);
+  }
+
+  .btn-secondary {
+    background-color: var(--button-secondary-bg, #ecf0f1);
+    color: var(--button-secondary-text, #34495e);
+    border-color: var(--button-secondary-border, #bdc3c7);
+  }
+  .btn-secondary:hover:not(:disabled) {
+    background-color: var(--button-secondary-hover-bg, #dadedf);
+    border-color: var(--button-secondary-hover-border, #abb0b2);
+  }
+
   .btn:disabled {
     opacity: 0.6;
     cursor: not-allowed;
   }
-  
-  .btn-primary {
-    background: linear-gradient(135deg, #3498db, #2980b9);
-    color: white;
-  }
-  
-  .btn-primary:hover:not(:disabled) {
-    background: linear-gradient(135deg, #2980b9, #21618c);
-  }
-  
-  .btn-secondary {
-    background: #6c757d;
-    color: white;
-  }
-  
-  .btn-secondary:hover:not(:disabled) {
-    background: #5a6268;
-  }
-  
-  .spinner {
-    width: 16px;
-    height: 16px;
-    border: 2px solid transparent;
-    border-top: 2px solid currentColor;
+
+  .spinner-sm {
+    width: 1em;
+    height: 1em;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
     border-radius: 50%;
-    animation: spin 1s linear infinite;
+    animation: spin 0.75s linear infinite;
+    margin-right: 0.5em;
   }
   
   @media (max-width: 768px) {
@@ -663,31 +684,44 @@
     }
     
     .table-header, .table-row {
-      grid-template-columns: 1fr;
+      grid-template-columns: 1fr; /* Stack columns on small screens */
       gap: 0.5rem;
+      padding: 0.75rem;
     }
     
     .table-header {
-      display: none;
+      display: none; /* Hide header row, use labels in data rows */
     }
     
     .table-row {
-      display: block;
-      padding: 1rem;
+      display: block; /* Make rows block elements */
+      margin-bottom: 1rem;
+      border: 1px solid var(--table-border-color, #e1e8ed);
+      border-radius: 8px;
     }
     
     .col-name, .col-email, .col-role, .col-created, .col-actions {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 0.5rem;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid var(--table-row-border-color, #f1f3f4); /* Separator inside stacked row */
+    }
+    .col-actions {
+      border-bottom: none; /* No border for the last item in a stacked row */
     }
     
-    .col-name::before { content: "Name: "; font-weight: 600; }
-    .col-email::before { content: "Email: "; font-weight: 600; }
-    .col-role::before { content: "Role: "; font-weight: 600; }
-    .col-created::before { content: "Created: "; font-weight: 600; }
-    .col-actions::before { content: "Actions: "; font-weight: 600; }
+    /* Commented out to simplify and check for linter error source 
+    .col-name::before, 
+    .col-email::before, 
+    .col-role::before, 
+    .col-created::before, 
+    .col-actions::before {
+      content: attr(aria-label);
+      font-weight: 600;
+      margin-right: 0.5rem;
+    }
+    */
     
     .form-row {
       grid-template-columns: 1fr;
@@ -695,6 +729,9 @@
     
     .form-actions {
       flex-direction: column;
+    }
+    .form-actions .btn {
+      width: 100%;
     }
   }
 </style> 

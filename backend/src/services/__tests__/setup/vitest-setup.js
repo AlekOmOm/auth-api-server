@@ -13,22 +13,6 @@ import fs from "fs";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Try to load .env.test first, then fallback to .env
-const envTestPath = path.resolve(__dirname, "../../../../../.env.test");
-const envPath = path.resolve(__dirname, "../../../../../.env");
-
-let loadedEnvFile;
-if (fs.existsSync(envTestPath)) {
-   dotenv.config({ path: envTestPath });
-   loadedEnvFile = envTestPath;
-   console.log(`🔧 Loading test .env from: ${envTestPath}`);
-} else {
-   dotenv.config({ path: envPath });
-   loadedEnvFile = envPath;
-   console.log(`🔧 Loading .env from: ${envPath}`);
-   console.log(`💡 Tip: Create .env.test for test-specific configuration`);
-}
-
 // Global test setup
 beforeAll(async () => {
    console.log("🔧 Global test setup starting...");
@@ -58,7 +42,7 @@ beforeAll(async () => {
    }
 
    // Log loaded environment (for debugging)
-   console.log(`📍 Environment file: ${loadedEnvFile}`);
+   console.log("📍 Environment variables (should be set by vitest.config.js):");
    console.log(`📍 POSTGRES_HOST: ${process.env.POSTGRES_HOST}`);
    console.log(`📍 POSTGRES_DB: ${process.env.POSTGRES_DB}`);
    console.log(`📍 POSTGRES_USER: ${process.env.POSTGRES_USER}`);
