@@ -1,6 +1,6 @@
 <!-- src/components/ErrorMessage.svelte -->
 <script>
-   export let errors = [];
+   let { errors = [] } = $props();
  </script>
  
  {#if errors.length > 0}

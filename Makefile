@@ -47,6 +47,17 @@ clean-full:
 	@docker compose down -v --rmi all --remove-orphans
 	@echo "Full cleanup completed"
 
+clean-full-backend:
+	@echo "Performing full cleanup of only Backend (containers, images, volumes)..."
+	@docker compose down backend -v --rmi all --remove-orphans
+	@echo "Full cleanup of Backend completed"
+
+restart-full-backend: clean-full-backend rebuild-backend
+	@echo "Restarting backend..."
+	@docker compose up -d backend
+	@make logs-backend
+	@echo "Backend restarted"
+
 # Show logs for all services
 logs:
 	@echo "Showing Docker Compose logs..."
@@ -77,6 +88,11 @@ rebuild:
 	@echo "Rebuilding and starting services..."
 	@docker compose up -d --build
 	@echo "Services rebuilt and started"
+
+rebuild-backend:
+	@echo "Rebuilding and starting backend..."
+	@docker compose up -d --build backend
+	@echo "Backend rebuilt and started"
 
 # ==============================================================================
 # DEVELOPMENT COMMANDS (Non-Docker)
@@ -113,6 +129,10 @@ dev-fullstack:
 # ENVIRONMENT SETUP
 # ==============================================================================
 
+init-auth:
+	@echo "Initializing Auth System schema..."
+	@node ./scripts/init-auth-schema.js
+
 # setup environment
 setup-env:
 	@node .\scripts\setup-env.js
@@ -131,12 +151,14 @@ help:
 	@echo "  stop         - Stop all services"
 	@echo "  clean        - Remove containers (keeps images/volumes)"
 	@echo "  clean-full   - Full cleanup (containers + images + volumes)"
+	@echo "  clean-full-backend - Remove backend containers, images, and volumes"
 	@echo "  logs         - Show logs for all services"
 	@echo "  logs-db      - Show database logs only"
 	@echo "  logs-backend - Show backend logs only"  
 	@echo "  logs-frontend- Show frontend logs only"
 	@echo "  status       - Show service status"
 	@echo "  restart      - Stop and start services"
+	@echo "  restart-full-backend - clean-full-backend and rebuild and start backend"
 	@echo "  rebuild      - Rebuild and start services"
 	@echo ""
 	@echo " DEVELOPMENT COMMANDS (Non-Docker):"
@@ -158,7 +180,4 @@ help:
 # Declare phony targets
 .PHONY: run run-clean stop clean clean-full logs logs-db logs-backend logs-frontend status restart rebuild
 .PHONY: setup-frontend setup-backend dev-frontend dev-backend dev-fullstack
-.PHONY: setup-env gen-ses-secret help
-
-
-
+.PHONY: setup-env gen-ses-secret help init-auth

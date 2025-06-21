@@ -1,2 +1,1 @@
-
-<h2> Auth System </h2>
+<h1> Auth System </h1>

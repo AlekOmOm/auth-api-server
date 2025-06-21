@@ -10,7 +10,16 @@
     "nodemonDev": "nodemon server.js",
     "init-db": "node ./src/db/setupDB.js",
     "reset-db": "node ./src/db/setupDB.js --delete",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:unit": "vitest run --testNamePattern=\"^(?!.*Integration Tests)\"",
+    "test:integration": "vitest run --testNamePattern=\"Integration Tests\"",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:setup": "npm run test:db:up && npm run test:wait-for-db",
+    "test:teardown": "npm run test:db:down",
+    "test:db:up": "docker-compose -f ../docker-compose.yml up db -d",
+    "test:db:down": "docker-compose -f ../docker-compose.yml down",
+    "test:wait-for-db": "node -e \"const testSetup = require('./src/services/__tests__/setup/testSetup.js'); testSetup.waitForDatabase().then(() => console.log('Database ready')).catch(console.error);\""
   },
   "repository": {
     "type": "git",
@@ -34,6 +43,7 @@
     "express-session": "^1.18.1",
     "express-validator": "^7.2.1",
     "jsonwebtoken": "^9.0.2",
+    "node-fetch": "^3.3.2",
     "pg": "^8.16.0",
     "pg-format": "^1.0.4",
     "sqlite": "^5.1.1",
@@ -41,6 +51,7 @@
     "uuid": "^11.1.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.53.0",
     "supertest": "^7.1.0",
     "vitest": "^3.1.2"
   }

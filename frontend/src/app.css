@@ -72,6 +72,52 @@ h1 {
 
 }
 
+.btn {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #1a1a1a;
+  cursor: pointer;
+  transition: border-color 0.25s;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.87);
+}
+
+.btn:hover {
+  border-color: #646cff;
+}
+
+.btn:focus,
+.btn:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+.btn-primary {
+  background-color: #646cff;
+  color: #ffffff;
+}
+
+.btn-primary:hover {
+  background-color: #535bf2;
+}
+
+.btn-secondary {
+  background-color: #4a4a4a;
+  /* Darker grey for dark mode */
+  color: #dddddd;
+  border: 1px solid #6a6a6a;
+}
+
+.btn-secondary:hover {
+  background-color: #5a5a5a;
+  border-color: #7a7a7a;
+}
+
 button {
   border-radius: 8px;
   border: 1px solid transparent;
@@ -82,6 +128,7 @@ button {
   background-color: #1a1a1a;
   cursor: pointer;
   transition: border-color 0.25s;
+  color: rgba(255, 255, 255, 0.87);
 }
 
 button:hover {
@@ -103,7 +150,80 @@ button:focus-visible {
     color: #747bff;
   }
 
+  .btn {
+    background-color: #f9f9f9;
+    color: #213547;
+  }
+
+  .btn-primary {
+    background-color: #747bff;
+    color: #ffffff;
+  }
+
+  .btn-primary:hover {
+    background-color: #646cff;
+  }
+
+  .btn-secondary {
+    background-color: #e0e0e0;
+    /* Lighter grey for light mode */
+    color: #333333;
+    border: 1px solid #cccccc;
+  }
+
+  .btn-secondary:hover {
+    background-color: #d0d0d0;
+    border-color: #bbbbbb;
+  }
+
   button {
     background-color: #f9f9f9;
+    color: #213547;
   }
+}
+
+/* Global Spinner Styles */
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(255, 255, 255, 0.1);
+  /* Default for dark mode */
+  border-top-color: #646cff;
+  /* Default for dark mode */
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 1rem auto;
+  /* General purpose margin */
+}
+
+.spinner-sm {
+  width: 16px;
+  height: 16px;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  /* Inherits color from parent, good for buttons */
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  display: inline-block;
+  /* To flow with text/icons */
+  vertical-align: middle;
+}
+
+@media (prefers-color-scheme: light) {
+  .spinner {
+    border-color: rgba(0, 0, 0, 0.1);
+    border-top-color: #747bff;
+  }
+
+  /* .spinner-sm using currentColor will adapt automatically */
 }

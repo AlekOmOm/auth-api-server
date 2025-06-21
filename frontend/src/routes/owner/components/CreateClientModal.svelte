@@ -1,23 +1,41 @@
-<script>
-  import { createEventDispatcher } from 'svelte';
+<script lang="ts">
+  interface ClientServer {
+    app_name: string;
+    assigned_schema_name: string;
+    client_mode: string;
+    allowed_return_urls: string[];
+    client_id: string;
+    // Define other properties if they exist
+  }
   
-  export let clientServer = null; // null for create, object for edit
+  interface Props {
+    clientServer?: ClientServer | null; // null for create, object for edit
+    onClose?: () => void;
+    onClientCreated?: () => void;
+  }
   
-  const dispatch = createEventDispatcher();
+  let { 
+    clientServer = null,
+    onClose,
+    onClientCreated
+  }: Props = $props();
+  
+  // Import the API service
+  import clientServerApi from '../../../services/clientServerApi.js';
   
   let isEditing = !!clientServer;
-  let loading = false;
-  let error = '';
+  let loading = $state(false);
+  let error = $state('');
   
   // Form fields
-  let appName = (clientServer && clientServer.app_name) || '';
-  let schemaName = (clientServer && clientServer.assigned_schema_name) || '';
-  let clientMode = (clientServer && clientServer.client_mode) || 'frontend-login-proxy';
-  let returnUrls = (clientServer && clientServer.allowed_return_urls && clientServer.allowed_return_urls.join('\n')) || '';
+  let appName = $state(clientServer?.app_name || '');
+  let schemaName = $state(clientServer?.assigned_schema_name || '');
+  let clientMode = $state(clientServer?.client_mode || 'frontend-login-proxy');
+  let returnUrls = $state(clientServer?.allowed_return_urls?.join('\n') || '');
   
   // Generated fields (for display only when editing)
-  let clientId = (clientServer && clientServer.client_id) || '';
-  let clientSecret = ''; // Will be shown only on creation
+  let clientId = $state(clientServer?.client_id || '');
+  let clientSecret = $state(''); // Will be shown only on creation
   
   const clientModes = [
     { value: 'frontend-login-proxy', label: 'Frontend Login Proxy', description: 'For web applications with user login flows' },
@@ -54,78 +72,78 @@
   }
   
   async function handleSubmit() {
+    error = ''; // Clear previous errors
+    loading = true;
+    clientSecret = ''; // Clear previous secret if any
+
     try {
-      loading = true;
-      error = '';
-      
       validateForm();
       
       const urls = returnUrls.split('\n').map(url => url.trim()).filter(url => url);
       
-      const clientData = {
+      const modalDataPayload = {
         app_name: appName.trim(),
         assigned_schema_name: schemaName.trim(),
         client_mode: clientMode,
         allowed_return_urls: urls
       };
+
+      if (isEditing && clientId) {
+        (modalDataPayload as any).client_id = clientId;
+      }
       
-      let response;
+      let response; // Changed variable name from result to response for clarity
       
       if (isEditing) {
-        // Update existing client
-        response = await fetch(`/api/clientServer/user/clients/${clientId}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include',
-          body: JSON.stringify(clientData)
+        response = await clientServerApi.updateClientServer(clientId, {
+          app_name: modalDataPayload.app_name,
+          client_mode: modalDataPayload.client_mode,
+          allowed_return_urls: modalDataPayload.allowed_return_urls
         });
       } else {
-        // Create new client
-        response = await fetch('/api/clientServer/user/register', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include',
-          body: JSON.stringify(clientData)
+        response = await clientServerApi.createClientServer({
+          app_name: modalDataPayload.app_name,
+          authorized_urls: modalDataPayload.allowed_return_urls,
         });
       }
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+      loading = false; // Set loading to false once API call is done
+
+      if (!response.success) {
+        let errorMsg = 'An unexpected error occurred.';
+        if (response.errors && Array.isArray(response.errors) && response.errors.length > 0) {
+          errorMsg = response.errors.map(e => e.msg || String(e)).join('; ');
+        } else if (response.message) {
+          errorMsg = response.message;
+        }
+        error = errorMsg;
+        return; // Stop further execution on error
       }
       
-      const result = await response.json();
-      
-      // If creating, show the client secret
-      if (!isEditing && result.data?.client_secret) {
-        clientSecret = result.data.client_secret;
-        clientId = result.data.client_id;
+      // Success path
+      if (!isEditing && response.data?.client_secret) {
+        clientSecret = response.data.client_secret;
+        clientId = response.data.client_id; 
+        // Don't call onClientCreated yet, wait for user to acknowledge the secret
+        return; 
       }
       
-      if (clientSecret) {
-        // Show success with secret, don't close yet
-        return;
-      }
+      onClientCreated?.(); // This will close modal and refresh OwnerPanel list
       
-      dispatch('clientCreated');
-      
-    } catch (err) {
-      console.error('Error saving client server:', err);
-      error = err.message;
-    } finally {
+    } catch (err: any) {
+      // This catch block now primarily handles errors from validateForm() or other unexpected JS errors
+      console.error('Error during client server operation (validation or unexpected):', err);
+      error = err.message || 'An unexpected client-side error occurred.';
       loading = false;
     }
+    // No finally block needed here for loading, as it's handled in try/catch and after API call
   }
   
   function handleClose() {
-    dispatch('close');
+    onClose?.();
   }
   
-  function copyToClipboard(text) {
+  function copyToClipboard(text: string) {
     navigator.clipboard.writeText(text).then(() => {
       alert('Copied to clipboard!');
     }).catch(() => {
@@ -134,11 +152,20 @@
   }
 </script>
 
-<div class="modal-overlay" on:click={handleClose}>
-  <div class="modal" on:click|stopPropagation>
+<div class="modal-overlay" 
+     onclick={handleClose}
+     onkeydown={(e) => { if (e.key === 'Escape') handleClose(); }}
+     role="button"
+     tabindex="-1">
+  <div class="modal" 
+       role="dialog"
+       aria-modal="true"
+       tabindex="-1"
+       onclick={(e) => e.stopPropagation()}
+       onkeydown={(e) => { if (e.key === 'Escape') handleClose(); }}>
     <div class="modal-header">
       <h2>{isEditing ? '✏️ Edit Client Server' : '➕ Create New Client Server'}</h2>
-      <button class="close-btn" on:click={handleClose}>✕</button>
+      <button class="close-btn" onclick={handleClose}>✕</button>
     </div>
     
     <div class="modal-content">
@@ -151,18 +178,18 @@
           
           <div class="credentials">
             <div class="credential-item">
-              <label>Client ID:</label>
+              <span class="credential-label">Client ID:</span>
               <div class="credential-value">
                 <code>{clientId}</code>
-                <button class="copy-btn" on:click={() => copyToClipboard(clientId)}>📋</button>
+                <button class="copy-btn" onclick={() => copyToClipboard(clientId)}>📋</button>
               </div>
             </div>
             
             <div class="credential-item">
-              <label>Client Secret:</label>
+              <span class="credential-label">Client Secret:</span>
               <div class="credential-value">
                 <code class="secret">{clientSecret}</code>
-                <button class="copy-btn" on:click={() => copyToClipboard(clientSecret)}>📋</button>
+                <button class="copy-btn" onclick={() => copyToClipboard(clientSecret)}>📋</button>
               </div>
             </div>
           </div>
@@ -171,13 +198,13 @@
             ⚠️ <strong>Important:</strong> The client secret will not be shown again. Please save it securely.
           </div>
           
-          <button class="btn btn-primary" on:click={() => dispatch('clientCreated')}>
+          <button class="btn btn-primary" onclick={() => onClientCreated?.()}>
             Continue to Dashboard
           </button>
         </div>
       {:else}
         <!-- Form state -->
-        <form on:submit|preventDefault={handleSubmit}>
+        <form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
           <div class="form-group">
             <label for="appName">Application Name *</label>
             <input 
@@ -239,12 +266,12 @@
           {/if}
           
           <div class="form-actions">
-            <button type="button" class="btn btn-secondary" on:click={handleClose} disabled={loading}>
+            <button type="button" class="btn btn-secondary" onclick={handleClose} disabled={loading}>
               Cancel
             </button>
             <button type="submit" class="btn btn-primary" disabled={loading}>
               {#if loading}
-                <span class="spinner"></span>
+                <span class="spinner-sm"></span>
                 {isEditing ? 'Updating...' : 'Creating...'}
               {:else}
                 {isEditing ? 'Update Client Server' : 'Create Client Server'}
@@ -258,267 +285,265 @@
 </div>
 
 <style>
+  /* Inherit font from global styles */
+  :global(body) {
+    font-family: var(--font-family);
+    line-height: var(--line-height);
+    font-weight: var(--font-weight-normal);
+  }
+
   .modal-overlay {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.65); /* Slightly darker overlay for better contrast with dark modal */
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 1000;
     padding: 1rem;
   }
-  
+
   .modal {
-    background: white;
-    border-radius: 12px;
+    background: var(--modal-bg);
+    color: var(--text-color); /* Ensure text inside modal uses theme color */
+    border-radius: 12px; /* Kept original, can be 8px to match buttons */
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
     max-width: 600px;
     width: 100%;
     max-height: 90vh;
     overflow-y: auto;
   }
-  
+
   .modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 1.5rem;
-    border-bottom: 1px solid #e1e8ed;
+    border-bottom: 1px solid var(--modal-header-border);
   }
-  
+
   .modal-header h2 {
     margin: 0;
-    color: #2c3e50;
+    /* color: var(--text-color); Inherited */
   }
-  
+
   .close-btn {
     background: none;
     border: none;
     font-size: 1.5rem;
     cursor: pointer;
-    color: #7f8c8d;
+    color: var(--help-text-color);
     padding: 0.25rem;
     border-radius: 4px;
-    transition: background-color 0.2s ease;
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
-  
+
   .close-btn:hover {
-    background: #f8f9fa;
+    background: var(--button-bg-color);
+    color: var(--link-hover-color);
   }
-  
+
   .modal-content {
     padding: 1.5rem;
   }
-  
+
   .success-state {
     text-align: center;
   }
-  
+
   .success-icon {
     font-size: 4rem;
     margin-bottom: 1rem;
+    color: var(--success-icon-color);
   }
-  
+
   .success-state h3 {
-    color: #27ae60;
+    color: var(--success-text-color); /* More specific success text color */
     margin-bottom: 1rem;
   }
-  
+
   .success-state p {
-    color: #7f8c8d;
+    color: var(--help-text-color); /* Use help text color for less emphasis */
     margin-bottom: 2rem;
   }
-  
+
   .credentials {
-    background: #f8f9fa;
+    background: var(--credentials-bg);
     border-radius: 8px;
     padding: 1.5rem;
     margin-bottom: 1.5rem;
     text-align: left;
   }
-  
+
   .credential-item {
     margin-bottom: 1rem;
   }
-  
+
   .credential-item:last-child {
     margin-bottom: 0;
   }
-  
-  .credential-item label {
+
+  .credential-item .credential-label {
     display: block;
-    font-weight: 600;
-    color: #2c3e50;
+    font-weight: var(--font-weight-medium);
+    /* color: var(--text-color); Inherited */
     margin-bottom: 0.5rem;
   }
-  
+
   .credential-value {
     display: flex;
     align-items: center;
     gap: 0.5rem;
   }
-  
+
   .credential-value code {
     flex: 1;
-    background: white;
-    border: 1px solid #dee2e6;
-    border-radius: 4px;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border-color);
+    color: var(--input-text-color);
+    border-radius: 4px; /* Can be 8px */
     padding: 0.75rem;
     font-family: 'Courier New', monospace;
     word-break: break-all;
   }
-  
+
   .credential-value code.secret {
-    background: #fff3cd;
-    border-color: #ffeaa7;
-    color: #856404;
+    background: var(--secret-code-bg);
+    border-color: var(--secret-code-border);
+    color: var(--secret-code-text);
   }
-  
-  .copy-btn {
-    background: #3498db;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    padding: 0.5rem;
+
+  .copy-btn { /* Style like a small utility button */
+    background: var(--button-bg-color);
+    color: var(--link-color);
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 0.5rem 0.8rem; /* Adjusted padding */
+    font-size: 0.9em;
+    font-weight: var(--font-weight-medium);
     cursor: pointer;
-    transition: background-color 0.2s ease;
+    transition: border-color 0.25s, background-color 0.2s ease;
   }
-  
+
   .copy-btn:hover {
-    background: #2980b9;
+    border-color: var(--button-hover-border-color);
+    background: var(--button-bg-color); /* Keep bg or slightly change */
   }
-  
+   .copy-btn:focus,
+   .copy-btn:focus-visible {
+    outline: var(--button-focus-outline);
+  }
+
+
   .warning {
-    background: #fff3cd;
-    border: 1px solid #ffeaa7;
-    border-radius: 6px;
+    background: var(--warning-bg);
+    border: 1px solid var(--warning-border);
+    border-radius: 8px; /* Consistent radius */
     padding: 1rem;
-    color: #856404;
+    color: var(--warning-text);
     margin-bottom: 1.5rem;
   }
-  
+  .warning strong {
+    font-weight: var(--font-weight-medium);
+  }
+
   .form-group {
     margin-bottom: 1.5rem;
   }
-  
+
   .form-group label {
     display: block;
-    font-weight: 600;
-    color: #2c3e50;
+    font-weight: var(--font-weight-medium);
+    /* color: var(--text-color); Inherited */
     margin-bottom: 0.5rem;
   }
-  
+
   .form-group input,
   .form-group select,
   .form-group textarea {
     width: 100%;
     padding: 0.75rem;
-    border: 1px solid #dee2e6;
-    border-radius: 6px;
+    border: 1px solid var(--input-border-color);
+    border-radius: 8px; /* Match button radius */
     font-size: 1rem;
-    transition: border-color 0.2s ease;
+    background-color: var(--input-bg);
+    color: var(--input-text-color);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    font-family: var(--font-family); /* Ensure form elements inherit font */
   }
-  
+
   .form-group input:focus,
   .form-group select:focus,
   .form-group textarea:focus {
     outline: none;
-    border-color: #3498db;
-    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+    border-color: var(--input-focus-border-color);
+    box-shadow: 0 0 0 3px rgba(var(--rgb-link-color, 100, 108, 255), 0.25); /* Define --rgb-link-color for this */
   }
-  
+  /* You'd need to define --rgb-link-color in :root, e.g. --rgb-link-color: 100, 108, 255; */
+
+
   .form-group input:disabled,
   .form-group select:disabled,
   .form-group textarea:disabled {
-    background: #f8f9fa;
-    color: #6c757d;
+    background: var(--input-disabled-bg);
+    color: var(--input-disabled-text-color);
+    cursor: not-allowed;
   }
-  
+
   .help-text {
     display: block;
     margin-top: 0.25rem;
-    color: #6c757d;
+    color: var(--help-text-color);
     font-size: 0.875rem;
   }
-  
+
   .error-message {
-    background: #fff5f5;
-    border: 1px solid #fed7d7;
-    border-radius: 6px;
+    background: var(--error-bg);
+    border: 1px solid var(--error-border-color);
+    border-radius: 8px; /* Consistent radius */
     padding: 1rem;
-    color: #c53030;
+    color: var(--error-text-color);
     margin-bottom: 1.5rem;
   }
-  
+
   .form-actions {
     display: flex;
     gap: 1rem;
     justify-content: flex-end;
   }
-  
-  .btn {
-    padding: 0.75rem 1.5rem;
-    border: none;
-    border-radius: 6px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-  
-  .btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-  
-  .btn-primary {
-    background: linear-gradient(135deg, #3498db, #2980b9);
-    color: white;
-  }
-  
-  .btn-primary:hover:not(:disabled) {
-    background: linear-gradient(135deg, #2980b9, #21618c);
-  }
-  
-  .btn-secondary {
-    background: #6c757d;
-    color: white;
-  }
-  
-  .btn-secondary:hover:not(:disabled) {
-    background: #5a6268;
-  }
-  
-  .spinner {
-    width: 16px;
-    height: 16px;
-    border: 2px solid transparent;
-    border-top: 2px solid currentColor;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-  }
-  
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
-  
+
+  /* General Button Styling (from app.css) -- Comment preserved for context */
+  /* .btn { ... } */
+  /* .btn:hover:not(:disabled) { ... } */
+  /* .btn:focus, .btn:focus-visible { ... } */
+  /* .btn:disabled { ... } */
+
+  /* Specific Button Types -- Comment preserved for context */
+  /* .btn-primary { ... } */
+  /* .btn-primary:hover:not(:disabled) { ... } */
+
+  /* .btn-secondary { ... } */
+  /* .btn-secondary:hover:not(:disabled) { ... } */
+
+  /* Spinner styles below are now handled by global app.css */
+  /* .spinner { ... } */
+  /* @keyframes spin { ... } */
+
   @media (max-width: 768px) {
     .modal {
       margin: 1rem;
       max-height: calc(100vh - 2rem);
     }
-    
     .form-actions {
       flex-direction: column;
     }
-    
+    .form-actions .btn { /* Make buttons full width in column layout */
+        width: 100%;
+        justify-content: center;
+    }
     .credential-value {
       flex-direction: column;
       align-items: stretch;

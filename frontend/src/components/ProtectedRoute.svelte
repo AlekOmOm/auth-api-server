@@ -3,36 +3,68 @@
   import { navigate } from 'svelte-routing';
   import { onMount } from 'svelte';
 
-  let isAuthenticated = false;
-  let loading = true;
+  let { path = "", location, children } = $props();
 
-  // subscribe to authStore to get the state
-  /*
-  * @param {Object} value - The state of the authStore
-  * @param {Boolean} value.isAuthenticated - Whether the user is authenticated
-  * @param {Boolean} value.loading - Whether the user is loading
-  */
+  let isAuthenticated = $state(false);
+  let loading = $state(true);
+  let hasAttemptedRedirect = $state(false);
+
   const unsubscribe = authStore.subscribe(value => {
     isAuthenticated = value.isAuthenticated;
     loading = value.loading;
-    // Redirect if not authenticated and not loading
-    if (!loading && !isAuthenticated) {
-        // Use timeout to ensure navigation happens after component mounts
-        setTimeout(() => navigate('/login', { replace: true }), 0);
+  });
+
+  $effect(() => {
+    console.log(`🔍 [ProtectedRoute $effect path="${path}"] Evaluating:`, {
+      isActive: location?.pathname === path,
+      currentLoc: location?.pathname,
+      loading: loading,
+      isAuthenticated: isAuthenticated,
+      hasAttemptedRedirect: hasAttemptedRedirect
+    });
+
+    if (location && location.pathname === path) {
+      if (!loading && !isAuthenticated) {
+        if (!hasAttemptedRedirect) {
+          console.log(`🔍 [ProtectedRoute $effect path="${path}"] User not authenticated. Storing return URL and queueing redirect to /login.`);
+          hasAttemptedRedirect = true;
+          
+          const currentFullPath = location.pathname + location.search + location.hash;
+          sessionStorage.setItem('auth_return_url', currentFullPath);
+          console.log("🔍 [ProtectedRoute $effect] Storing return URL:", currentFullPath, "for active protected path:", path);
+          
+          console.log(`🔍 [ProtectedRoute $effect path="${path}"] Navigating to /login immediately.`);
+          navigate('/login', { replace: true });
+        } else {
+          console.log(`🔍 [ProtectedRoute $effect path="${path}"] User not authenticated, but redirect already attempted or in progress.`);
+        }
+      } else if (!loading && isAuthenticated) {
+        console.log(`🔍 [ProtectedRoute $effect path="${path}"] ✅ User authenticated. Resetting redirect flag.`);
+        hasAttemptedRedirect = false;
+      } else if (loading) {
+        console.log(`🔍 [ProtectedRoute $effect path="${path}"] Auth state is loading.`);
+      }
+    } else {
+      if (hasAttemptedRedirect) {
+        console.log(`🔍 [ProtectedRoute $effect path="${path}"] Route not active. Resetting redirect flag.`);
+        hasAttemptedRedirect = false;
+      }
     }
   });
 
-  // Ensure unsubscribe is called when component is destroyed
   onMount(() => {
-      return () => {
-          unsubscribe();
-      };
+    return () => {
+      unsubscribe();
+    };
   });
-
 </script>
 
-{#if loading}
-  <p>Loading...</p> <!-- Or some loading indicator -->
-{:else if isAuthenticated}
-  <slot></slot> <!-- Render the wrapped component/content -->
+{#if !isAuthenticated && loading && location && location.pathname === path}
+  <p>Loading...</p>
+{:else if isAuthenticated && location && location.pathname === path}
+  {@render children()}
+{:else if !location || location.pathname !== path}
+  {@html ""}
+{:else}
+  <p>Loading...</p> 
 {/if} 

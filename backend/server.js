@@ -1,3 +1,8 @@
+console.log(
+   "[SERVER_JS_LOAD_CONFIRMATION_V2] Backend starting at: " +
+      new Date().toISOString()
+); // NEW DISTINCT LOG
+
 import express from "express";
 const app = express();
 import config from "./src/config/env.js";
@@ -9,7 +14,7 @@ const PORT = BACKEND.PORT || 3001;
 const FRONTEND_PORT = BACKEND.FRONTEND_PORT || 3000;
 const SESSION_SECRET = BACKEND.SESSION_SECRET;
 const RATE_LIMIT_WINDOW = BACKEND.RATE_LIMIT_WINDOW || 15;
-const RATE_LIMIT_LIMIT = BACKEND.RATE_LIMIT_LIMIT || 300;
+const RATE_LIMIT_LIMIT = BACKEND.RATE_LIMIT_LIMIT || 3000;
 const ALLOWED_CLIENT_ORIGINS =
    config.ALLOWED_CLIENT_ORIGINS ||
    "http://localhost:5173,http://localhost:5174,http://localhost:4173";
@@ -62,8 +67,13 @@ app.use(
  * - set secret to session secret
  * - set resave to false
  * - set saveUninitialized to false
+ * - configure for cross-domain client applications
  */
 import session from "express-session";
+
+// Determine if we're in production
+const isProduction = process.env.NODE_ENV === "production";
+
 app.use(
    session({
       secret: "" + SESSION_SECRET,
@@ -73,7 +83,10 @@ app.use(
          sameSite: "lax",
          secure: false, // http only (true in production)
          maxAge: 1000 * 60 * 60 * 24, // 1 day
+         httpOnly: true, // Prevent XSS attacks
+         domain: undefined, // Allow cookies to work across different ports on localhost
       },
+      name: "auth-system.sid", // Custom session name to avoid conflicts
    })
 );
 
@@ -131,8 +144,13 @@ app.use(generalLimiter);
 
 // --- routes ---
 
+// Health check endpoint
+app.get("/api/health", (req, res) => {
+   res.json({ status: "healthy", timestamp: new Date().toISOString() });
+});
+
 /** * Schema detection middleware - detects client schema from URL/token */
-import { detectSchema } from "./src/middleware/schemaDetection.js";
+import { detectSchema } from "./src/middleware/detection.js";
 app.use(detectSchema);
 /** * clientServer - for host-application to connect to auth-system */
 import clientServerRoute from "./src/routes/clientServer.js";
@@ -147,6 +165,15 @@ app.use("/api/users", userRoute);
 /** * owner - for client server owners to manage their applications and users */
 import ownerRoute from "./src/routes/owner.js";
 app.use("/api/owner", ownerRoute);
+
+/** * schema - for managing schemas/tenants */
+import schemaRoute from "./src/routes/schema.js";
+app.use("/api/schema", schemaRoute);
+
+// --- Global Error Handler ---
+// This MUST be the last piece of middleware added.
+import { errorHandler } from "./src/middleware/errorHandler.js";
+app.use(errorHandler);
 
 app.listen(PORT, () => {
    // For production logging

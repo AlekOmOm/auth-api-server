@@ -7,10 +7,10 @@ const router = Router();
 
 // --- controllers ---
 import {
-  getAllUsers,
-  getUserById,
-  updateUser,
-  // Import createUser, deleteUser controllers when added
+   getAllUsers,
+   getUserById,
+   updateUser,
+   // Import createUser, deleteUser controllers when added
 } from "../controllers/user.js";
 
 // --- middleware ---

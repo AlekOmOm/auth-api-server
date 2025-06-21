@@ -1,27 +1,39 @@
-
 <script>
-  import { Router, Route, Link } from 'svelte-routing';
-  import ProtectedRoute from './ProtectedRoute.svelte';
-  import UnAuthenticatedRoute from './UnAuthenticatedRoute.svelte';
-
+  import { Link } from 'svelte-routing';
+  import { authStore } from '../stores/authStore.js';
   import authApi from '../services/authApi';
+
+  async function handleLogout() {
+    try {
+      await authApi.logout();
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  }
+
+
 </script>
 
 <div class="footer">
-   <Router>
    <nav>
       <div class="links">
-         <ProtectedRoute path="/home"><Link class="link" id="home" to="/home">home</Link></ProtectedRoute>
-         <ProtectedRoute path="/logout"><Link class="link" id="logout" to="/logout" onclick={authApi.logout}>logout</Link></ProtectedRoute>
-         <UnAuthenticatedRoute><Link class="link" id="login" to="/login">login</Link></UnAuthenticatedRoute>
-         <UnAuthenticatedRoute><Link class="link" id="register" to="/register">register</Link></UnAuthenticatedRoute>
+         {#if !$authStore.loading}
+           {#if $authStore.isAuthenticated}
+             <!-- Authenticated user links -->
+             <Link class="link" id="home" to="/home">home</Link>
+             <button class="link logout-btn" id="logout" onclick={handleLogout}>logout</button>
+           {:else}
+             <!-- Unauthenticated user links -->
+             <Link class="link" id="login" to="/login">login</Link>
+             <Link class="link" id="register" to="/register">register</Link>
+           {/if}
+         {/if}
       </div>    
    </nav>
-   </Router>
 </div>
 
 <style>
-   nav {
+    nav {
         gap: 1rem;
         width: 100%;
         display: flex;
@@ -36,6 +48,20 @@
         padding: 0.5rem;
         border-radius: 4px;
         /* border: 1px solid #ccc; */
+    }
+
+    .logout-btn {
+        background: none;
+        border: none;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline;
+    }
+
+    .logout-btn:hover {
+        color: #646cff;
     }
 
     .footer {

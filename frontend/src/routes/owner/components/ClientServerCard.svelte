@@ -1,9 +1,10 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-  
-  export let clientServer;
-  
-  const dispatch = createEventDispatcher();
+  let { 
+    clientServer,
+    onManageUsers,
+    onEditClient,
+    onDeleteClient
+  } = $props();
   
   function formatDate(dateString) {
     if (!dateString) return 'N/A';
@@ -70,7 +71,7 @@
   <div class="card-actions">
     <button 
       class="btn btn-secondary"
-      on:click={() => dispatch('manageUsers')}
+      onclick={() => onManageUsers?.()}
       title="Manage users in this client server"
     >
       👥 Manage Users
@@ -78,7 +79,7 @@
     
     <button 
       class="btn btn-outline"
-      on:click={() => dispatch('editClient')}
+      onclick={() => onEditClient?.()}
       title="Edit client server settings"
     >
       ✏️ Edit
@@ -86,7 +87,7 @@
     
     <button 
       class="btn btn-danger"
-      on:click={() => dispatch('deleteClient')}
+      onclick={() => onDeleteClient?.()}
       title="Delete this client server"
     >
       🗑️ Delete

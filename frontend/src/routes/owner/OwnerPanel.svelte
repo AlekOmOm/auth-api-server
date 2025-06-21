@@ -1,69 +1,92 @@
 <script>
   import { onMount } from 'svelte';
   import { authStore } from '../../stores/authStore.js';
+  import clientServerApi from '../../services/clientServerApi.js';
   import ClientServerCard from './components/ClientServerCard.svelte';
   import CreateClientModal from './components/CreateClientModal.svelte';
   import UserManagementModal from './components/UserManagementModal.svelte';
   import OwnerStats from './components/OwnerStats.svelte';
 
-  let clientServers = [];
-  let loading = true;
-  let error = '';
-  let showCreateModal = false;
-  let showUserModal = false;
-  let selectedClientServer = null;
-  let userRole = '';
-  let ownerStats = null;
+  // Backend URL configuration - No longer directly needed here for these calls
+  // const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:3001/api";
 
-  onMount(async () => {
-    await loadOwnerData();
+  let clientServers = $state([]);
+  let loading = $state(true);
+  let error = $state('');
+  let showCreateModal = $state(false);
+  let showUserModal = $state(false);
+  let selectedClientServer = $state(null);
+  let userRole = $state('');
+  let ownerStats = $state(null);
+
+  // Operation specific feedback messages
+  let actionError = $state('');
+  let actionSuccessMessage = $state('');
+
+  // Make component reactive to authStore changes
+  $effect(() => {
+    const currentStoreState = $authStore;
+    // console.log('🔍 [OWNER PANEL] AuthStore changed:', currentStoreState);
+    
+    if (!currentStoreState.loading) {
+      // Always reload data when auth state changes and is not loading
+      loadOwnerData();
+    }
+  });
+
+  onMount(() => {
+    // console.log('🔍 [OWNER PANEL] Component mounted');
   });
 
   async function loadOwnerData() {
+    loading = true; // Show loading for the overall process initially
+    error = '';     // Clear previous errors
+
     try {
-      loading = true;
-      error = '';
+      const currentStoreState = $authStore;
 
-      // Check if user has owner privileges
-      const currentUser = await authStore.getCurrentUser();
-      if (!currentUser.success) {
-        error = 'Authentication required';
-        return;
+      if (!currentStoreState.isAuthenticated || !currentStoreState.session) {
+         console.log('🔍 [OWNER PANEL] Authentication check failed:', { 
+          isAuthenticated: currentStoreState.isAuthenticated, 
+          hasSession: !!currentStoreState.session 
+        });
+        throw new Error('Authentication required to access owner panel.');
       }
 
-      userRole = currentUser.data?.poolMetadata?.user_role || 'user';
+      const userRoleFromSession = currentStoreState.session?.role || 'user';
+      console.log('🔍 [OWNER PANEL] User role from session:', userRoleFromSession);
       
-      if (userRole !== 'owner' && userRole !== 'admin') {
-        error = 'Owner privileges required to access this panel';
-        return;
+      if (userRoleFromSession !== 'owner' && userRoleFromSession !== 'admin') {
+        throw new Error(`Owner or Admin privileges required to access this panel. Detected role: ${userRoleFromSession}`);
       }
 
-      // Load client servers
+      userRole = userRoleFromSession;
+
       await loadClientServers();
       
-      // Load owner statistics
-      await loadOwnerStats();
+      loading = false; 
 
-    } catch (err) {
-      console.error('Error loading owner data:', err);
-      error = 'Failed to load owner panel data';
-    } finally {
-      loading = false;
+      try {
+        await loadOwnerStats();
+      } catch (statsError) {
+        console.warn('[OwnerPanel] Further error during background load of owner stats:', statsError);
+      }
+
+    } catch (err) { // Catches errors from auth checks or loadClientServers
+      console.error('[OwnerPanel] Failed to load primary owner panel data:', err);
+      error = err.message || 'Unknown error loading owner panel.'; // Set $error
+      loading = false; // Ensure loading is false to display the error message
     }
   }
 
   async function loadClientServers() {
     try {
-      const response = await fetch('/api/clientServer/user/clients', {
-        credentials: 'include'
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      const response = await clientServerApi.getClientServers();
+      if (response.success) {
+        clientServers = response.data || [];
+      } else {
+        throw new Error(response.message || 'Failed to load client servers from API.');
       }
-
-      const result = await response.json();
-      clientServers = result.data || [];
     } catch (err) {
       console.error('Error loading client servers:', err);
       throw err;
@@ -72,17 +95,16 @@
 
   async function loadOwnerStats() {
     try {
-      const response = await fetch('/api/owner/stats', {
-        credentials: 'include'
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        ownerStats = result.data;
+      const response = await clientServerApi.getOwnerStats();
+      if (response.success) {
+        ownerStats = response.data;
+      } else {
+        console.warn('Failed to load owner stats from API:', response.message);
+        ownerStats = null;
       }
     } catch (err) {
-      console.error('Error loading owner stats:', err);
-      // Non-critical, continue without stats
+      console.error('Error loading owner stats via API:', err);
+      ownerStats = null;
     }
   }
 
@@ -97,7 +119,7 @@
 
   function handleEditClient(clientServer) {
     selectedClientServer = clientServer;
-    showCreateModal = true; // Reuse create modal for editing
+    showCreateModal = true;
   }
 
   async function handleDeleteClient(clientServer) {
@@ -105,31 +127,44 @@
       return;
     }
 
-    try {
-      const response = await fetch(`/api/clientServer/user/clients/${clientServer.client_id}`, {
-        method: 'DELETE',
-        credentials: 'include'
-      });
+    actionError = '';
+    actionSuccessMessage = '';
+    loading = true; // Indicate an operation is in progress
 
-      if (!response.ok) {
-        throw new Error(`Failed to delete client server: ${response.statusText}`);
+    try {
+      const response = await clientServerApi.deleteClientServer(clientServer.client_id);
+
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to delete client server via API.');
       }
 
-      // Reload client servers
+      actionSuccessMessage = `Successfully deleted client server: ${clientServer.app_name}`;
       await loadClientServers();
       await loadOwnerStats();
       
     } catch (err) {
       console.error('Error deleting client server:', err);
-      alert('Failed to delete client server: ' + err.message);
+      actionError = 'Failed to delete client server: ' + (err.message || 'Unknown error');
+    } finally {
+      loading = false;
+      // Optional: Clear messages after a delay
+      setTimeout(() => {
+        actionError = '';
+        actionSuccessMessage = '';
+      }, 5000);
     }
   }
 
   async function handleClientCreated() {
     showCreateModal = false;
     selectedClientServer = null;
+    actionError = ''; // Clear previous action errors
+    actionSuccessMessage = 'Client server operation successful!'; // Generic success for create/update
     await loadClientServers();
     await loadOwnerStats();
+    setTimeout(() => {
+        actionSuccessMessage = '';
+      }, 5000);
   }
 
   function handleModalClose() {
@@ -141,7 +176,7 @@
 
 <div class="owner-panel">
   <header class="panel-header">
-    <h1>🏢 Owner Panel</h1>
+    <h2>🏢 Owner Panel</h2>
     <p class="subtitle">Manage your client servers and users</p>
     
     {#if userRole === 'admin'}
@@ -162,9 +197,11 @@
     </div>
   {:else if error}
     <div class="error">
-      <h3>❌ Access Denied</h3>
+      <h3>⚠️ Loading Issue</h3>
       <p>{error}</p>
-      <a href="/home" class="btn btn-primary">Go to Home</a>
+      <button class="btn btn-primary" onclick={loadOwnerData}>
+        🔄 Retry Loading
+      </button>
     </div>
   {:else}
     <!-- Owner Statistics -->
@@ -172,11 +209,23 @@
       <OwnerStats stats={ownerStats} />
     {/if}
 
+    <!-- Action Feedback Messages -->
+    {#if actionError}
+      <div class="error-message inline-feedback">
+        <p>❌ {actionError}</p>
+      </div>
+    {/if}
+    {#if actionSuccessMessage}
+      <div class="success-message inline-feedback">
+        <p>✅ {actionSuccessMessage}</p>
+      </div>
+    {/if}
+
     <!-- Client Servers Section -->
     <section class="client-servers-section">
       <div class="section-header">
         <h2>📱 Your Client Servers</h2>
-        <button class="btn btn-primary" on:click={handleCreateClient}>
+        <button class="btn btn-primary" onclick={handleCreateClient}>
           ➕ Create New Client Server
         </button>
       </div>
@@ -185,7 +234,7 @@
         <div class="empty-state">
           <h3>🚀 Get Started</h3>
           <p>You don't have any client servers yet. Create your first one to start managing users and authentication.</p>
-          <button class="btn btn-primary" on:click={handleCreateClient}>
+          <button class="btn btn-primary" onclick={handleCreateClient}>
             Create Your First Client Server
           </button>
         </div>
@@ -194,9 +243,9 @@
           {#each clientServers as clientServer (clientServer.client_id)}
             <ClientServerCard 
               {clientServer}
-              on:manageUsers={() => handleManageUsers(clientServer)}
-              on:editClient={() => handleEditClient(clientServer)}
-              on:deleteClient={() => handleDeleteClient(clientServer)}
+              onManageUsers={() => handleManageUsers(clientServer)}
+              onEditClient={() => handleEditClient(clientServer)}
+              onDeleteClient={() => handleDeleteClient(clientServer)}
             />
           {/each}
         </div>
@@ -209,60 +258,67 @@
 {#if showCreateModal}
   <CreateClientModal 
     clientServer={selectedClientServer}
-    on:clientCreated={handleClientCreated}
-    on:close={handleModalClose}
+    onClientCreated={handleClientCreated}
+    onClose={handleModalClose}
   />
 {/if}
 
 {#if showUserModal && selectedClientServer}
   <UserManagementModal 
     clientServer={selectedClientServer}
-    on:close={handleModalClose}
+    onClose={handleModalClose}
   />
 {/if}
 
 <style>
+  /* Use consistent styling with app.css */
   .owner-panel {
-    max-width: 1200px;
+    max-width: 1280px;
     margin: 0 auto;
     padding: 2rem;
     min-height: 100vh;
+    text-align: center;
   }
 
   .panel-header {
-    text-align: center;
     margin-bottom: 3rem;
     position: relative;
   }
 
   .panel-header h1 {
-    font-size: 2.5rem;
+    font-size: 3.2em;
+    line-height: 1.1;
     margin-bottom: 0.5rem;
-    color: #2c3e50;
   }
 
   .subtitle {
     font-size: 1.1rem;
-    color: #7f8c8d;
     margin-bottom: 1rem;
+    opacity: 0.8;
   }
 
   .admin-badge, .owner-badge {
     display: inline-block;
-    padding: 0.5rem 1rem;
-    border-radius: 20px;
-    font-weight: bold;
+    padding: 0.6em 1.2em;
+    border-radius: 8px;
+    font-weight: 500;
     font-size: 0.9rem;
+    border: 1px solid transparent;
+    transition: border-color 0.25s;
   }
 
   .admin-badge {
-    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    background-color: #e74c3c;
     color: white;
   }
 
   .owner-badge {
-    background: linear-gradient(135deg, #f39c12, #e67e22);
+    background-color: #646cff;
     color: white;
+  }
+
+  .admin-badge:hover, .owner-badge:hover {
+    border-color: #646cff;
   }
 
   .loading {
@@ -270,32 +326,22 @@
     padding: 4rem 2rem;
   }
 
-  .spinner {
-    width: 40px;
-    height: 40px;
-    border: 4px solid #f3f3f3;
-    border-top: 4px solid #3498db;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin: 0 auto 1rem;
-  }
-
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
+  /* Spinner styles below are now handled by global app.css */
+  /* .spinner { ... } */
+  /* @keyframes spin { ... } */
 
   .error {
     text-align: center;
-    padding: 4rem 2rem;
-    background: #fff5f5;
-    border: 1px solid #fed7d7;
+    padding: 2em;
+    background-color: rgba(255, 0, 0, 0.1);
+    border: 1px solid rgba(255, 0, 0, 0.3);
     border-radius: 8px;
-    color: #c53030;
+    margin: 2rem 0;
   }
 
   .error h3 {
     margin-bottom: 1rem;
+    color: #ff6b6b;
   }
 
   .section-header {
@@ -303,64 +349,67 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 2rem;
+    text-align: left;
   }
 
   .section-header h2 {
-    color: #2c3e50;
     margin: 0;
+    font-size: 1.8em;
   }
 
   .empty-state {
     text-align: center;
-    padding: 4rem 2rem;
-    background: #f8f9fa;
-    border-radius: 12px;
-    border: 2px dashed #dee2e6;
+    padding: 2em;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    border: 2px dashed rgba(255, 255, 255, 0.2);
+    margin: 2rem 0;
   }
 
   .empty-state h3 {
-    color: #495057;
     margin-bottom: 1rem;
   }
 
   .empty-state p {
-    color: #6c757d;
     margin-bottom: 2rem;
     max-width: 500px;
     margin-left: auto;
     margin-right: auto;
+    opacity: 0.8;
   }
 
   .client-servers-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
     gap: 2rem;
-  }
-
-  .btn {
-    padding: 0.75rem 1.5rem;
-    border: none;
-    border-radius: 6px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    text-decoration: none;
-    display: inline-block;
-    text-align: center;
-  }
-
-  .btn-primary {
-    background: linear-gradient(135deg, #3498db, #2980b9);
-    color: white;
-  }
-
-  .btn-primary:hover {
-    background: linear-gradient(135deg, #2980b9, #21618c);
-    transform: translateY(-1px);
+    text-align: left;
   }
 
   .client-servers-section {
     margin-top: 2rem;
+  }
+
+  /* Light mode support (matches app.css) */
+  @media (prefers-color-scheme: light) {
+    .admin-badge {
+      background-color: #e74c3c;
+    }
+
+    .owner-badge {
+      background-color: #747bff;
+    }
+
+    .empty-state {
+      background-color: rgba(0, 0, 0, 0.05);
+      border-color: rgba(0, 0, 0, 0.2);
+    }
+
+    .error {
+      background-color: rgba(255, 0, 0, 0.1);
+      border-color: rgba(255, 0, 0, 0.3);
+    }
+
+    /* .spinner { ... } -- Handled globally */
   }
 
   @media (max-width: 768px) {
@@ -369,7 +418,7 @@
     }
 
     .panel-header h1 {
-      font-size: 2rem;
+      font-size: 2.5em;
     }
 
     .section-header {
@@ -381,5 +430,25 @@
     .client-servers-grid {
       grid-template-columns: 1fr;
     }
+  }
+
+  /* Inline feedback messages */
+  .inline-feedback {
+    padding: 1rem;
+    margin: 1rem 0;
+    border-radius: 8px;
+    text-align: center;
+  }
+
+  .error-message.inline-feedback {
+    background-color: rgba(255, 0, 0, 0.1);
+    border: 1px solid rgba(255, 0, 0, 0.3);
+    color: #ff6b6b; /* Or a darker red for better contrast */
+  }
+
+  .success-message.inline-feedback {
+    background-color: rgba(0, 255, 0, 0.1);
+    border: 1px solid rgba(0, 255, 0, 0.3);
+    color: #27ae60; /* Or a darker green */
   }
 </style> 

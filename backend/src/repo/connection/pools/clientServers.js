@@ -1,9 +1,10 @@
 import { Pool } from "pg";
+import format from "pg-format";
 import config from "../../../config/env.js";
-import { ddl } from "../../schemas/client_servers/client_server_template.js";
+import { ddl } from "../../DDL/tenant_template.js";
 
 // Cache
-const schemas = {};
+const poolsCached = {};
 
 /**
  * Returns a pg.Pool connected to the given schema (creates it on first use).
@@ -12,8 +13,8 @@ const schemas = {};
  *   const { rows } = await pool.query("SELECT * FROM users");
  */
 export const getPoolForSchema = async (schemaName = "client_template") => {
-   if (schemas[schemaName]) {
-      return schemas[schemaName];
+   if (poolsCached[schemaName]) {
+      return poolsCached[schemaName];
    }
 
    // Transform config.POSTGRES to match pg Pool constructor expectations
@@ -28,8 +29,8 @@ export const getPoolForSchema = async (schemaName = "client_template") => {
    const localPool = new Pool(pgConfig);
    await localPool.connect();
    await initSchema(localPool, schemaName);
-   schemas[schemaName] = localPool;
-   await localPool.query(`set search_path to ${schemaName}, public`);
+   poolsCached[schemaName] = localPool;
+   await localPool.query(format("SET search_path TO %I, public", schemaName));
    return localPool;
 };
 
@@ -40,7 +41,10 @@ export const getPoolForSchema = async (schemaName = "client_template") => {
  * - execute statements
  */
 const initSchema = async (currentPool, schemaName) => {
-   await currentPool.query(`CREATE SCHEMA IF NOT EXISTS ${schemaName};`);
+   // Use pg-format for safe identifier quoting
+   await currentPool.query(
+      format("CREATE SCHEMA IF NOT EXISTS %I", schemaName)
+   );
    if (schemaName === "client_template") {
       return;
    }

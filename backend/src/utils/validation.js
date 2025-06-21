@@ -38,12 +38,24 @@ const register = [
       .trim()
       .notEmpty()
       .withMessage(rules.ERROR_MESSAGES.USER.FIELD_REQUIRED("Password"))
-      .isLength({ min: rules.PASSWORD_RULES.MIN_LENGTH })
-      .withMessage(rules.ERROR_MESSAGES.PASSWORD.WEAK_PASSWORD) // Use the corrected message key
-      .isLength({ max: rules.PASSWORD_RULES.MAX_LENGTH })
-      .withMessage(rules.ERROR_MESSAGES.PASSWORD.MAX_LENGTH_ERROR)
-      .isStrongPassword()
+      .isLength({
+         min: rules.PASSWORD_RULES.MIN_LENGTH,
+         max: rules.PASSWORD_RULES.MAX_LENGTH,
+      })
+      .withMessage(rules.ERROR_MESSAGES.PASSWORD.WEAK_PASSWORD)
+      .isStrongPassword({
+         minLength: rules.PASSWORD_RULES.MIN_LENGTH,
+         minLowercase: 1,
+         minUppercase: 1,
+         minNumbers: 1,
+         minSymbols: 1,
+      })
       .withMessage(rules.ERROR_MESSAGES.PASSWORD.WEAK_PASSWORD),
+   // Add validation for userType
+   body("userType")
+      .optional()
+      .isIn(["auth", "client"])
+      .withMessage("User type must be either 'auth' or 'client'"),
 
    (req, res, next) => {
       const errors = validationResult(req);
@@ -71,8 +83,22 @@ const login = [
    body("returnUrl").optional(),
 
    (req, res, next) => {
+      console.log(
+         "[LOGIN_VALIDATION]",
+         JSON.stringify({
+            body: req.body,
+            path: req.path,
+         })
+      );
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
+         console.error(
+            "[LOGIN_VALIDATION_ERROR]",
+            JSON.stringify({
+               body: req.body,
+               errors: errors.array(),
+            })
+         );
          return res.status(400).json({ errors: errors.array() });
       }
       next();

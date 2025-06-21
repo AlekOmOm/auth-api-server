@@ -1,0 +1,501 @@
+[
+  {
+    "test": "POST /auth/register",
+    "status": 201,
+    "success": true,
+    "timestamp": "2025-06-12T14:50:28.079Z",
+    "response": {
+      "success": true,
+      "message": "User registered and logged in successfully",
+      "data": {
+        "user": {
+          "id": "3e4f04fe-6513-4447-a4df-bedcd85969fe",
+          "name": "New Test User",
+          "email": "newuser1749739827829@example.com",
+          "role": "owner"
+        },
+        "session": {
+          "id": "3ae0d6f8-9729-4fa0-81bb-28f219c028f0"
+        }
+      },
+      "sessionUpdate": {
+        "isAuthenticated": true,
+        "userId": "3e4f04fe-6513-4447-a4df-bedcd85969fe",
+        "name": "New Test User",
+        "email": "newuser1749739827829@example.com",
+        "role": "owner",
+        "schema": "auth_internal",
+        "sessionId": "2591884b-8919-4766-81fb-7cba305e2179",
+        "ownerId": null,
+        "allowedUrls": []
+      }
+    },
+    "error": null
+  },
+  {
+    "test": "POST /auth/login",
+    "status": 200,
+    "success": true,
+    "timestamp": "2025-06-12T14:50:28.179Z",
+    "response": {
+      "success": true,
+      "message": "Login successful",
+      "data": {
+        "schema": "auth_internal",
+        "user": {
+          "id": "1069746a-3535-48a3-bc1e-80600eff8ff7",
+          "name": "Owner Test User",
+          "email": "owner@example.com",
+          "role": "owner"
+        },
+        "session": {
+          "id": "c76015a2-526f-4f7a-a4a1-2b3f59a69da7"
+        },
+        "allowedUrls": {
+          "_errors": [],
+          "_isValid": true,
+          "identifier_url": "http://owner-app.test",
+          "entry_point_url": "http://owner-app.test/start",
+          "authorized_urls": [
+            "http://owner-app.test/callback",
+            "http://owner-app.test/dashboard"
+          ],
+          "client_id": "cs_081ea22b-e3ad-4129-ba78-e6f4114acd7e",
+          "assigned_schema_name": "client_74e3a4b24fae6d89",
+          "_plainClientSecret": "6ad81c137f264813efcf2f504f45ba8f585f11aec183750fb87ed46300ab1a28",
+          "client_secret_hash": "9902dcb47a3f364d36c504131c3512034f21872cfd61aa1cfd84cad7dafee37b"
+        }
+      },
+      "sessionUpdate": {
+        "isAuthenticated": true,
+        "userId": "1069746a-3535-48a3-bc1e-80600eff8ff7",
+        "name": "Owner Test User",
+        "email": "owner@example.com",
+        "role": "owner",
+        "schema": "auth_internal",
+        "sessionId": "2054ceb2-cdcf-4fdd-8ddb-7329c86c8c9b",
+        "ownerId": null,
+        "allowedUrls": {
+          "_errors": [],
+          "_isValid": true,
+          "identifier_url": "http://owner-app.test",
+          "entry_point_url": "http://owner-app.test/start",
+          "authorized_urls": [
+            "http://owner-app.test/callback",
+            "http://owner-app.test/dashboard"
+          ],
+          "client_id": "cs_081ea22b-e3ad-4129-ba78-e6f4114acd7e",
+          "assigned_schema_name": "client_74e3a4b24fae6d89",
+          "_plainClientSecret": "6ad81c137f264813efcf2f504f45ba8f585f11aec183750fb87ed46300ab1a28",
+          "client_secret_hash": "9902dcb47a3f364d36c504131c3512034f21872cfd61aa1cfd84cad7dafee37b"
+        }
+      }
+    },
+    "error": null
+  },
+  {
+    "test": "GET /auth/session",
+    "status": 200,
+    "success": true,
+    "timestamp": "2025-06-12T14:50:28.188Z",
+    "response": {
+      "success": true,
+      "message": "Session retrieved successfully",
+      "data": {
+        "isAuthenticated": true,
+        "user": {
+          "id": "1069746a-3535-48a3-bc1e-80600eff8ff7",
+          "name": "Owner Test User",
+          "email": "owner@example.com",
+          "role": "owner"
+        },
+        "schema": "auth_internal",
+        "sessionId": "2054ceb2-cdcf-4fdd-8ddb-7329c86c8c9b",
+        "allowedUrls": {
+          "_errors": [],
+          "_isValid": true,
+          "identifier_url": "http://owner-app.test",
+          "entry_point_url": "http://owner-app.test/start",
+          "authorized_urls": [
+            "http://owner-app.test/callback",
+            "http://owner-app.test/dashboard"
+          ],
+          "client_id": "cs_081ea22b-e3ad-4129-ba78-e6f4114acd7e",
+          "assigned_schema_name": "client_74e3a4b24fae6d89",
+          "_plainClientSecret": "6ad81c137f264813efcf2f504f45ba8f585f11aec183750fb87ed46300ab1a28",
+          "client_secret_hash": "9902dcb47a3f364d36c504131c3512034f21872cfd61aa1cfd84cad7dafee37b"
+        },
+        "expires_at": "2025-06-13T14:50:28.189Z",
+        "validation_context": {
+          "schema": "auth_internal",
+          "required_fields": [
+            "name",
+            "email",
+            "password",
+            "role"
+          ]
+        }
+      }
+    },
+    "error": null
+  },
+  {
+    "test": "GET /auth/me",
+    "status": 200,
+    "success": true,
+    "timestamp": "2025-06-12T14:50:28.202Z",
+    "response": {
+      "success": true,
+      "message": "User retrieved successfully.",
+      "data": {
+        "id": "1069746a-3535-48a3-bc1e-80600eff8ff7",
+        "name": "Owner Test User",
+        "role": "owner",
+        "email": "owner@example.com",
+        "schema": "auth_internal",
+        "urls": []
+      }
+    },
+    "error": null
+  },
+  {
+    "test": "GET /auth/admin",
+    "status": 200,
+    "success": true,
+    "timestamp": "2025-06-12T14:50:28.216Z",
+    "response": {
+      "success": true,
+      "message": "User retrieved successfully.",
+      "data": {
+        "id": "1069746a-3535-48a3-bc1e-80600eff8ff7",
+        "name": "Owner Test User",
+        "role": "owner",
+        "email": "owner@example.com",
+        "schema": "auth_internal",
+        "urls": []
+      }
+    },
+    "error": null
+  },
+  {
+    "test": "POST /auth/sessions",
+    "status": 200,
+    "success": true,
+    "timestamp": "2025-06-12T14:50:28.225Z",
+    "response": {
+      "success": true,
+      "message": "Sessions retrieved successfully",
+      "data": [
+        {
+          "_errors": [],
+          "_isValid": true,
+          "userId": "1069746a-3535-48a3-bc1e-80600eff8ff7",
+          "id": "9b06405f-28e7-49c9-92a2-a08bf34cdf4f",
+          "sessionId": "552cdfb7-dfdd-4538-9b36-d78d53176346",
+          "ipAddress": "::ffff:172.18.0.1",
+          "userAgent": "node-fetch",
+          "createdAt": "2025-06-12T14:49:16.368Z",
+          "expiresAt": "2025-06-13T14:49:16.367Z",
+          "user": null,
+          "schema": null
+        },
+        {
+          "_errors": [],
+          "_isValid": true,
+          "userId": "1069746a-3535-48a3-bc1e-80600eff8ff7",
+          "id": "c76015a2-526f-4f7a-a4a1-2b3f59a69da7",
+          "sessionId": "2054ceb2-cdcf-4fdd-8ddb-7329c86c8c9b",
+          "ipAddress": "::ffff:172.18.0.1",
+          "userAgent": "node-fetch",
+          "createdAt": "2025-06-12T14:50:28.173Z",
+          "expiresAt": "2025-06-13T14:50:28.172Z",
+          "user": null,
+          "schema": null
+        }
+      ]
+    },
+    "error": null
+  },
+  {
+    "test": "POST /auth/logout",
+    "status": 200,
+    "success": true,
+    "timestamp": "2025-06-12T14:50:28.236Z",
+    "response": {
+      "success": true,
+      "message": "Logout successful"
+    },
+    "error": null
+  },
+  {
+    "test": "POST /clientServer/register",
+    "status": 500,
+    "success": false,
+    "timestamp": "2025-06-12T14:50:28.251Z",
+    "response": {
+      "message": "clientServerRepo.create is not a function",
+      "debug": {
+        "originalMessage": "clientServerRepo.create is not a function",
+        "errorType": "TypeError",
+        "statusCode": 500,
+        "requestSchemaContext": "Schema not detected on request object",
+        "errorSchemaContext": null,
+        "errorDetails": null,
+        "validationErrors": null,
+        "stack": "TypeError: clientServerRepo.create is not a function\n    at Module.register (file:///usr/src/app/src/services/clientServer.js:143:27)\n    at registerClientServerController (file:///usr/src/app/src/controllers/clientServer.js:61:40)\n    at file:///usr/src/app/src/utils/asyncErrorHandler.js:3:23\n    at Layer.handleRequest (/usr/src/app/node_modules/router/lib/layer.js:152:17)\n    at next (/usr/src/app/node_modules/router/lib/route.js:157:13)\n    at Route.dispatch (/usr/src/app/node_modules/router/lib/route.js:117:3)\n    at handle (/usr/src/app/node_modules/router/index.js:435:11)\n    at Layer.handleRequest (/usr/src/app/node_modules/router/lib/layer.js:152:17)\n    at /usr/src/app/node_modules/router/index.js:295:15\n    at processParams (/usr/src/app/node_modules/router/index.js:582:12)",
+        "clientErrorContext": null
+      }
+    },
+    "error": null
+  },
+  {
+    "test": "GET /clientServer/me",
+    "status": 401,
+    "success": false,
+    "timestamp": "2025-06-12T14:50:28.264Z",
+    "response": {
+      "message": "Authorization header with Bearer token required",
+      "debug": {
+        "originalMessage": "Authorization header with Bearer token required",
+        "errorType": "AuthError",
+        "statusCode": 401,
+        "requestSchemaContext": "Schema not detected on request object",
+        "errorSchemaContext": null,
+        "errorDetails": null,
+        "validationErrors": null,
+        "stack": "AuthError: Authorization header with Bearer token required\n    at authenticateClientServer (file:///usr/src/app/src/middleware/clientServerAuth.js:13:16)\n    at Layer.handleRequest (/usr/src/app/node_modules/router/lib/layer.js:152:17)\n    at next (/usr/src/app/node_modules/router/lib/route.js:157:13)\n    at Route.dispatch (/usr/src/app/node_modules/router/lib/route.js:117:3)\n    at handle (/usr/src/app/node_modules/router/index.js:435:11)\n    at Layer.handleRequest (/usr/src/app/node_modules/router/lib/layer.js:152:17)\n    at /usr/src/app/node_modules/router/index.js:295:15\n    at processParams (/usr/src/app/node_modules/router/index.js:582:12)\n    at next (/usr/src/app/node_modules/router/index.js:291:5)\n    at Function.handle (/usr/src/app/node_modules/router/index.js:186:3)",
+        "clientErrorContext": null
+      }
+    },
+    "error": null
+  },
+  {
+    "test": "PUT /clientServer/me",
+    "status": 401,
+    "success": false,
+    "timestamp": "2025-06-12T14:50:28.273Z",
+    "response": {
+      "message": "Authorization header with Bearer token required",
+      "debug": {
+        "originalMessage": "Authorization header with Bearer token required",
+        "errorType": "AuthError",
+        "statusCode": 401,
+        "requestSchemaContext": "Schema not detected on request object",
+        "errorSchemaContext": null,
+        "errorDetails": null,
+        "validationErrors": null,
+        "stack": "AuthError: Authorization header with Bearer token required\n    at authenticateClientServer (file:///usr/src/app/src/middleware/clientServerAuth.js:13:16)\n    at Layer.handleRequest (/usr/src/app/node_modules/router/lib/layer.js:152:17)\n    at next (/usr/src/app/node_modules/router/lib/route.js:157:13)\n    at Route.dispatch (/usr/src/app/node_modules/router/lib/route.js:117:3)\n    at handle (/usr/src/app/node_modules/router/index.js:435:11)\n    at Layer.handleRequest (/usr/src/app/node_modules/router/lib/layer.js:152:17)\n    at /usr/src/app/node_modules/router/index.js:295:15\n    at processParams (/usr/src/app/node_modules/router/index.js:582:12)\n    at next (/usr/src/app/node_modules/router/index.js:291:5)\n    at Function.handle (/usr/src/app/node_modules/router/index.js:186:3)",
+        "clientErrorContext": null
+      }
+    },
+    "error": null
+  },
+  {
+    "test": "POST /clientServer/user/register",
+    "status": 500,
+    "success": false,
+    "timestamp": "2025-06-12T14:50:28.397Z",
+    "response": {
+      "message": "clientServerRepo.create is not a function",
+      "debug": {
+        "originalMessage": "clientServerRepo.create is not a function",
+        "errorType": "TypeError",
+        "statusCode": 500,
+        "requestSchemaContext": "auth_internal",
+        "errorSchemaContext": null,
+        "errorDetails": null,
+        "validationErrors": null,
+        "stack": "TypeError: clientServerRepo.create is not a function\n    at register (file:///usr/src/app/src/services/clientServer.js:143:27)\n    at Module.registerClientServerForUser (file:///usr/src/app/src/services/clientServer.js:455:17)\n    at registerClientServerForUserController (file:///usr/src/app/src/controllers/clientServer.js:87:40)\n    at file:///usr/src/app/src/utils/asyncErrorHandler.js:3:23\n    at Layer.handleRequest (/usr/src/app/node_modules/router/lib/layer.js:152:17)\n    at next (/usr/src/app/node_modules/router/lib/route.js:157:13)\n    at checkSession (file:///usr/src/app/src/middleware/auth.js:111:4)\n    at isAuthenticated (file:///usr/src/app/src/middleware/auth.js:2:11)\n    at Layer.handleRequest (/usr/src/app/node_modules/router/lib/layer.js:152:17)\n    at next (/usr/src/app/node_modules/router/lib/route.js:157:13)",
+        "clientErrorContext": null
+      }
+    },
+    "error": null
+  },
+  {
+    "test": "GET /clientServer/user/clients",
+    "status": 200,
+    "success": true,
+    "timestamp": "2025-06-12T14:50:28.409Z",
+    "response": {
+      "success": true,
+      "message": "Client servers retrieved successfully",
+      "data": [
+        {
+          "_errors": [],
+          "_isValid": true,
+          "app_name": "Owner Test App",
+          "identifier_url": "http://owner-app.test",
+          "entry_point_url": "http://owner-app.test/start",
+          "authorized_urls": [
+            "http://owner-app.test/callback",
+            "http://owner-app.test/dashboard"
+          ],
+          "user_id": "1069746a-3535-48a3-bc1e-80600eff8ff7",
+          "client_id": "cs_ef969ac2-2598-4f25-a45c-21a3d8943110",
+          "assigned_schema_name": "client_4ff7e63a609be584",
+          "_plainClientSecret": "7962e46f97e852ecf756637f9c531334b9d9df3c378ed7c7d7904ab72f0e218a",
+          "client_secret_hash": "c2c4796eb1121df6cadfd8b397ee9ac5a3d4d0392d5c3031ab2a1b669dcdcf06"
+        }
+      ]
+    },
+    "error": null
+  },
+  {
+    "test": "GET /users",
+    "status": 200,
+    "success": true,
+    "timestamp": "2025-06-12T14:50:28.420Z",
+    "response": {
+      "success": true,
+      "message": "Users retrieved successfully",
+      "data": [
+        {
+          "_errors": [],
+          "_isValid": true,
+          "id": "3e4f04fe-6513-4447-a4df-bedcd85969fe",
+          "name": "New Test User",
+          "role": "owner",
+          "email": "newuser1749739827829@example.com",
+          "password": null,
+          "passwordHash": "$2b$10$p2GHe99uEfHJfrQEJWHFTem3PKBU8PBFSIki5dqcdgqc2FyXJX1/e"
+        },
+        {
+          "_errors": [],
+          "_isValid": true,
+          "id": "d1dbaa2f-cc6a-44a8-bd07-07d4321e1596",
+          "name": "New Test User",
+          "role": "owner",
+          "email": "newuser1749739755872@example.com",
+          "password": null,
+          "passwordHash": "$2b$10$q2AgcmUmVfRAsSwivSk56elGpM7Z1w2288a.nWp5RmN.XmFZykzLW"
+        },
+        {
+          "_errors": [],
+          "_isValid": true,
+          "id": "10505455-4cf6-4126-bcdc-101cfba245ce",
+          "name": "Admin User",
+          "role": "admin",
+          "email": "admin@auth-system.com",
+          "password": null,
+          "passwordHash": "$2b$10$fVINRrmLrtAZfcjkdzlatuEzdfVT5OZusyE7HjbIiC.3HNcoyZRV."
+        },
+        {
+          "_errors": [],
+          "_isValid": true,
+          "id": "1532acda-5e8c-4174-bbe1-1832c801159e",
+          "name": "Regular Test User",
+          "role": "user",
+          "email": "testuser@example.com",
+          "password": null,
+          "passwordHash": "$2b$10$m1dt2SsxozmshCLzBfVtceHYhArMLG.QNx6FmZGPzCjqkcxcttubG"
+        },
+        {
+          "_errors": [],
+          "_isValid": true,
+          "id": "1069746a-3535-48a3-bc1e-80600eff8ff7",
+          "name": "Owner Test User",
+          "role": "owner",
+          "email": "owner@example.com",
+          "password": null,
+          "passwordHash": "$2b$10$k7qICprvebnX0kKtBJD7iu4nHa7wSzFHSG.nALf..5pLDfNaNHh/6"
+        },
+        {
+          "_errors": [],
+          "_isValid": true,
+          "id": "52343c7f-9dd9-41f3-8470-64d1496e18d6",
+          "name": "Test User",
+          "role": "user",
+          "email": "user@example.com",
+          "password": null,
+          "passwordHash": "$2b$10$m1dt2SsxozmshCLzBfVtceHYhArMLG.QNx6FmZGPzCjqkcxcttubG"
+        }
+      ]
+    },
+    "error": null
+  },
+  {
+    "test": "GET /owner/stats",
+    "status": 200,
+    "success": true,
+    "timestamp": "2025-06-12T14:50:28.474Z",
+    "response": {
+      "success": true,
+      "data": {
+        "totalClients": 1,
+        "clientDetails": [
+          {
+            "clientName": "Owner Test App",
+            "schemaName": "client_074e49ccc73c1000",
+            "userCount": 0,
+            "activeSessionCount": 0
+          }
+        ],
+        "totalUsers": 0,
+        "totalActiveSessions": 0
+      }
+    },
+    "error": null
+  },
+  {
+    "test": "GET /schema",
+    "status": 200,
+    "success": true,
+    "timestamp": "2025-06-12T14:50:28.494Z",
+    "response": {
+      "success": true,
+      "message": "Tenant schemas retrieved successfully",
+      "data": [
+        {
+          "schema_name": "client_074e49ccc73c1000"
+        },
+        {
+          "schema_name": "client_2a5324ae07ed6c96"
+        }
+      ]
+    },
+    "error": null
+  },
+  {
+    "test": "POST /schema",
+    "status": 201,
+    "success": true,
+    "timestamp": "2025-06-12T14:50:28.502Z",
+    "response": {
+      "success": true,
+      "message": "Schema creation is not implemented in this version",
+      "data": {
+        "schema_name": "client_test_schema"
+      }
+    },
+    "error": null
+  },
+  {
+    "test": "PUT /schema/1",
+    "status": 200,
+    "success": true,
+    "timestamp": "2025-06-12T14:50:28.509Z",
+    "response": {
+      "success": true,
+      "message": "Schema update is not implemented in this version",
+      "data": {
+        "id": "1",
+        "schema_name": "client_updated_schema"
+      }
+    },
+    "error": null
+  },
+  {
+    "test": "DELETE /schema/1",
+    "status": 200,
+    "success": true,
+    "timestamp": "2025-06-12T14:50:28.516Z",
+    "response": {
+      "success": true,
+      "message": "Schema deletion is not implemented in this version",
+      "data": {
+        "id": "1"
+      }
+    },
+    "error": null
+  }
+]
